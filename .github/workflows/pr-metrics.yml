@@ -1,6 +1,6 @@
 # .github/workflows/pr-size-analysis.yml
 # PR Size Analysis - Real-time feedback to prevent problematic AI-generated code patterns
-# Based on research by Ken Judy - https://github.com/yourrepo/your-article
+# Based on research by Ken Judy - https://github.com/stride-nyc/code-quality-metrics
 # Licensed under CC BY 4.0
 
 name: PR Size Analysis
