@@ -1,184 +1,172 @@
-# .github/workflows/pr-size-analysis.yml
-# PR Size Analysis - Real-time feedback to prevent problematic AI-generated code patterns
-# Based on research by Ken Judy - https://github.com/stride-nyc/code-quality-metrics
-# Licensed under CC BY 4.0
-
 name: PR Size Analysis
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
-
+    types: [opened, synchronize]
 jobs:
-  analyze-pr-size:
+  analyze-pr:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - name: Analyze PR Size and Scope
+      - name: Analyze PR Size
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
-            const additions = pr.additions || 0;
-            const deletions = pr.deletions || 0;
-            const changedFiles = pr.changed_files || 0;
-            const totalChanges = additions + deletions;
             
-            console.log(`Analyzing PR #${pr.number}: ${totalChanges} lines across ${changedFiles} files`);
+            // Get detailed file information
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100
+            });
             
-            // Determine size category and generate recommendations
+            // Separate test and production files using same logic as commit metrics
+            const testFiles = files.filter(f =>
+              /\.(test|spec)\.|Tests?\.cs$|Test\.cs$|__tests__|\/tests?\//i.test(f.filename)
+            );
+            
+            const prodFiles = files.filter(f =>
+              !/\.(test|spec)\.|Tests?\.cs$|Test\.cs$|__tests__|\/tests?\//i.test(f.filename)
+            );
+            
+            // Calculate metrics for all files
+            const totalAdditions = pr.additions;
+            const totalDeletions = pr.deletions;
+            const totalChangedFiles = pr.changed_files;
+            const totalChanges = totalAdditions + totalDeletions;
+            
+            // Calculate metrics for production files only
+            const prodAdditions = prodFiles.reduce((sum, f) => sum + f.additions, 0);
+            const prodDeletions = prodFiles.reduce((sum, f) => sum + f.deletions, 0);
+            const prodChanges = prodAdditions + prodDeletions;
+            const prodFilesCount = prodFiles.length;
+            
+            // Calculate metrics for test files
+            const testAdditions = testFiles.reduce((sum, f) => sum + f.additions, 0);
+            const testDeletions = testFiles.reduce((sum, f) => sum + f.deletions, 0);
+            const testChanges = testAdditions + testDeletions;
+            const testFilesCount = testFiles.length;
+            
+            // Determine size based on production code only
             let sizeLabel = 'small';
-            let sizeEmoji = '🟢';
             let concerns = [];
-            let recommendations = [];
             
-            // Size-based analysis
-            if (totalChanges > 1000) {
+            if (prodChanges > 500) {
               sizeLabel = 'extra-large';
-              sizeEmoji = '🔴';
-              concerns.push('⚠️ **Very large PR** - High risk of introducing bugs and difficult to review thoroughly');
-              recommendations.push('Consider breaking this into multiple smaller PRs focused on specific features or components');
-              recommendations.push('If this is generated code, ensure proper validation and testing');
-            } else if (totalChanges > 500) {
+              concerns.push(':warning: Very large production changes - consider breaking into smaller PRs');
+            } else if (prodChanges > 200) {
               sizeLabel = 'large';
-              sizeEmoji = '🟠';
-              concerns.push('⚠️ **Large PR** - May indicate batch acceptance of AI-generated code');
-              recommendations.push('Review carefully for AI-generated patterns that should be broken down');
-            } else if (totalChanges > 200) {
-              sizeLabel = 'medium-large';
-              sizeEmoji = '🟡';
-              concerns.push('⚠️ **Medium-large PR** - Approaching the threshold for detailed review');
-            } else if (totalChanges > 100) {
+              concerns.push(':straight_ruler: Large production changes - review carefully');
+            } else if (prodChanges > 100) {
               sizeLabel = 'medium';
-              sizeEmoji = '🟡';
-            } else {
-              sizeLabel = 'small';
-              sizeEmoji = '🟢';
             }
             
-            // File sprawl analysis
-            if (changedFiles > 20) {
-              concerns.push('⚠️ **Many files changed** - Possible scope creep or shotgun surgery pattern');
-              recommendations.push('Consider if these changes could be split into focused, single-responsibility PRs');
-            } else if (changedFiles > 10) {
-              concerns.push('⚠️ **Multiple files changed** - Ensure changes are cohesive and related');
+            if (prodFilesCount > 10) {
+              concerns.push(':file_folder: Many production files changed - possible scope creep');
             }
             
-            // AI-specific pattern detection
-            const hasAIPatterns = (totalChanges > 500 && changedFiles > 10) || totalChanges > 1000;
-            if (hasAIPatterns) {
-              concerns.push('🤖 **Possible AI-generated batch** - Large changes across multiple files may indicate wholesale AI code acceptance');
-              recommendations.push('If using AI tools, consider accepting smaller code blocks and making incremental commits');
-              recommendations.push('Ensure proper code review and testing for AI-generated sections');
-            }
+            // Separate test adequacy analysis
+            let testAdequacy = 'excellent';
+            let testConcerns = [];
+            let testPraise = [];
             
-            // Change ratio analysis
-            const changeRatio = deletions > 0 ? (additions / deletions).toFixed(1) : 'N/A';
-            let ratioInsight = '';
-            if (deletions > 0) {
-              if (additions / deletions > 3) {
-                ratioInsight = ' (Mostly additions - new feature or expansion)';
-              } else if (additions / deletions < 0.5) {
-                ratioInsight = ' (Mostly deletions - cleanup or removal)';
+            // Calculate test-to-production ratio
+            const testRatio = prodChanges > 0 ? (testChanges / prodChanges) : 0;
+            
+            if (prodChanges === 0) {
+              // No production changes
+              if (testChanges > 0) {
+                testAdequacy = 'excellent';
+                testPraise.push(':white_check_mark: Test-only changes - refactoring or test improvements');
               } else {
-                ratioInsight = ' (Balanced changes - likely refactoring)';
+                testAdequacy = 'n/a';
+              }
+            } else if (prodChanges > 0 && testChanges === 0) {
+              // Production changes but no tests
+              testAdequacy = 'poor';
+              testConcerns.push(':x: No test changes for production code modifications');
+              if (prodChanges > 20) {
+                testConcerns.push(':warning: Significant production changes without corresponding tests');
+              }
+            } else if (testRatio < 0.3) {
+              // Low test coverage
+              testAdequacy = 'needs-improvement';
+              testConcerns.push(':yellow_circle: Low test coverage - consider adding more tests');
+              if (prodChanges > 100) {
+                testConcerns.push(':warning: Large production changes with minimal test coverage');
+              }
+            } else if (testRatio >= 0.3 && testRatio <= 2.0) {
+              // Good balance
+              testAdequacy = 'good';
+              testPraise.push(':white_check_mark: Good balance of production and test code');
+              if (testRatio >= 0.8) {
+                testPraise.push(':star: Strong test coverage ratio');
+              }
+            } else {
+              // Very high test ratio
+              testAdequacy = 'excellent';
+              testPraise.push(':star2: Excellent test coverage - comprehensive testing');
+            }
+            
+            // Check for test-first indicators
+            if (testFilesCount > 0 && prodFilesCount > 0) {
+              testPraise.push(':test_tube: Test-first discipline detected');
+            }
+            
+            // Special checks for different change types
+            if (prodFiles.some(f => f.filename.includes('Controller') || f.filename.includes('Service'))) {
+              if (testChanges === 0) {
+                testConcerns.push(':warning: API/Service changes should include integration tests');
               }
             }
             
-            // Generate size recommendation
-            const sizeGuidance = {
-              'small': 'Ideal size for review and testing',
-              'medium': 'Good size - manageable for thorough review',
-              'medium-large': 'Consider if this could be split into smaller PRs',
-              'large': 'Recommend breaking into smaller, focused changes',
-              'extra-large': 'Strongly recommend splitting into multiple PRs'
-            };
-            
-            // Build the comment
-            const sections = [
-              `## ${sizeEmoji} PR Size Analysis`,
-              '',
-              `**Size Classification:** ${sizeLabel}`,
-              `**Total Changes:** ${totalChanges.toLocaleString()} lines (+${additions.toLocaleString()}, -${deletions.toLocaleString()})${ratioInsight}`,
-              `**Files Changed:** ${changedFiles}`,
-              `**Change Ratio:** ${changeRatio}`,
-              '',
-              `**Guidance:** ${sizeGuidance[sizeLabel]}`
-            ];
-            
-            if (concerns.length > 0) {
-              sections.push('', '### ⚠️ Concerns:');
-              sections.push(...concerns.map(c => `- ${c}`));
+            if (prodFiles.some(f => f.filename.includes('.cs') && f.additions > f.deletions)) {
+              if (testChanges === 0) {
+                testConcerns.push(':bulb: New code additions typically benefit from unit tests');
+              }
             }
             
-            if (recommendations.length > 0) {
-              sections.push('', '### 💡 Recommendations:');
-              sections.push(...recommendations.map(r => `- ${r}`));
-            }
+            // Create detailed breakdown
+            const breakdown = `
+            **Production Code:** ${prodChanges} lines (${prodFilesCount} files)
+            **Test Code:** ${testChanges} lines (${testFilesCount} files)
+            **Total:** ${totalChanges} lines (${totalChangedFiles} files)
+            ${prodChanges > 0 ? `**Test-to-Production Ratio:** ${testRatio.toFixed(2)}:1` : ''}
+            `;
             
-            // Add AI Code Drift context for larger PRs
-            if (totalChanges > 200 || changedFiles > 8) {
-              sections.push(
-                '',
-                '### 📊 AI Code Drift Prevention',
-                '',
-                'Large PRs can indicate problematic AI tool usage patterns. Consider:',
-                '- Making smaller, incremental commits when using AI assistance',
-                '- Breaking AI-generated code into logical, reviewable chunks',
-                '- Ensuring test coverage for AI-generated sections',
-                '',
-                'Learn more: [AI Code Drift Metrics](https://github.com/yourrepo/your-article)'
-              );
-            } else {
-              sections.push(
-                '',
-                '✅ **Good practices:** This PR size supports thorough review and reduces AI code drift risk.'
-              );
-            }
+            const testSection = testAdequacy !== 'n/a' ? `
+            ## Test Coverage Analysis
             
-            sections.push(
-              '',
-              '---',
-              '*Analysis by [AI Code Drift PR Size Analyzer](https://github.com/yourrepo/workflows) - Part of PDCA Framework for AI-Assisted Development*'
-            );
+            **Test Adequacy:** ${testAdequacy}
             
-            const comment = sections.join('\n');
+            ${testPraise.length > 0 ? '### Strengths:\n' + testPraise.map(p => `- ${p}`).join('\n') + '\n' : ''}
+            ${testConcerns.length > 0 ? '### Test Coverage Concerns:\n' + testConcerns.map(c => `- ${c}`).join('\n') + '\n' : ''}
             
-            // Check if we already commented on this PR
-            const existingComments = await github.rest.issues.listComments({
+            ### Test Coverage Guidelines:
+            - **Target ratio:** 0.5-2.0 test lines per production line
+            - **Minimum:** Some test changes for any production code modifications
+            - **Best practice:** Write tests first (TDD) when adding new features
+            ` : '';
+            
+            const comment = `
+            ## PR Size Analysis
+            
+            **Size:** ${sizeLabel} (based on production code)
+            
+            ${breakdown}
+            
+            ${concerns.length > 0 ? '### Size Concerns:\n' + concerns.map(c => `- ${c}`).join('\n') + '\n' : ':white_check_mark: Good size for review\n'}
+            
+            ${testSection}
+            
+            *Note: Size analysis focuses on production code changes. Test adequacy is evaluated separately.*
+            
+            *Automated by PDCA Framework*
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number
+              body: comment
             });
-            
-            const botComment = existingComments.data.find(comment => 
-              comment.user.type === 'Bot' && 
-              comment.body.includes('PR Size Analysis')
-            );
-            
-            if (botComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: comment
-              });
-              console.log('Updated existing PR size analysis comment');
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: comment
-              });
-              console.log('Created new PR size analysis comment');
-            }
-            
-            // Set output for potential use by other actions
-            core.setOutput('size-label', sizeLabel);
-            core.setOutput('total-changes', totalChanges);
-            core.setOutput('files-changed', changedFiles);
-            core.setOutput('has-concerns', concerns.length > 0 ? 'true' : 'false');
