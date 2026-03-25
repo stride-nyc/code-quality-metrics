@@ -1,0 +1,20 @@
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
+
+# Beads task tracking (exclude binary dolt database, keep audit trail)
+.beads/*
+!.beads/issues.jsonl
+!.beads/config.yaml
+
+# Generated output files
+local_commit_metrics.json
+local_metrics_summary.json
+
+# Test coverage
+coverage/
+node_modules/
+
+# macOS
+.DS_Store

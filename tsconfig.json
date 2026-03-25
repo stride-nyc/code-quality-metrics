@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2019",
+    "module": "commonjs",
+    "lib": ["ES2019"],
+    "noImplicitAny": true,
+    "strictNullChecks": false
+  },
+  "include": ["local-code-metrics.js"]
+}
