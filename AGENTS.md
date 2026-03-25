@@ -121,6 +121,17 @@ bd automatically syncs with git:
 
 For more details, see README.md and docs/QUICKSTART.md.
 
+## Quality Gates
+
+Run these after each implementation step, not only at the end of a session:
+
+```bash
+npm test          # all tests must pass before moving to next step
+npm run lint      # lint must be clean before moving to next step
+```
+
+When introducing new tooling (new lint rules, type checking, config changes), run the gate immediately after setup — before writing any tests or code — to catch configuration gaps early.
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.

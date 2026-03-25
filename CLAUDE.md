@@ -19,7 +19,17 @@ gh workflow run code-metrics.yml
 gh workflow run pr-metrics.yml
 ```
 
-No build, install, or lint steps — the script has no npm dependencies and runs with Node.js v12+.
+## Testing and Linting
+
+```bash
+npm test                 # run all tests
+npm run test:coverage    # tests with coverage report (thresholds: 80% lines, 90% functions)
+npm run test:watch       # watch mode
+npx jest __tests__/parseGitLog.test.js   # run a single test file
+npm run lint             # ESLint (flat config, globals.node required — already configured)
+```
+
+All tests mock `child_process` and `fs` — no git repository required to run the suite.
 
 ## Architecture
 
