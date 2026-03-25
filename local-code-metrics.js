@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @ts-check
 
 /**
  * AI Code Drift Local Analysis Script
@@ -15,6 +16,12 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+
+/**
+ * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, test_first_indicator: boolean, large_commit: boolean, sprawling_commit: boolean, source_branch: string, change_ratio: string }} CommitStats
+ * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
+ */
 
 // Configuration - Adjust these for your project
 const CONFIG = {
@@ -38,26 +45,32 @@ const CONFIG = {
 
 /**
  * Execute Git command with error handling
+ * @param {string} command
+ * @returns {string}
  */
 function runGitCommand(command) {
   try {
     const result = execSync(command, { encoding: 'utf8' }).trim();
     return result;
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error(`Error running Git command: ${command}`);
-    console.error(`Error: ${error.message}`);
+    console.error(`Error: ${msg}`);
     return '';
   }
 }
 
 /**
  * Parse Git log output into structured commit data
+ * @param {string} logOutput
+ * @returns {CommitInfo[]}
  */
 function parseGitLog(logOutput) {
   if (!logOutput) return [];
-  
+
+  /** @type {CommitInfo[]} */
   const commits = [];
-  const lines = logOutput.split('\n').filter(line => line.trim());
+  const lines = logOutput.split('\n').filter(/** @param {string} line */ line => line.trim());
   
   for (const line of lines) {
     const parts = line.split('|');
@@ -79,6 +92,8 @@ function parseGitLog(logOutput) {
 
 /**
  * Check if a filename matches test file patterns
+ * @param {string} filename
+ * @returns {boolean}
  */
 function isTestFile(filename) {
   return CONFIG.TEST_FILE_PATTERNS.some(pattern => pattern.test(filename));
@@ -86,6 +101,9 @@ function isTestFile(filename) {
 
 /**
  * Analyze a single commit for AI drift indicators
+ * @param {string} sha
+ * @param {string} branch
+ * @returns {CommitStats|null}
  */
 function analyzeCommit(sha, branch) {
   try {
@@ -146,13 +164,17 @@ function analyzeCommit(sha, branch) {
       change_ratio: totalDeletions > 0 ? (totalAdditions / totalDeletions).toFixed(2) : 'inf'
     };
   } catch (error) {
-    console.error(`  Error analyzing commit ${sha}: ${error.message}`);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`  Error analyzing commit ${sha}: ${msg}`);
     return null;
   }
 }
 
 /**
  * Generate insights based on metrics
+ * @param {{ large_commits_pct: string, sprawling_commits_pct: string, test_first_pct: string, avg_lines_changed: string }} summary
+ * @param {CommitMetric[]} metrics
+ * @returns {{ insights: string[], warnings: string[], recommendations: string[] }}
  */
 function generateInsights(summary, metrics) {
   const insights = [];
@@ -264,7 +286,9 @@ async function collectLocalMetrics() {
   console.log('');
   
   // Collect commits from all feature branches
+  /** @type {CommitInfo[]} */
   const allCommits = [];
+  /** @type {Record<string, number>} */
   const branchCommitCounts = {};
   
   for (const branch of allBranches) {
@@ -287,7 +311,8 @@ async function collectLocalMetrics() {
       console.log(`${branchCommits.length} commits`);
       
     } catch (error) {
-      console.log(`❌ Error: ${error.message}`);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.log(`❌ Error: ${msg}`);
       branchCommitCounts[branch] = 0;
     }
   }
@@ -327,7 +352,7 @@ async function collectLocalMetrics() {
       process.stdout.write(`\r⏳ Processing commits... ${progress}%`);
     }
     
-    const analysis = analyzeCommit(commit.full_sha, commit.source_branch);
+    const analysis = analyzeCommit(commit.full_sha, commit.source_branch ?? '');
     if (analysis) {
       metrics.push({
         ...commit,
@@ -442,4 +467,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { collectLocalMetrics, CONFIG };
+module.exports = { collectLocalMetrics, parseGitLog, isTestFile, analyzeCommit, generateInsights, CONFIG };
