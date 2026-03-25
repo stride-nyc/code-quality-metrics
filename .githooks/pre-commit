@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+echo "▶ lint..."
+npm run lint
+
+echo "▶ typecheck..."
+npm run typecheck
+
+echo "▶ test..."
+npm test -- --no-coverage
+
+echo "✓ all checks passed"

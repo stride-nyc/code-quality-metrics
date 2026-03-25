@@ -27,9 +27,16 @@ npm run test:coverage    # tests with coverage report (thresholds: 80% lines, 90
 npm run test:watch       # watch mode
 npx jest __tests__/parseGitLog.test.js   # run a single test file
 npm run lint             # ESLint (flat config, globals.node required — already configured)
+npm run typecheck        # tsc --noEmit (checks local-code-metrics.js via @ts-check + tsconfig.json)
 ```
 
 All tests mock `child_process` and `fs` — no git repository required to run the suite.
+
+A pre-commit hook runs lint → typecheck → test automatically. After cloning, activate it with:
+
+```bash
+npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
+```
 
 ## Architecture
 
