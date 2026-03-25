@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "server",
+  "dolt_database": "code_quality_metrics",
+  "project_id": "cb784801-1120-4f98-97ae-43b469b7e3d1"
+}
