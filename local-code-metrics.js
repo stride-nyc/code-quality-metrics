@@ -561,14 +561,6 @@ async function collectLocalMetrics() {
   console.log('📚 Learn more: https://github.com/yourrepo/your-article');
 }
 
-// Script execution
-if (require.main === module) {
-  collectLocalMetrics().catch(error => {
-    console.error('❌ Analysis failed:', error.message);
-    process.exit(1);
-  });
-}
-
 /**
  * Classify a repo into a DORA team archetype based on summary metrics.
  * Evaluated in priority order: harmonious-high-achiever → legacy-bottleneck → foundational-challenges → mixed-signals
@@ -800,3 +792,12 @@ async function getAnthropicClient() {
 }
 
 module.exports = { collectLocalMetrics, parseGitLog, isTestFile, analyzeCommit, generateInsights, CONFIG, computeStatistics, computeVelocity, scoreMessageQuality, classifyDoraArchetype, getAnthropicClient, selectClaudeCommits, getCommitDiff, analyzeWithClaude, CLAUDE_SYSTEM_PROMPT };
+
+// Script execution — placed after all definitions so CONVENTIONAL_COMMIT_RE and
+// other helpers are fully initialized before collectLocalMetrics() runs synchronously.
+if (require.main === module) {
+  collectLocalMetrics().catch(error => {
+    console.error('❌ Analysis failed:', error.message);
+    process.exit(1);
+  });
+}
