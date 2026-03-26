@@ -130,6 +130,34 @@ describe('collectLocalMetrics — successful run', () => {
     expect(typeof summary.avg_lines_changed).toBe('string');
   });
 
+  test('writes local_metrics_summary.json with DORA metric fields', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(typeof summary.velocity_commits_per_day).toBe('number');
+    expect(['accelerating', 'stable', 'decelerating']).toContain(summary.velocity_trend);
+    expect(typeof summary.additions_ratio_median).toBe('number');
+    expect(typeof summary.additions_ratio_p90).toBe('number');
+    expect(typeof summary.message_quality_pct).toBe('string');
+    expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
+      .toContain(summary.dora_archetype);
+  });
+
+  test('writes local_metrics_summary.json with statistical distribution fields', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(typeof summary.p50_lines_changed).toBe('number');
+    expect(typeof summary.p90_lines_changed).toBe('number');
+    expect(typeof summary.p95_lines_changed).toBe('number');
+    expect(typeof summary.stddev_lines_changed).toBe('number');
+    expect(typeof summary.p50_files_changed).toBe('number');
+    expect(typeof summary.p90_files_changed).toBe('number');
+    expect(['growing', 'stable', 'shrinking']).toContain(summary.commit_size_trend);
+  });
+
   test('logs warnings and recommendations when commits are large', async () => {
     // 101 added lines → 100% large commit rate → critical warning + recommendation
     const bigNumstat = `101\t0\tsrc/app.js`;

@@ -19,7 +19,7 @@ const path = require('path');
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, test_first_indicator: boolean, large_commit: boolean, sprawling_commit: boolean, source_branch: string, change_ratio: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, test_first_indicator: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -29,6 +29,10 @@ const CONFIG = {
   MAX_COMMITS: 50,
   LARGE_COMMIT_THRESHOLD: 100,
   SPRAWLING_COMMIT_THRESHOLD: 5,
+  MESSAGE_QUALITY_MIN_WORDS: 10,
+  AI_ANALYSIS_MAX_COMMITS: 5,
+  AI_DIFF_MAX_CHARS: 4000,
+  AI_RISK_ADDITIONS_RATIO: 3,
   
   // Test file patterns - customize for your language/framework
   TEST_FILE_PATTERNS: [
@@ -160,6 +164,7 @@ function analyzeCommit(sha, branch) {
       test_first_indicator: testFiles > 0 && prodFiles > 0,
       large_commit: totalLines > CONFIG.LARGE_COMMIT_THRESHOLD,
       sprawling_commit: filesChanged > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
+      outlier: false,
       source_branch: branch,
       change_ratio: totalDeletions > 0 ? (totalAdditions / totalDeletions).toFixed(2) : 'inf'
     };
@@ -364,6 +369,32 @@ async function collectLocalMetrics() {
   
   console.log('\n');
   
+  // Statistical distributions
+  const lineSizes = metrics.map(m => m.total_additions + m.total_deletions);
+  const fileCounts = metrics.map(m => m.files_changed);
+  const timestamps = metrics.map(m => new Date(m.date).getTime());
+  const lineStats = computeStatistics(lineSizes, timestamps);
+  const fileStats = computeStatistics(fileCounts, timestamps);
+
+  // Mark outlier commits in-place
+  metrics.forEach(m => {
+    m.outlier = lineStats.isOutlier(m.total_additions + m.total_deletions);
+  });
+
+  // Velocity
+  const dates = metrics.map(m => m.date);
+  const velocity = computeVelocity(dates);
+
+  // Additions ratio distribution
+  const ratios = metrics.map(m => m.total_additions / (m.total_deletions || 1));
+  const ratioStats = computeStatistics(ratios, timestamps);
+
+  // Message quality
+  const qualityCount = metrics.filter(m => scoreMessageQuality(m.message)).length;
+  const message_quality_pct = metrics.length > 0
+    ? ((qualityCount / metrics.length) * 100).toFixed(2)
+    : '0.00';
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -377,6 +408,24 @@ async function collectLocalMetrics() {
     test_first_pct: metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : "0.00",
     avg_files_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.files_changed, 0) / metrics.length).toFixed(2) : "0.00",
     avg_lines_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.total_additions + m.total_deletions, 0) / metrics.length).toFixed(2) : "0.00",
+    p50_lines_changed: lineStats.p50,
+    p90_lines_changed: lineStats.p90,
+    p95_lines_changed: lineStats.p95,
+    stddev_lines_changed: lineStats.stddev,
+    p50_files_changed: fileStats.p50,
+    p90_files_changed: fileStats.p90,
+    commit_size_trend: lineStats.trend,
+    velocity_commits_per_day: velocity.commits_per_day,
+    velocity_trend: velocity.trend,
+    additions_ratio_median: ratioStats.p50,
+    additions_ratio_p90: ratioStats.p90,
+    message_quality_pct,
+    dora_archetype: classifyDoraArchetype({
+      large_commits_pct: metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00',
+      sprawling_commits_pct: metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00',
+      test_first_pct: metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00',
+      message_quality_pct
+    }),
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };
@@ -467,4 +516,123 @@ if (require.main === module) {
   });
 }
 
-module.exports = { collectLocalMetrics, parseGitLog, isTestFile, analyzeCommit, generateInsights, CONFIG };
+/**
+ * Classify a repo into a DORA team archetype based on summary metrics.
+ * Evaluated in priority order: harmonious-high-achiever → legacy-bottleneck → foundational-challenges → mixed-signals
+ * @param {{ large_commits_pct: string, sprawling_commits_pct: string, test_first_pct: string, message_quality_pct: string }} summary
+ * @returns {string}
+ */
+function classifyDoraArchetype(summary) {
+  const large = parseFloat(summary.large_commits_pct);
+  const sprawling = parseFloat(summary.sprawling_commits_pct);
+  const testFirst = parseFloat(summary.test_first_pct);
+  const msgQuality = parseFloat(summary.message_quality_pct);
+
+  if (large < 20 && sprawling < 10 && testFirst > 50 && msgQuality > 60) return 'harmonious-high-achiever';
+  if (sprawling > 25 && large > 30) return 'legacy-bottleneck';
+  if (large > 40 || (testFirst < 30 && large > 20)) return 'foundational-challenges';
+  return 'mixed-signals';
+}
+
+/** @type {RegExp} */
+const CONVENTIONAL_COMMIT_RE = /^(feat|fix|refactor|test|chore|docs|perf|ci|build|revert)(\(.+\))?:/i;
+
+/**
+ * Score a single commit message for quality.
+ * Quality = conventional commit format OR word count >= MESSAGE_QUALITY_MIN_WORDS.
+ * @param {string} message
+ * @returns {boolean}
+ */
+function scoreMessageQuality(message) {
+  if (!message) return false;
+  if (CONVENTIONAL_COMMIT_RE.test(message)) return true;
+  return message.split(/\s+/).filter(Boolean).length >= CONFIG.MESSAGE_QUALITY_MIN_WORDS;
+}
+
+/**
+ * Compute commit velocity and trend from an array of ISO 8601 date strings.
+ * Dates must be time-ordered (oldest first).
+ * @param {string[]} dates
+ * @returns {{ commits_per_day: number, trend: string }}
+ */
+function computeVelocity(dates) {
+  if (dates.length < 2) return { commits_per_day: dates.length, trend: 'stable' };
+
+  const ms = dates.map(d => new Date(d).getTime());
+  const spanDays = (ms[ms.length - 1] - ms[0]) / 86400000 || 1;
+  const commits_per_day = dates.length / spanDays;
+
+  // Split commits at time midpoint; compare first-half vs second-half rate
+  const midMs = (ms[0] + ms[ms.length - 1]) / 2;
+  const firstHalf = ms.filter(t => t <= midMs);
+  const secondHalf = ms.filter(t => t > midMs);
+  const halfSpan = spanDays / 2 || 1;
+  const firstRate = firstHalf.length / halfSpan;
+  const secondRate = secondHalf.length / halfSpan;
+
+  let trend = 'stable';
+  if (secondRate > firstRate * 1.25) trend = 'accelerating';
+  else if (secondRate < firstRate * 0.75) trend = 'decelerating';
+
+  return { commits_per_day, trend };
+}
+
+/**
+ * Compute statistical distribution of a numeric array.
+ * sizes and timestamps must be same length and time-ordered (oldest first).
+ * @param {number[]} sizes
+ * @param {number[]} timestamps - epoch ms values
+ * @returns {{ p50: number, p90: number, p95: number, mean: number, stddev: number, trend: string, isOutlier: (v: number) => boolean }}
+ */
+function computeStatistics(sizes, timestamps) {
+  if (sizes.length === 0) {
+    return { p50: 0, p90: 0, p95: 0, mean: 0, stddev: 0, trend: 'stable', isOutlier: () => false };
+  }
+
+  // Percentile (linear interpolation)
+  const sorted = [...sizes].sort((a, b) => a - b);
+  /** @param {number} p - 0..1 */
+  function quantile(p) {
+    if (sorted.length === 1) return sorted[0];
+    const idx = p * (sorted.length - 1);
+    const lo = Math.floor(idx);
+    const hi = Math.ceil(idx);
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo);
+  }
+
+  const mean = sizes.reduce((s, v) => s + v, 0) / sizes.length;
+  const variance = sizes.reduce((s, v) => s + (v - mean) ** 2, 0) / sizes.length;
+  const stddev = Math.sqrt(variance);
+
+  // Trend: linear regression slope of size over time index
+  const n = sizes.length;
+  let trend = 'stable';
+  if (n >= 2) {
+    // Normalize timestamps to [0..1] to avoid floating-point magnitude issues
+    const t0 = timestamps[0];
+    const tRange = (timestamps[n - 1] - t0) || 1;
+    const xs = timestamps.map(t => (t - t0) / tRange);
+    const xMean = xs.reduce((s, v) => s + v, 0) / n;
+    const yMean = mean;
+    const num = xs.reduce((s, x, i) => s + (x - xMean) * (sizes[i] - yMean), 0);
+    const den = xs.reduce((s, x) => s + (x - xMean) ** 2, 0);
+    const slope = den === 0 ? 0 : num / den;
+    // Threshold: slope relative to mean — ignore noise below 5% of mean per unit
+    const threshold = yMean * 0.05;
+    if (slope > threshold) trend = 'growing';
+    else if (slope < -threshold) trend = 'shrinking';
+  }
+
+  const cutoff = mean + 2 * stddev;
+  return {
+    p50: quantile(0.5),
+    p90: quantile(0.9),
+    p95: quantile(0.95),
+    mean,
+    stddev,
+    trend,
+    isOutlier: (v) => stddev > 0 && v > cutoff
+  };
+}
+
+module.exports = { collectLocalMetrics, parseGitLog, isTestFile, analyzeCommit, generateInsights, CONFIG, computeStatistics, computeVelocity, scoreMessageQuality, classifyDoraArchetype };
