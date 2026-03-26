@@ -8,9 +8,14 @@
 !.beads/issues.jsonl
 !.beads/config.yaml
 
+# Environment variables — never commit API keys
+.env
+.env.local
+
 # Generated output files
 local_commit_metrics.json
 local_metrics_summary.json
+RETROSPECTIVE*.md
 
 # Test coverage
 coverage/
