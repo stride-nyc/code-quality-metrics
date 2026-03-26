@@ -603,7 +603,7 @@ function scoreMessageQuality(message) {
 function computeVelocity(dates) {
   if (dates.length < 2) return { commits_per_day: dates.length, trend: 'stable' };
 
-  const ms = dates.map(d => new Date(d).getTime());
+  const ms = dates.map(d => new Date(d).getTime()).sort((a, b) => a - b);
   const spanDays = (ms[ms.length - 1] - ms[0]) / 86400000 || 1;
   const commits_per_day = dates.length / spanDays;
 

@@ -51,4 +51,18 @@ describe('computeVelocity', () => {
     ];
     expect(computeVelocity(dates).trend).toBe('stable');
   });
+
+  it('returns positive commits_per_day when dates arrive newest-first (git log order)', () => {
+    // git log outputs commits newest-first; velocity must still be positive
+    const base = new Date('2024-01-01T00:00:00Z').getTime();
+    const datesOldestFirst = [
+      new Date(base + 1 * 86400000).toISOString(),
+      new Date(base + 3 * 86400000).toISOString(),
+      new Date(base + 5 * 86400000).toISOString(),
+      new Date(base + 7 * 86400000).toISOString(),
+    ];
+    const datesNewestFirst = [...datesOldestFirst].reverse();
+    const result = computeVelocity(datesNewestFirst);
+    expect(result.commits_per_day).toBeGreaterThan(0);
+  });
 });
