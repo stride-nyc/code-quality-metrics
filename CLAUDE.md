@@ -40,9 +40,16 @@ npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
 
 ## Architecture
 
-Three components, no shared code between them:
+Three public components with no shared code between them:
 
-1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
+1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
+
+   The `lib/` directory contains the internal modules (not shared with workflows):
+   - `lib/config.js` — CONFIG object; single source of truth for all thresholds
+   - `lib/git.js` — git shell commands, log parsing, per-commit analysis, diff extraction
+   - `lib/statistics.js` — statistical distributions (p50/p90/p95/stddev), velocity and trend
+   - `lib/metrics.js` — message quality scoring, DORA archetype classification, insights generation
+   - `lib/claude.js` — Anthropic client setup, commit pre-filtering, diff-level API analysis
 
 2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
@@ -84,7 +91,7 @@ The script degrades gracefully when the key is absent. No SDK install is require
 
 ## Configuration
 
-Thresholds are configured in the `CONFIG` object at the top of `local-code-metrics.js`. Key values:
+Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is the single source of truth for the local script. Key values:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -97,7 +104,7 @@ Thresholds are configured in the `CONFIG` object at the top of `local-code-metri
 
 The GitHub workflows have equivalent values hard-coded in their shell/jq logic. When adjusting thresholds, update both places.
 
-Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in the script or the equivalent grep patterns in the workflows for other languages.
+Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` or the equivalent grep patterns in the workflows for other languages.
 
 ## Workflow Permissions
 
