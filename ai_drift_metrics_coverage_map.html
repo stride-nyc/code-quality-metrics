@@ -1,0 +1,279 @@
+
+<style>
+  .coverage-root { font-family: var(--font-sans); padding: 0.5rem 0 1rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 1.25rem; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--color-text-secondary); }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .dot-full { background: #1D9E75; }
+  .dot-partial { background: #BA7517; }
+  .dot-gap { background: #D85A30; }
+  .dot-oos { background: #888780; }
+
+  .section-label { font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-tertiary); margin: 1.25rem 0 .5rem; }
+
+  .grid { display: grid; gap: 6px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+
+  .card { border-radius: 8px; padding: 10px 12px; cursor: pointer; transition: opacity .15s; border: 0.5px solid transparent; position: relative; }
+  .card:hover { opacity: .85; }
+
+  .card-full   { background: #E1F5EE; border-color: #5DCAA5; }
+  .card-partial { background: #FAEEDA; border-color: #EF9F27; }
+  .card-gap    { background: #FAECE7; border-color: #D85A30; }
+  .card-oos    { background: #F1EFE8; border-color: #B4B2A9; }
+
+  @media (prefers-color-scheme: dark) {
+    .card-full   { background: #085041; border-color: #1D9E75; }
+    .card-partial { background: #633806; border-color: #BA7517; }
+    .card-gap    { background: #4A1B0C; border-color: #993C1D; }
+    .card-oos    { background: #2C2C2A; border-color: #5F5E5A; }
+  }
+
+  .card-title { font-size: 13px; font-weight: 500; margin: 0 0 2px; }
+  .card-full .card-title   { color: #085041; }
+  .card-partial .card-title { color: #633806; }
+  .card-gap .card-title    { color: #4A1B0C; }
+  .card-oos .card-title    { color: #444441; }
+
+  @media (prefers-color-scheme: dark) {
+    .card-full .card-title   { color: #9FE1CB; }
+    .card-partial .card-title { color: #FAC775; }
+    .card-gap .card-title    { color: #F5C4B3; }
+    .card-oos .card-title    { color: #D3D1C7; }
+  }
+
+  .card-sub { font-size: 11px; line-height: 1.4; margin: 0; }
+  .card-full .card-sub   { color: #0F6E56; }
+  .card-partial .card-sub { color: #854F0B; }
+  .card-gap .card-sub    { color: #993C1D; }
+  .card-oos .card-sub    { color: #5F5E5A; }
+
+  @media (prefers-color-scheme: dark) {
+    .card-full .card-sub   { color: #5DCAA5; }
+    .card-partial .card-sub { color: #EF9F27; }
+    .card-gap .card-sub    { color: #F0997B; }
+    .card-oos .card-sub    { color: #888780; }
+  }
+
+  .cap-num { font-size: 10px; font-weight: 500; position: absolute; top: 7px; right: 9px; opacity: .6; }
+
+  .detail-panel { border-radius: 8px; padding: 12px 14px; margin-top: 6px; border: 0.5px solid var(--color-border-tertiary); background: var(--color-background-secondary); font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; display: none; }
+  .detail-panel.open { display: block; }
+
+  .threshold-row { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .threshold-row:last-child { border-bottom: none; }
+  .t-range { font-size: 11px; font-family: var(--font-mono); min-width: 90px; }
+  .t-ok   { color: #1D9E75; }
+  .t-warn { color: #BA7517; }
+  .t-crit { color: #D85A30; }
+  .t-label { font-size: 11px; color: var(--color-text-secondary); }
+
+  .divider { border: none; border-top: 0.5px solid var(--color-border-tertiary); margin: 1rem 0 0; }
+
+  .tool-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .tool-row:last-child { border-bottom: none; }
+  .tool-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); min-width: 80px; }
+  .tool-desc { font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; }
+
+  .analysis-layer { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+  .layer-card { border-radius: 8px; padding: 9px 11px; border: 0.5px solid var(--color-border-tertiary); background: var(--color-background-primary); }
+  .layer-name { font-size: 12px; font-weight: 500; color: var(--color-text-primary); margin: 0 0 3px; }
+  .layer-desc { font-size: 11px; color: var(--color-text-secondary); line-height: 1.4; margin: 0; }
+  .layer-badge { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 4px; margin-bottom: 5px; font-weight: 500; }
+  .badge-green { background: #E1F5EE; color: #0F6E56; }
+  .badge-amber { background: #FAEEDA; color: #854F0B; }
+  @media (prefers-color-scheme: dark) {
+    .badge-green { background: #085041; color: #5DCAA5; }
+    .badge-amber { background: #633806; color: #EF9F27; }
+  }
+</style>
+
+<div class="coverage-root">
+
+  <div class="legend">
+    <div class="legend-item"><div class="dot dot-full"></div>Fully covered by this toolkit</div>
+    <div class="legend-item"><div class="dot dot-partial"></div>Partial / proxy only</div>
+    <div class="legend-item"><div class="dot dot-gap"></div>Gap — needs external tool</div>
+    <div class="legend-item"><div class="dot dot-oos"></div>Out of scope (organizational)</div>
+  </div>
+
+  <div class="section-label">DORA AI Capabilities (7 total)</div>
+  <div class="grid grid-3" id="caps-grid"></div>
+  <div id="caps-detail" class="detail-panel"></div>
+
+  <div class="section-label">DORA Delivery Metrics</div>
+  <div class="grid grid-4" id="delivery-grid"></div>
+  <div id="delivery-detail" class="detail-panel"></div>
+
+  <div class="section-label">Git-Based Signals — fully measured</div>
+  <div class="grid grid-3" id="git-grid"></div>
+  <div id="git-detail" class="detail-panel"></div>
+
+  <hr class="divider">
+
+  <div class="section-label">Analysis layers</div>
+  <div class="analysis-layer" id="layers"></div>
+
+  <div class="section-label">Commercial tools for gaps</div>
+  <div id="tools-list"></div>
+
+</div>
+
+<script>
+const CAPS = [
+  { num:'#1', title:'Clear AI stance', sub:'Org policy', type:'oos', detail:'Whether the organization has a communicated AI policy. Requires survey data — not visible in commit history.' },
+  { num:'#2', title:'Healthy data ecosystems', sub:'Data infra quality', type:'oos', detail:'Quality of internal data infrastructure supporting AI tools. Organizational survey instrument only.' },
+  { num:'#3', title:'AI-accessible internal data', sub:'Knowledge systems', type:'oos', detail:'Whether AI tools can access relevant internal documentation and knowledge. Not in git history.' },
+  { num:'#4', title:'Strong version control', sub:'Commit discipline', type:'full', detail:'Fully addressed. Metrics: commit velocity trend, message quality score, branch discipline, additions ratio. All derived from git log.' },
+  { num:'#5', title:'Working in small batches', sub:'Batch discipline', type:'full', detail:'Fully addressed. Metrics: large commit %, sprawling commit %, p50/p90/p95 lines and files changed, commit size trend. Core DORA differentiator.' },
+  { num:'#6', title:'User-centric focus', sub:'Product decisions', type:'oos', detail:'User adoption, retention, satisfaction — product and UX telemetry. Not addressable from git history.' },
+  { num:'#7', title:'Quality internal platforms', sub:'CI/CD and tooling', type:'partial', detail:'Partially visible via workflow file complexity in .github/. Core CI/CD reliability metrics require pipeline telemetry.' },
+];
+
+const DELIVERY = [
+  { title:'Deployment frequency', sub:'CI/CD pipeline data', type:'gap', detail:'Requires deployment event data from CI/CD pipeline. Use DX or LinearB for full lifecycle visibility.' },
+  { title:'Lead time for changes', sub:'Commit → production', type:'partial', detail:'Proxy available: branch lifetime (creation → merge date). Full metric requires pipeline timestamps.' },
+  { title:'Change failure rate', sub:'Incident / rollback data', type:'gap', detail:'Requires integration with incident tracking (PagerDuty, etc.). Not addressable from git alone.' },
+  { title:'Mean time to recovery', sub:'Incident duration', type:'gap', detail:'Requires incident duration data. Not addressable without incident tracking integration.' },
+];
+
+const GIT_METRICS = [
+  {
+    title:'Large commit %', sub:'Lines > 100 threshold',
+    type:'full',
+    thresholds:[{r:'< 20%',l:'Healthy',cls:'t-ok'},{r:'20–40%',l:'Warning',cls:'t-warn'},{r:'> 40%',l:'Critical',cls:'t-crit'}],
+    detail:'Proxy for wholesale AI code acceptance. Threshold calibrated to DORA "small batches" capability boundary.'
+  },
+  {
+    title:'Sprawling commit %', sub:'Files > 5 threshold',
+    type:'full',
+    thresholds:[{r:'< 10%',l:'Healthy',cls:'t-ok'},{r:'10–25%',l:'Warning',cls:'t-warn'},{r:'> 25%',l:'Critical',cls:'t-crit'}],
+    detail:'Proxy for "shotgun surgery" — AI-suggested fixes rippling through unrelated components. DORA documents 154% PR size increase with high AI adoption.'
+  },
+  {
+    title:'Test-first discipline', sub:'Test + prod co-occurrence',
+    type:'full',
+    thresholds:[{r:'> 50%',l:'Healthy',cls:'t-ok'},{r:'30–50%',l:'Warning',cls:'t-warn'},{r:'< 30%',l:'Critical',cls:'t-crit'}],
+    detail:'DORA identifies automated testing as the single strongest predictor of whether AI tools help or hurt. Cannot distinguish test-first from test-after — measures co-occurrence only.'
+  },
+  {
+    title:'Commit size distribution', sub:'p50 / p90 / p95 lines',
+    type:'full',
+    thresholds:[{r:'p90 < 200',l:'Healthy',cls:'t-ok'},{r:'p90 200–500',l:'Monitor',cls:'t-warn'},{r:'p90 > 500',l:'Investigate',cls:'t-crit'}],
+    detail:'Distributions reveal what averages hide. p90 of 500 with p50 of 30 = "mostly disciplined with occasional explosions" — not visible in an average of 65.'
+  },
+  {
+    title:'File scope distribution', sub:'p50 / p90 files/commit',
+    type:'full',
+    thresholds:[{r:'p90 < 8',l:'Healthy',cls:'t-ok'},{r:'p90 8–15',l:'Monitor',cls:'t-warn'},{r:'p90 > 15',l:'Investigate',cls:'t-crit'}],
+    detail:'Architectural scatter metric. Complements large commit % by showing the shape of the distribution, not just the percentage above threshold.'
+  },
+  {
+    title:'Commit velocity trend', sub:'Acceleration / deceleration',
+    type:'full',
+    thresholds:[{r:'Stable',l:'Neutral',cls:'t-ok'},{r:'Growing + accelerating',l:'"Volume without discipline"',cls:'t-crit'},{r:'Shrinking',l:'Positive signal',cls:'t-ok'}],
+    detail:'Velocity alone is neutral. "Growing" commit size trend combined with "accelerating" velocity is DORA\'s joint indicator for risk.'
+  },
+  {
+    title:'Additions ratio', sub:'Adds ÷ deletions (p90)',
+    type:'full',
+    thresholds:[{r:'ratio near 1',l:'Balanced (editing)',cls:'t-ok'},{r:'ratio > 3',l:'Accumulating',cls:'t-warn'},{r:'+ large commit',l:'AI signature',cls:'t-crit'}],
+    detail:'AI-generated code tends to add without removing. Additions > deletions × 3 combined with large_commit is the specific pre-filter used before Claude API analysis.'
+  },
+  {
+    title:'Commit message quality', sub:'Word count / conventional',
+    type:'full',
+    thresholds:[{r:'> 10 words or conventional',l:'Specific',cls:'t-ok'},{r:'Below threshold',l:'Vague',cls:'t-warn'}],
+    detail:'Proxy for developer understanding of changes made. Vague messages ("fix stuff", "wip") correlate with passive AI code acceptance. Uses conventional commit format detection.'
+  },
+  {
+    title:'DORA archetype', sub:'Derived classification',
+    type:'full',
+    thresholds:[{r:'Harmonious high-achiever',l:'Strong foundations + AI',cls:'t-ok'},{r:'Foundational challenges',l:'Weak foundations + AI',cls:'t-crit'},{r:'Mixed signals',l:'Inconsistent',cls:'t-warn'}],
+    detail:'Composite classification derived from all git metrics. The archetype determines which intervention to prioritize — a "foundational challenges" team needs practice discipline before scaling AI use.'
+  },
+  {
+    title:'Claude API risk score', sub:'Optional — needs API key',
+    type:'partial',
+    thresholds:[{r:'0–40',l:'Low risk',cls:'t-ok'},{r:'41–70',l:'Review recommended',cls:'t-warn'},{r:'71–100',l:'High risk',cls:'t-crit'}],
+    detail:'Semantic analysis of commit diffs. Detects: generic variable names, boilerplate without error handling, architectural boundary violations. Pre-filtered to high-ratio commits only — typically 3–5 per run.'
+  },
+  {
+    title:'Copy-paste / code cloning', sub:'AST-level analysis',
+    type:'gap',
+    detail:'Git heuristics cannot detect this. Requires AST diff analysis — GitClear\'s core capability. Their 2025 research shows copy-paste now exceeds code moves in high-AI repos.'
+  },
+  {
+    title:'Code review quality', sub:'Reviewer depth / count',
+    type:'gap',
+    detail:'Requires GitHub API data beyond commit history: reviewer count, comment depth, review-to-merge time. DX or LinearB cover this.'
+  },
+];
+
+const LAYERS = [
+  { name:'GitHub Actions', badge:'Recommended', badgeCls:'badge-green', desc:'Pre-merge feature branch analysis. Captures signals before squash-merge destroys them. Weekly summary + real-time PR feedback.' },
+  { name:'Local script', badge:'Available', badgeCls:'badge-amber', desc:'Node.js script for immediate local analysis. Reveals the 10× gap between pre-merge patterns and what post-merge metrics show.' },
+  { name:'Claude API', badge:'Optional', badgeCls:'badge-amber', desc:'Semantic diff analysis on pre-filtered high-risk commits. Adds architectural concern detection and natural language risk explanation.' },
+];
+
+const TOOLS = [
+  { name:'GitClear', desc:'AST-level copy-paste and code cloning detection. The most direct evidence of structural AI drift — covers the gap this toolkit cannot address heuristically.' },
+  { name:'DX', desc:'Full DORA delivery metrics (deployment frequency, lead time, MTTR, change failure rate). Best for engineering leaders needing complete lifecycle visibility.' },
+  { name:'LinearB', desc:'PR cycle time, review bottleneck detection, indirect AI drift correlation. Good for teams wanting comprehensive metrics without custom instrumentation.' },
+];
+
+function typeClass(t) {
+  return { full:'card-full', partial:'card-partial', gap:'card-gap', oos:'card-oos' }[t];
+}
+
+function renderGrid(id, items, detailId, hasThresholds) {
+  const grid = document.getElementById(id);
+  const detail = document.getElementById(detailId);
+  items.forEach((item, i) => {
+    const card = document.createElement('div');
+    card.className = 'card ' + typeClass(item.type);
+    card.innerHTML = (item.num ? `<span class="cap-num">${item.num}</span>` : '') +
+      `<p class="card-title">${item.title}</p>` +
+      `<p class="card-sub">${item.sub}</p>`;
+    card.onclick = () => {
+      const isOpen = detail.classList.contains('open') && detail.dataset.idx == i;
+      detail.classList.remove('open');
+      if (!isOpen) {
+        let html = `<strong style="font-size:13px;color:var(--color-text-primary)">${item.title}</strong><br><span>${item.detail}</span>`;
+        if (item.thresholds) {
+          html += '<div style="margin-top:10px">' + item.thresholds.map(t =>
+            `<div class="threshold-row"><span class="t-range ${t.cls}">${t.r}</span><span class="t-label">${t.l}</span></div>`
+          ).join('') + '</div>';
+        }
+        detail.innerHTML = html;
+        detail.dataset.idx = i;
+        detail.classList.add('open');
+      }
+    };
+    grid.appendChild(card);
+  });
+}
+
+renderGrid('caps-grid', CAPS, 'caps-detail');
+renderGrid('delivery-grid', DELIVERY, 'delivery-detail');
+renderGrid('git-grid', GIT_METRICS, 'git-detail', true);
+
+const layersEl = document.getElementById('layers');
+LAYERS.forEach(l => {
+  layersEl.innerHTML += `<div class="layer-card">
+    <span class="layer-badge ${l.badgeCls}">${l.badge}</span>
+    <p class="layer-name">${l.name}</p>
+    <p class="layer-desc">${l.desc}</p>
+  </div>`;
+});
+
+const toolsEl = document.getElementById('tools-list');
+TOOLS.forEach(t => {
+  toolsEl.innerHTML += `<div class="tool-row">
+    <span class="tool-name">${t.name}</span>
+    <span class="tool-desc">${t.desc}</span>
+  </div>`;
+});
+</script>
