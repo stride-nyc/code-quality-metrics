@@ -9,5 +9,6 @@
     "noImplicitAny": true,
     "strictNullChecks": false
   },
-  "include": ["local-code-metrics.js"]
+  "include": ["local-code-metrics.js"],
+  "exclude": ["lib/", "node_modules"]
 }

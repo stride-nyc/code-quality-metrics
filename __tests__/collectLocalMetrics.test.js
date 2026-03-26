@@ -2,9 +2,11 @@
 
 jest.mock('child_process');
 jest.mock('fs');
+jest.mock('../lib/claude');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
+const claude = require('../lib/claude');
 const { collectLocalMetrics } = require('../local-code-metrics');
 
 const FAKE_ROOT = '/fake/repo';
@@ -17,6 +19,8 @@ beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => {});
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
+  // Default: Claude skipped — overridden only in Claude-active tests
+  claude.getAnthropicClient.mockResolvedValue(null);
 });
 
 afterEach(() => {
@@ -130,6 +134,34 @@ describe('collectLocalMetrics — successful run', () => {
     expect(typeof summary.avg_lines_changed).toBe('string');
   });
 
+  test('writes local_metrics_summary.json with DORA metric fields', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(typeof summary.velocity_commits_per_day).toBe('number');
+    expect(['accelerating', 'stable', 'decelerating']).toContain(summary.velocity_trend);
+    expect(typeof summary.additions_ratio_median).toBe('number');
+    expect(typeof summary.additions_ratio_p90).toBe('number');
+    expect(typeof summary.message_quality_pct).toBe('string');
+    expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
+      .toContain(summary.dora_archetype);
+  });
+
+  test('writes local_metrics_summary.json with statistical distribution fields', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(typeof summary.p50_lines_changed).toBe('number');
+    expect(typeof summary.p90_lines_changed).toBe('number');
+    expect(typeof summary.p95_lines_changed).toBe('number');
+    expect(typeof summary.stddev_lines_changed).toBe('number');
+    expect(typeof summary.p50_files_changed).toBe('number');
+    expect(typeof summary.p90_files_changed).toBe('number');
+    expect(['growing', 'stable', 'shrinking']).toContain(summary.commit_size_trend);
+  });
+
   test('logs warnings and recommendations when commits are large', async () => {
     // 101 added lines → 100% large commit rate → critical warning + recommendation
     const bigNumstat = `101\t0\tsrc/app.js`;
@@ -173,6 +205,14 @@ describe('collectLocalMetrics — successful run', () => {
     expect(allLogs).toMatch(/and \d+ more commits/);
   });
 
+  test('logs Claude-skipped message when ANTHROPIC_API_KEY is absent', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    await collectLocalMetrics();
+    const allLogs = logSpy.mock.calls.flat().join(' ');
+    expect(allLogs).toMatch(/Claude analysis skipped/);
+  });
+
   test('deduplicates commits with the same SHA across branches', async () => {
     // Two branches both surface the same commit SHA
     mockExecSequence(
@@ -189,5 +229,72 @@ describe('collectLocalMetrics — successful run', () => {
     const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
     const written = JSON.parse(metricsCall[1]);
     expect(written).toHaveLength(1);
+  });
+});
+
+describe('collectLocalMetrics — Claude API active', () => {
+  const SHA = 'a'.repeat(40);
+  const NUMSTAT = `110\t5\tsrc/app.js`;  // 115 prod lines → large_commit = true, additions >> deletions
+
+  beforeEach(() => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+    claude.selectClaudeCommits.mockReturnValue([{
+      sha: SHA.substring(0, 8),
+      full_sha: SHA,
+      message: 'feat: add thing',
+      author: 'Dev',
+      date: '2024-01-15T10:00:00Z',
+      source_branch: 'feature/x'
+    }]);
+    claude.analyzeWithClaude.mockResolvedValue([{
+      sha: SHA.substring(0, 8),
+      ai_confidence: 75,
+      risk_score: 80,
+      patterns: ['generic variable names'],
+      architectural_concerns: [],
+      summary: 'Possible AI-generated code'
+    }]);
+  });
+
+  test('annotates metrics and writes local_claude_analysis.json when Claude returns results', async () => {
+    claude.getAnthropicClient.mockResolvedValue({});
+
+    await collectLocalMetrics();
+
+    // Three files: metrics, summary, claude analysis
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
+
+    const claudeCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_claude_analysis'));
+    expect(claudeCall).toBeDefined();
+    const claudeOutput = JSON.parse(claudeCall[1]);
+    expect(claudeOutput.model).toBe('claude-sonnet-4-6');
+    expect(claudeOutput.commits_analyzed).toBe(1);
+    expect(claudeOutput.results).toHaveLength(1);
+
+    // Metric should be annotated with Claude fields
+    const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+    const metrics = JSON.parse(metricsCall[1]);
+    expect(metrics[0].ai_confidence).toBe(75);
+    expect(metrics[0].risk_score).toBe(80);
+    expect(metrics[0].patterns).toEqual(['generic variable names']);
+  });
+
+  test('logs Claude analysis section to console when metrics are annotated', async () => {
+    claude.getAnthropicClient.mockResolvedValue({});
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const allLogs = logSpy.mock.calls.flat().join(' ');
+    expect(allLogs).toMatch(/CLAUDE AI ANALYSIS/);
+    expect(allLogs).toMatch(/confidence=75%/);
+    expect(allLogs).toMatch(/risk=80%/);
   });
 });
