@@ -201,6 +201,14 @@ describe('collectLocalMetrics — successful run', () => {
     expect(allLogs).toMatch(/and \d+ more commits/);
   });
 
+  test('logs Claude-skipped message when ANTHROPIC_API_KEY is absent', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    await collectLocalMetrics();
+    const allLogs = logSpy.mock.calls.flat().join(' ');
+    expect(allLogs).toMatch(/Claude analysis skipped/);
+  });
+
   test('deduplicates commits with the same SHA across branches', async () => {
     // Two branches both surface the same commit SHA
     mockExecSequence(
