@@ -42,7 +42,7 @@ npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
 
 Three components, no shared code between them:
 
-1. **`local-code-metrics.js`** — Standalone Node.js script. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json`, and prints a console report with insights.
+1. **`local-code-metrics.js`** — Standalone Node.js script (requires Node ≥18). Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
 
 2. **`.github/workflows/code-metrics.yml`** — Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
@@ -56,10 +56,46 @@ Three components, no shared code between them:
 | Sprawling commit % (>5 files) | <10% |
 | Test-to-production ratio | 0.5–2.0:1 |
 | Avg files changed per commit | <5 |
+| Commit message quality % | >60% |
+| Additions-to-deletions ratio (median) | <3.0 |
+
+Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and DORA team archetype are included in the summary.
+
+### DORA Archetype Classification
+
+The summary includes a `dora_archetype` field classifying the repository into one of four team archetypes based on large commit %, sprawling commit %, test-first %, and message quality %:
+
+| Archetype | Signal |
+|-----------|--------|
+| `harmonious-high-achiever` | All four metrics in healthy range |
+| `legacy-bottleneck` | High sprawl (>25%) + high large commits (>30%) |
+| `foundational-challenges` | Large commits >40%, or low test discipline + elevated large commits |
+| `mixed-signals` | No clear archetype threshold breached |
+
+### Claude API Integration (Optional)
+
+Set `ANTHROPIC_API_KEY` to enable diff-level analysis of high-risk commits. When active:
+- Up to 5 commits are selected (large commits with additions > deletions × 3)
+- Each commit is analyzed for AI-generated code patterns and architectural concerns
+- Results are written to `local_claude_analysis.json`
+- Commit metrics are annotated with `ai_confidence`, `risk_score`, `patterns`, and `architectural_concerns`
+
+The script degrades gracefully when the key is absent — no SDK install required to run.
 
 ## Configuration
 
-Thresholds are configured in the `CONFIG` object at the top of `local-code-metrics.js`. The GitHub workflows have equivalent values hard-coded in their shell/jq logic. When adjusting thresholds, update both places.
+Thresholds are configured in the `CONFIG` object at the top of `local-code-metrics.js`. Key values:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `LARGE_COMMIT_THRESHOLD` | 100 | Prod lines changed to flag as large |
+| `SPRAWLING_COMMIT_THRESHOLD` | 5 | Files changed to flag as sprawling |
+| `MESSAGE_QUALITY_MIN_WORDS` | 10 | Word count threshold for non-conventional messages |
+| `AI_ANALYSIS_MAX_COMMITS` | 5 | Max commits sent to Claude per run |
+| `AI_DIFF_MAX_CHARS` | 4000 | Diff truncation limit for Claude API calls |
+| `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
+
+The GitHub workflows have equivalent values hard-coded in their shell/jq logic. When adjusting thresholds, update both places.
 
 Test file detection uses patterns for JS, Python, Go, Java, and C# — extend `TEST_FILE_PATTERNS` in the script or the equivalent grep patterns in the workflows for other languages.
 
