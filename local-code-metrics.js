@@ -423,6 +423,11 @@ async function collectLocalMetrics() {
     console.log('ℹ️  Claude analysis skipped (no ANTHROPIC_API_KEY set)');
   }
 
+  // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
+  const large_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const sprawling_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const test_first_pct = metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00';
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -431,9 +436,9 @@ async function collectLocalMetrics() {
     filtered_from: uniqueCommits.length,
     branches_analyzed: allBranches,
     branch_commit_counts: branchCommitCounts,
-    large_commits_pct: metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : "0.00",
-    sprawling_commits_pct: metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : "0.00",
-    test_first_pct: metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : "0.00",
+    large_commits_pct,
+    sprawling_commits_pct,
+    test_first_pct,
     avg_files_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.files_changed, 0) / metrics.length).toFixed(2) : "0.00",
     avg_lines_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.total_additions + m.total_deletions, 0) / metrics.length).toFixed(2) : "0.00",
     p50_lines_changed: lineStats.p50,
@@ -448,12 +453,7 @@ async function collectLocalMetrics() {
     additions_ratio_median: ratioStats.p50,
     additions_ratio_p90: ratioStats.p90,
     message_quality_pct,
-    dora_archetype: classifyDoraArchetype({
-      large_commits_pct: metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00',
-      sprawling_commits_pct: metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00',
-      test_first_pct: metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00',
-      message_quality_pct
-    }),
+    dora_archetype: classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_first_pct, message_quality_pct }),
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };
