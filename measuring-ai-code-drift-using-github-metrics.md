@@ -1,14 +1,14 @@
 # Measuring AI Code Drift: Working with GitHub's Available Metrics to Track LLM Impact on Existing Codebases
 
-The productivity case for AI coding tools seems straightforward: developers write code faster, complete more tasks, and merge more pull requests. But a growing body of research — most recently the DORA 2025 AI Capabilities Model report [1] — is documenting a troubling paradox. The same teams reporting individual productivity gains are simultaneously experiencing slower delivery, more bugs, and longer code reviews. The tools are generating more code faster than organizations can safely absorb it.
+The productivity case for AI coding tools seems straightforward: developers write code faster, complete more tasks, and merge more pull requests. But a growing body of research, most recently the DORA 2025 AI Capabilities Model report [1], is documenting a troubling paradox. The same teams reporting individual productivity gains are simultaneously experiencing slower delivery, more bugs, and longer code reviews. The tools are generating more code faster than organizations can safely absorb it.
 
 This article explains why standard measurement approaches miss the most important signals, what the research actually shows, and how to instrument your development workflow to detect AI code drift before it compounds.
 
 ## The Signal Destruction Problem
 
-Most software teams measure code quality at the wrong point in the process. Post-merge analysis — scanning your main branch, reviewing GitHub's aggregate statistics — sees a sanitized view of development that conceals how the code was actually written.
+Most software teams measure code quality at the wrong point in the process. Post-merge analysis (scanning your main branch, reviewing GitHub's aggregate statistics) sees a sanitized view of development that conceals how the code was actually written.
 
-The culprit is `git merge --squash`. This standard workflow collapses an entire feature branch — potentially dozens of commits representing days of iterative development — into a single merge commit on main. The granular signals that reveal AI-assisted development patterns (large individual commits, test discipline on a commit-by-commit basis, the ratio of additions to deletions) are destroyed at merge time.
+The culprit is `git merge --squash`. This standard workflow collapses an entire feature branch (potentially dozens of commits representing days of iterative development) into a single merge commit on main. The granular signals that reveal AI-assisted development patterns (large individual commits, test discipline on a commit-by-commit basis, the ratio of additions to deletions) are destroyed at merge time.
 
 The practical consequence: local analysis of feature branches before merging consistently reveals 10x higher AI drift rates than analysis of the main branch after merging [2]. By the time the problem is visible in your standard metrics, it's embedded across your codebase.
 
@@ -25,26 +25,26 @@ Teams with high AI adoption reported measurable individual productivity gains:
 - 21% more tasks completed
 - Reported improvements in documentation quality, code quality, and review speed
 
-But when DORA looked at team-level delivery metrics — the ones that actually reflect whether software is reaching users reliably — the picture reversed:
+But when DORA looked at team-level delivery metrics (the ones that actually reflect whether software is reaching users reliably), the picture reversed:
 
-- **154% increase in pull request size** — AI-generated code arrives in larger batches
-- **91% increase in code review time** — reviewers struggle with the volume and size of AI-generated changes
-- **9% increase in bug rates** — more code, reviewed faster, with higher confidence in AI output, means more defects escape
-- **7.2% reduction in delivery stability** — change failure rates increased initially with high AI adoption
-- **1.5% decrease in overall delivery throughput** — despite individual productivity gains, teams delivered less
+- **154% increase in pull request size**: AI-generated code arrives in larger batches
+- **91% increase in code review time**: reviewers struggle with the volume and size of AI-generated changes
+- **9% increase in bug rates**: more code, reviewed faster, with higher confidence in AI output, means more defects escape
+- **7.2% reduction in delivery stability**: change failure rates increased initially with high AI adoption
+- **1.5% decrease in overall delivery throughput**: despite individual productivity gains, teams delivered less
 
 More code is being produced and merged more quickly, reviewed more slowly, and breaking more often.
 
 ### The AI Amplifier Effect
 
-DORA's central finding is that AI tools don't change a team's fundamental trajectory — they accelerate it. Teams with strong foundational practices (automated testing, CI/CD, version control discipline, working in small batches) found that AI amplified their existing strengths. Teams with weak foundations used AI tools to generate technical debt faster.
+DORA's central finding is that AI tools don't change a team's fundamental trajectory; they accelerate it. Teams with strong foundational practices (automated testing, CI/CD, version control discipline, working in small batches) found that AI amplified their existing strengths. Teams with weak foundations used AI tools to generate technical debt faster.
 
 DORA identifies seven organizational capabilities that amplify AI's positive outcomes [3]. Two of these are directly observable in commit history and form the foundation of the measurement approach described here:
 
 - **Strong version control practices** (Capability 4): frequent commits, mature rollback capability, disciplined branching
 - **Working in small batches** (Capability 5): a long-standing DORA principle that becomes even more critical in AI-assisted environments
 
-The remaining five capabilities — organizational AI policy, data ecosystem quality, internal knowledge systems, user-centric focus, and platform quality — require organizational and infrastructure data not available in git history.
+The remaining five capabilities (organizational AI policy, data ecosystem quality, internal knowledge systems, user-centric focus, and platform quality) require organizational and infrastructure data not available in git history.
 
 ### Team Archetypes
 
@@ -58,11 +58,11 @@ Identifying which archetype describes your team helps calibrate which signals to
 
 ## Why This Matters: GitClear's Independent Evidence
 
-GitClear, a code intelligence platform specializing in AI drift detection, provides independent evidence that corroborates DORA's findings [4]. Their 2025 research on code churn patterns documented a threshold crossed for the first time: copy-paste operations now exceed code moves in repositories with high AI adoption. This is significant because copy-paste at scale is a leading indicator of the kind of technical debt that compounds invisibly — code that appears to work but creates hidden coupling and increases maintenance cost over time.
+GitClear, a code intelligence platform specializing in AI drift detection, provides independent evidence that corroborates DORA's findings [4]. Their 2025 research on code churn patterns documented a threshold crossed for the first time: copy-paste operations now exceed code moves in repositories with high AI adoption. This is significant because copy-paste at scale is a leading indicator of the kind of technical debt that compounds invisibly: code that appears to work but creates hidden coupling and increases maintenance cost over time.
 
 GitClear's analysis also shows that churn rates (code written and then rewritten within two weeks) have increased alongside AI adoption, suggesting that AI-generated code requires more downstream rework than human-written code, offsetting the speed gains from generation.
 
-These findings are consistent with what DORA describes as the rework paradox: individual developers write code faster, but the downstream effects — larger reviews, more bugs, more rework — push net team productivity below the pre-AI baseline for teams without strong foundations.
+These findings are consistent with what DORA describes as the rework paradox: individual developers write code faster, but the downstream effects (larger reviews, more bugs, more rework) push net team productivity below the pre-AI baseline for teams without strong foundations.
 
 ## What We Can Measure (and What We Can't)
 
@@ -77,11 +77,11 @@ Git commit history is a rich data source for two of DORA's seven capabilities. I
 - Commit message specificity
 
 **What git cannot reveal**:
-- The four core DORA delivery metrics (deployment frequency, lead time, change failure rate, MTTR) — these require CI/CD and incident data
-- Copy-paste and code cloning detection — requires AST-level diff analysis (GitClear's approach)
-- Code review quality — reviewer count and comment depth require GitHub API data
-- Architectural boundary violations — requires dependency graph analysis; the Claude API integration described below partially addresses this
-- DORA capabilities 1, 2, 3, 6, 7 — require organizational policy, data infrastructure, and product telemetry
+- The four core DORA delivery metrics (deployment frequency, lead time, change failure rate, MTTR): these require CI/CD and incident data
+- Copy-paste and code cloning detection: requires AST-level diff analysis (GitClear's approach)
+- Code review quality: reviewer count and comment depth require GitHub API data
+- Architectural boundary violations: requires dependency graph analysis; the Claude API integration described below partially addresses this
+- DORA capabilities 1, 2, 3, 6, 7: require organizational policy, data infrastructure, and product telemetry
 
 A detailed breakdown of measurable signals, gaps, and the tools that address each gap is available in the companion [Metrics Specification](metrics-specification.md).
 
@@ -107,9 +107,9 @@ Heuristics catch the shape of a problem; AI analysis can explain what's actually
 
 - **AI-generated code signature detection**: generic variable names (`data`, `result`, `item`), boilerplate CRUD without error handling, identically structured adjacent functions, absent domain language in identifiers
 - **Architectural boundary violation detection**: code that crosses service or module boundaries in ways that violate established patterns in the codebase
-- **Per-commit risk scoring**: a 0–100 confidence score with natural language explanation of specific concerns
+- **Per-commit risk scoring**: a 0-100 confidence score with natural language explanation of specific concerns
 
-The practical implementation pre-filters commits where `large_commit = true AND additions > deletions × 3` to keep API costs low — typically 3–5 commits per analysis run. An `ANTHROPIC_API_KEY` environment variable gates the feature; if absent, the analysis skips gracefully and the rest of the metrics run unchanged.
+The practical implementation pre-filters commits where `large_commit = true AND additions > deletions x 3` to keep API costs low (typically 3-5 commits per analysis run). An `ANTHROPIC_API_KEY` environment variable gates the feature; if absent, the analysis skips gracefully and the rest of the metrics run unchanged.
 
 This approach works best as a second pass: heuristics flag the candidates, Claude explains what's actually problematic about them.
 
@@ -117,7 +117,7 @@ This approach works best as a second pass: heuristics flag the candidates, Claud
 
 ### GitClear
 
-The most specialized solution for AI code drift detection. Goes beyond commit statistics to classify code operations including moved, copy/pasted, and duplicated blocks — the AST-level analysis that git heuristics cannot replicate. Their 2025 research on copy-paste exceeding code moves is the most direct quantitative evidence of structural AI drift available. Offers a free starter tier.
+The most specialized solution for AI code drift detection. Goes beyond commit statistics to classify code operations including moved, copy/pasted, and duplicated blocks. This is the AST-level analysis that git heuristics cannot replicate. Their 2025 research on copy-paste exceeding code moves is the most direct quantitative evidence of structural AI drift available. Offers a free starter tier.
 
 ### DX (Developer Experience Platform)
 

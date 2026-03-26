@@ -10,20 +10,21 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 
 ## Tools Included
 
-### 1. 📊 Weekly AI Code Drift Metrics (GitHub Actions)
-- **File:** `.github/workflows/ai-code-drift-metrics.yml`
+### 1. Weekly AI Code Drift Metrics (GitHub Actions)
+- **File:** `.github/workflows/code-metrics.yml`
 - **Purpose:** Automated weekly analysis of feature branches
 - **Output:** GitHub issues with trend analysis and artifacts
 
-### 2. 🚦 Real-time PR Size Analysis (GitHub Actions)  
-- **File:** `.github/workflows/pr-size-analysis.yml`
+### 2. Real-time PR Size Analysis (GitHub Actions)
+- **File:** `.github/workflows/pr-metrics.yml`
 - **Purpose:** Immediate feedback on every pull request
 - **Output:** PR comments with size warnings and recommendations
 
-### 3. 🔍 Local Repository Analysis (Node.js Script)
-- **File:** `local-ai-drift-analysis.js`
+### 3. Local Repository Analysis (Node.js Script)
+- **File:** `local-code-metrics.js`
 - **Purpose:** Immediate analysis of your local development patterns
 - **Output:** Console report and JSON files with detailed metrics
+- **Requires:** Node.js >= 18
 
 ## Quick Start
 
@@ -31,23 +32,24 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 ```bash
 # 1. Copy workflows to your repository
 mkdir -p .github/workflows
-curl -o .github/workflows/ai-code-drift-metrics.yml https://raw.githubusercontent.com/yourrepo/toolkit/main/ai-code-drift-metrics.yml
-curl -o .github/workflows/pr-size-analysis.yml https://raw.githubusercontent.com/yourrepo/toolkit/main/pr-size-analysis.yml
+# Copy .github/workflows/code-metrics.yml and pr-metrics.yml from this repo
 
 # 2. Ensure feature branches aren't auto-deleted
 # Go to repo Settings > General > Pull Requests
 # Uncheck "Automatically delete head branches"
 
 # 3. Run manually or wait for weekly schedule
+gh workflow run code-metrics.yml
 ```
 
 ### Option 2: Local Analysis
 ```bash
-# 1. Download and run the local script
-curl -o local-ai-drift-analysis.js https://raw.githubusercontent.com/yourrepo/toolkit/main/local-ai-drift-analysis.js
-node local-ai-drift-analysis.js
+# 1. Clone and run
+npm install
+node local-code-metrics.js
 
 # 2. Review the generated JSON files and console output
+# Optional: set ANTHROPIC_API_KEY for Claude diff analysis
 ```
 
 ## Key Metrics Tracked
@@ -56,20 +58,21 @@ node local-ai-drift-analysis.js
 |--------|--------|---------|
 | **Large Commit %** | <20% | Detects batch AI code acceptance |
 | **Sprawling Commit %** | <10% | Identifies scattered changes across files |
-| **Test-First Discipline** | Trending ↗ | Monitors TDD practices with AI tools |
+| **Test-First Discipline** | >50% | Monitors TDD practices with AI tools |
+| **Message Quality %** | >60% | Conventional commits or descriptive messages |
+| **Additions/Deletions Ratio (median)** | <3.0 | Flags batch-acceptance pattern |
 | **Avg Files Changed** | <5 | Measures development granularity |
-| **Avg Lines Changed** | <100 | Detects wholesale AI code acceptance |
 
 ## Real-World Example
 
 **Remote Repository Analysis (misleading):**
 - 4 commits over 30 days
-- 0% large commits  
+- 0% large commits
 - 8 lines average per commit
 
 **Local Repository Analysis (reality):**
 - 50 commits across 4 feature branches
-- **46% large commits** 
+- **46% large commits**
 - **9,053 lines average per commit**
 - Clear AI drift patterns hidden by merge squashing
 
@@ -81,7 +84,7 @@ Customize test file patterns for your language:
 ```javascript
 // In workflows or local script CONFIG
 TEST_FILE_PATTERNS: [
-  /\.(test|spec)\./i,              // JavaScript/TypeScript  
+  /\.(test|spec)\./i,              // JavaScript/TypeScript
   /Tests?\.cs$/i,                  // C# (FileTests.cs)
   /Test\.java$/i,                  // Java (FileTest.java)
   /_test\.py$/i,                   // Python (file_test.py)
@@ -95,44 +98,51 @@ TEST_FILE_PATTERNS: [
 Adjust warning thresholds based on your team:
 
 ```javascript
-// Large commit threshold (lines)
-large_commit: (additions + deletions) > 100,
-
-// Sprawling commit threshold (files)  
-sprawling_commit: files_changed > 5,
-
-// Analysis period (days)
-ANALYSIS_DAYS: 30,
+LARGE_COMMIT_THRESHOLD: 100,       // lines changed
+SPRAWLING_COMMIT_THRESHOLD: 5,     // files changed
+ANALYSIS_DAYS: 30,                 // lookback window
+MESSAGE_QUALITY_MIN_WORDS: 10,     // words for non-conventional messages
+AI_RISK_ADDITIONS_RATIO: 3,        // additions/deletions multiplier for Claude pre-filter
+AI_ANALYSIS_MAX_COMMITS: 5,        // max commits sent to Claude per run
 ```
 
 ## Understanding Results
 
-### 🟢 Healthy Patterns
+### Healthy Patterns
 ```
 Large commits: <20%
 Sprawling commits: <10%
 Test-first discipline: >50%
-Avg files changed: <5
-Avg lines changed: <100
+Message quality: >60%
+Additions ratio (median): <3.0
 ```
 
-### 🟡 Warning Signs  
+### Warning Signs
 ```
 Large commits: 20-40%
 Sprawling commits: 10-25%
 Test-first discipline: 30-50%
-Avg files changed: 5-10
-Avg lines changed: 100-500
+Additions ratio (median): 3.0-6.0
 ```
 
-### 🔴 Critical Issues
+### Critical Issues
 ```
 Large commits: >40%
-Sprawling commits: >25%  
+Sprawling commits: >25%
 Test-first discipline: <30%
-Avg files changed: >10
-Avg lines changed: >500
+Additions ratio (median): >6.0
 ```
+
+## DORA Archetype Classification
+
+The summary includes a `dora_archetype` field:
+
+| Archetype | Signal |
+|-----------|--------|
+| `harmonious-high-achiever` | All metrics in healthy range |
+| `legacy-bottleneck` | High sprawl + high large commits |
+| `foundational-challenges` | Large commits >40% or low test discipline |
+| `mixed-signals` | No clear threshold breached |
 
 ## Workflow Outputs
 
@@ -147,50 +157,50 @@ Avg lines changed: >500
 ### Key Metrics
 | Metric | Value | Target | Status |
 |--------|-------|--------|---------|
-| Large Commits | 28% | <20% | ⚠️ |
-| Sprawling Commits | 12% | <10% | ⚠️ |
-| Test-First Discipline | 64% | Trending ↗ | ✅ |
+| Large Commits | 28% | <20% | Warning |
+| Sprawling Commits | 12% | <10% | Warning |
+| Test-First Discipline | 64% | >50% | OK |
 
 ### Interpretation
-⚠️ **Large commits above 20% threshold** - Consider breaking down AI-generated code
-⚠️ **Sprawling commits above 10% threshold** - Review AI suggestions for scope creep
+**Large commits above 20% threshold** - Consider breaking down AI-generated code
+**Sprawling commits above 10% threshold** - Review AI suggestions for scope creep
 ```
 
 ### PR Size Analysis (PR Comment)
-```markdown  
-## 🟠 PR Size Analysis
+```markdown
+## PR Size Analysis
 
 **Size Classification:** large
 **Total Changes:** 847 lines (+782, -65)
 **Files Changed:** 12
 
-### ⚠️ Concerns:
-- ⚠️ **Large PR** - May indicate batch acceptance of AI-generated code
-- ⚠️ **Multiple files changed** - Ensure changes are cohesive
+### Concerns:
+- **Large PR** - May indicate batch acceptance of AI-generated code
+- **Multiple files changed** - Ensure changes are cohesive
 
-### 💡 Recommendations:
+### Recommendations:
 - Review carefully for AI-generated patterns that should be broken down
 - Consider splitting into focused, single-responsibility PRs
 ```
 
 ### Local Script Output
-```bash
-=== 📊 ANALYSIS RESULTS ===
+```
+=== ANALYSIS RESULTS ===
 
-📈 Total commits analyzed: 50
-📏 Large commits (>100 lines): 46.00%
-📁 Sprawling commits (>5 files): 20.00%
-🧪 Test-first discipline: 58.00%
-📂 Average files changed: 6.42
-📝 Average lines changed: 9,053
+Total commits analyzed: 50
+Large commits (>100 lines): 46.00%
+Sprawling commits (>5 files): 20.00%
+Test-first discipline: 58.00%
+Average files changed: 6.42
+Average lines changed: 9,053
 
-=== ⚠️ CONCERNS DETECTED ===
-🚨 Very high large commit rate (46%) - Strong AI drift indicators
-⚠️ High sprawling commit rate (20%) - Watch for scope creep
+=== CONCERNS DETECTED ===
+[CRITICAL] Very high large commit rate (46%) - Strong AI drift indicators
+[WARNING] High sprawling commit rate (20%) - Watch for scope creep
 
-=== 💡 RECOMMENDATIONS ===
-• Consider breaking AI-generated code into smaller, focused commits
-• Review if AI suggestions are causing scattered changes across files
+=== RECOMMENDATIONS ===
+- Consider breaking AI-generated code into smaller, focused commits
+- Review if AI suggestions are causing scattered changes across files
 ```
 
 ## Prerequisites
@@ -200,20 +210,22 @@ Avg lines changed: >500
 - Feature branches preserved after merging (disable auto-delete)
 - Repository permissions for creating issues and PR comments
 
-### For Local Script  
-- Node.js (v12 or later)
+### For Local Script
+- Node.js >= 18
 - Git repository with local feature branches
 - Command line access
+- Optional: `ANTHROPIC_API_KEY` for Claude diff-level analysis
 
 ## File Structure
 ```
 your-repo/
 ├── .github/workflows/
-│   ├── ai-code-drift-metrics.yml     # Weekly analysis
-│   └── pr-size-analysis.yml          # Real-time PR feedback
-├── local-ai-drift-analysis.js        # Local analysis script
-├── local_commit_metrics.json         # Generated: detailed data
-└── local_metrics_summary.json        # Generated: summary stats
+│   ├── code-metrics.yml              # Weekly analysis
+│   └── pr-metrics.yml               # Real-time PR feedback
+├── local-code-metrics.js            # Local analysis script
+├── local_commit_metrics.json        # Generated: detailed data
+├── local_metrics_summary.json       # Generated: summary stats
+└── local_claude_analysis.json       # Generated: Claude analysis (optional)
 ```
 
 ## Integration Examples
@@ -254,17 +266,17 @@ your-repo/
 ## Why This Matters
 
 **The Problem:** Teams adopting AI tools often see:
-- ✅ Faster initial coding
-- ❌ Larger, harder-to-review commits  
-- ❌ Reduced refactoring discipline
-- ❌ Technical debt accumulation
-- ❌ Net productivity loss over time
+- Faster initial coding
+- Larger, harder-to-review commits
+- Reduced refactoring discipline
+- Technical debt accumulation
+- Net productivity loss over time
 
 **The Solution:** Measure development patterns before they're hidden by workflow processing:
-- 🔍 **Early detection** of problematic AI usage
-- 📊 **Quantified feedback** for development process improvement  
-- 🚦 **Real-time prevention** through PR size controls
-- 📈 **Trend analysis** to track team improvement
+- **Early detection** of problematic AI usage
+- **Quantified feedback** for development process improvement
+- **Real-time prevention** through PR size controls
+- **Trend analysis** to track team improvement
 
 ## Related Research
 
@@ -273,8 +285,10 @@ This toolkit implements the methodology described in:
 
 Key findings:
 - Merge squashing destroys 90%+ of AI drift signals
-- Local analysis reveals 10x higher drift rates than remote analysis  
+- Local analysis reveals 10x higher drift rates than remote analysis
 - Teams can maintain quality with proper measurement and discipline
+
+See also: [metrics-specification.md](metrics-specification.md) for the full technical reference.
 
 ## License
 
@@ -284,17 +298,17 @@ You are free to share and adapt this material for any purpose, including commerc
 
 ## Contributing
 
-Improvements welcome! Particularly valuable:
+Improvements welcome. Particularly valuable:
 - Additional test file patterns for different languages
-- Enhanced AI pattern detection algorithms  
+- Enhanced AI pattern detection algorithms
 - Better threshold recommendations for different project types
 - Integration examples with other development tools
 
 ## Support
 
-- 📖 **Documentation:** This README covers all common use cases
-- 🐛 **Issues:** Report bugs or request features in the GitHub issues
-- 💬 **Discussions:** Share your results and insights with the community
+- **Documentation:** This README and [metrics-specification.md](metrics-specification.md) cover all common use cases
+- **Issues:** Report bugs or request features in the GitHub issues
+- **Discussions:** Share your results and insights with the community
 
 ---
 

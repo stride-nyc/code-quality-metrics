@@ -53,16 +53,16 @@ large_commit_pct = (commits where additions + deletions > LARGE_COMMIT_THRESHOLD
 
 **Per-commit flag**: `large_commit: boolean`
 
-**Data source**: `git show --numstat {sha}` — additions and deletions per file, summed across all files
+**Data source**: `git show --numstat {sha}` (additions and deletions per file, summed across all files)
 
 **CONFIG key**: `LARGE_COMMIT_THRESHOLD` (default: 100 lines)
 
 **Thresholds**:
 | Range | Signal |
 |-------|--------|
-| < 20% | Healthy — consistent with DORA "small batches" capability |
-| 20–40% | Warning — elevated AI batch-acceptance risk |
-| > 40% | Critical — strong AI drift indicators |
+| < 20% | Healthy: consistent with DORA "small batches" capability |
+| 20–40% | Warning: elevated AI batch-acceptance risk |
+| > 40% | Critical: strong AI drift indicators |
 
 **False positives**: Legitimate large commits include data migrations, bulk refactoring, large file additions (assets, generated code), and one-time cleanup. Context from `large_commit AND additions > deletions × 3` narrows to the AI-specific pattern.
 
@@ -79,7 +79,7 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 
 **Per-commit flag**: `sprawling_commit: boolean`
 
-**Data source**: `git show --numstat {sha}` — count of file entries
+**Data source**: `git show --numstat {sha}` (count of file entries)
 
 **CONFIG key**: `SPRAWLING_COMMIT_THRESHOLD` (default: 5 files)
 
@@ -87,8 +87,8 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 | Range | Signal |
 |-------|--------|
 | < 10% | Healthy |
-| 10–25% | Warning — watch for scope creep |
-| > 25% | Critical — possible shotgun surgery |
+| 10–25% | Warning: watch for scope creep |
+| > 25% | Critical: possible shotgun surgery |
 
 **DORA connection**: DORA's research documents a 154% increase in pull request size with high AI adoption. Sprawling commits are the commit-level precursor to oversized PRs.
 
@@ -105,16 +105,16 @@ test_first_pct = (commits where test_files_count > 0 AND prod_files_count > 0) /
 
 **Per-commit flag**: `test_first_indicator: boolean`
 
-**Data source**: `git show --numstat {sha}` — file paths matched against `TEST_FILE_PATTERNS`
+**Data source**: `git show --numstat {sha}` (file paths matched against `TEST_FILE_PATTERNS`)
 
 **CONFIG key**: `TEST_FILE_PATTERNS` (array of 8 regex patterns; covers JS/TS, Python, Go, Java, C#)
 
 **Thresholds**:
 | Range | Signal |
 |-------|--------|
-| > 50% | Healthy — strong test discipline |
-| 30–50% | Warning — monitor AI tool usage patterns |
-| < 30% | Critical — AI tools may be bypassing TDD practices |
+| > 50% | Healthy: strong test discipline |
+| 30–50% | Warning: monitor AI tool usage patterns |
+| < 30% | Critical: AI tools may be bypassing TDD practices |
 
 **Limitations**: This metric cannot distinguish test-first (TDD) from test-after. It measures co-occurrence, not ordering. A commit that adds production code and test code written afterward scores the same as one where tests were written first.
 
@@ -124,16 +124,16 @@ test_first_pct = (commits where test_files_count > 0 AND prod_files_count > 0) /
 
 ### Metric 4: Lines Changed Per Commit (Distribution)
 
-**What it measures**: The statistical distribution of commit sizes by line count. Distributions reveal patterns that averages conceal — a p90 of 500 lines with a p50 of 30 lines describes a "mostly disciplined with occasional explosions" pattern that an average of 65 lines hides entirely.
+**What it measures**: The statistical distribution of commit sizes by line count. Distributions reveal patterns that averages conceal: a p90 of 500 lines with a p50 of 30 lines describes a "mostly disciplined with occasional explosions" pattern that an average of 65 lines hides entirely.
 
 **Fields**:
 ```
-p50_lines_changed    — median commit size (lines)
-p90_lines_changed    — 90th percentile commit size
-p95_lines_changed    — 95th percentile commit size
-stddev_lines_changed — standard deviation
-avg_lines_changed    — mean (kept for backwards compatibility)
-commit_size_trend    — "growing" | "stable" | "shrinking"
+p50_lines_changed    : median commit size (lines)
+p90_lines_changed    : 90th percentile commit size
+p95_lines_changed    : 95th percentile commit size
+stddev_lines_changed : standard deviation
+avg_lines_changed    : mean (kept for backwards compatibility)
+commit_size_trend    : "growing" | "stable" | "shrinking"
 ```
 
 **Formula** (commit size trend):
@@ -144,7 +144,7 @@ slope < 0: "shrinking"
 |slope| < threshold: "stable"
 ```
 
-**Implementation**: `simple-statistics` library — `quantile()`, `mean()`, `standardDeviation()`, `linearRegression()`
+**Implementation**: `simple-statistics` library: `quantile()`, `mean()`, `standardDeviation()`, `linearRegression()`
 
 **Risk signal**: `commit_size_trend: "growing"` combined with `velocity_trend: "accelerating"` is the joint indicator DORA describes as "volume without discipline."
 
@@ -153,7 +153,7 @@ slope < 0: "shrinking"
 |-------|--------|
 | p90 < 200 lines | Healthy |
 | p90 200–500 lines | Monitor |
-| p90 > 500 lines | Investigate — high review burden |
+| p90 > 500 lines | Investigate: high review burden |
 
 ---
 
@@ -163,19 +163,19 @@ slope < 0: "shrinking"
 
 **Fields**:
 ```
-p50_files_changed   — median files per commit
-p90_files_changed   — 90th percentile files per commit
-avg_files_changed   — mean (kept for backwards compatibility)
+p50_files_changed   : median files per commit
+p90_files_changed   : 90th percentile files per commit
+avg_files_changed   : mean (kept for backwards compatibility)
 ```
 
-**Implementation**: `simple-statistics` library — `quantile()`, `mean()`
+**Implementation**: `simple-statistics` library: `quantile()`, `mean()`
 
 **Thresholds** (p90 guidance):
 | Range | Signal |
 |-------|--------|
 | p90 < 8 files | Healthy |
 | p90 8–15 files | Monitor |
-| p90 > 15 files | Investigate — architectural scatter |
+| p90 > 15 files | Investigate: architectural scatter |
 
 ---
 
@@ -199,13 +199,13 @@ Velocity trend:
 
 **Fields**:
 ```
-velocity_commits_per_day  — float
-velocity_trend            — "accelerating" | "stable" | "decelerating"
+velocity_commits_per_day  : float
+velocity_trend            : "accelerating" | "stable" | "decelerating"
 ```
 
-**Data source**: `date` field from `git log --pretty=format:"%ai"` — already collected in existing analysis loop; no new git calls required
+**Data source**: `date` field from `git log --pretty=format:"%ai"`. Already collected in the existing analysis loop; no new git calls required.
 
-**Risk signal**: `velocity_trend: "accelerating"` combined with `commit_size_trend: "growing"` — the combination DORA research calls the leading indicator of team archetype drift from "harmonious high-achiever" toward "foundational challenges."
+**Risk signal**: `velocity_trend: "accelerating"` combined with `commit_size_trend: "growing"`. DORA research identifies this combination as the leading indicator of team archetype drift toward "foundational challenges."
 
 **Note**: A single-day analysis window (all commits on one day) yields `velocity_commits_per_day` but `velocity_trend: "stable"` by convention.
 
@@ -213,7 +213,7 @@ velocity_trend            — "accelerating" | "stable" | "decelerating"
 
 ### Metric 7: Additions-to-Deletions Ratio Distribution
 
-**What it measures**: The median and 90th percentile of the per-commit ratio of lines added to lines deleted. High ratios indicate that new code is being added without commensurate refactoring or removal of replaced code — the systematic batch-acceptance pattern DORA associates with architectural debt accumulation.
+**What it measures**: The median and 90th percentile of the per-commit ratio of lines added to lines deleted. High ratios indicate that new code is being added without commensurate refactoring or removal of replaced code. This is the systematic batch-acceptance pattern DORA associates with architectural debt accumulation.
 
 **Formula**:
 ```
@@ -224,8 +224,8 @@ additions_ratio_p90    = quantile(all_ratios, 0.9)
 
 **Fields**:
 ```
-additions_ratio_median  — float (median ratio across all commits)
-additions_ratio_p90     — float (90th percentile ratio)
+additions_ratio_median  : float (median ratio across all commits)
+additions_ratio_p90     : float (90th percentile ratio)
 ```
 
 **Data source**: `total_additions` and `total_deletions` already collected per commit; no new git calls required
@@ -233,9 +233,9 @@ additions_ratio_p90     — float (90th percentile ratio)
 **Thresholds**:
 | Range (median) | Signal |
 |----------------|--------|
-| < 2.0 | Healthy — balanced additions and deletions |
-| 2.0–3.0 | Monitor — additions outpacing deletions |
-| > 3.0 | Warning — systematic batch-acceptance pattern |
+| < 2.0 | Healthy: balanced additions and deletions |
+| 2.0–3.0 | Monitor: additions outpacing deletions |
+| > 3.0 | Warning: systematic batch-acceptance pattern |
 
 **Relationship to existing heuristic**: The existing `generateInsights()` function counts commits where `large_commit AND additions > deletions × 3` as "possible AI commits." This metric expresses the same pattern at the aggregate level with a distribution, so outlier commits don't distort the reading.
 
@@ -243,7 +243,7 @@ additions_ratio_p90     — float (90th percentile ratio)
 
 ### Metric 8: Commit Message Quality Score
 
-**What it measures**: The proportion of commit messages that meet a minimum quality bar — either following conventional commit format or containing enough words to be considered specific. Message quality declines with AI over-reliance as developers accept AI-suggested vague descriptions ("update stuff", "fix issue", "wip").
+**What it measures**: The proportion of commit messages that meet a minimum quality bar: following conventional commit format, or containing enough words to be considered specific. Message quality declines with AI over-reliance as developers accept AI-suggested vague descriptions ("update stuff", "fix issue", "wip").
 
 **Formula**:
 ```
@@ -257,7 +257,7 @@ message_quality_pct = (quality commits / total commits) × 100
 
 **Fields**:
 ```
-message_quality_pct  — float (percentage of quality commits)
+message_quality_pct  : float (percentage of quality commits)
 ```
 
 **CONFIG key**: `MESSAGE_QUALITY_MIN_WORDS` (default: 10)
@@ -265,13 +265,13 @@ message_quality_pct  — float (percentage of quality commits)
 **Thresholds**:
 | Range | Signal |
 |-------|--------|
-| > 60% | Healthy — good commit message discipline |
+| > 60% | Healthy: good commit message discipline |
 | 40–60% | Monitor |
-| < 40% | Warning — messaging discipline issues |
+| < 40% | Warning: messaging discipline issues |
 
-**Design decision — why not NLP**: Conventional commit classification requires a 3-line regex. Word count requires one line. Adding a 200KB+ NLP library (`compromise`, `wink-nlp`) for these two signals is unjustified. The regex approach is zero-dependency, faster, more maintainable, and easier to test.
+**Design decision: why not NLP**: Conventional commit classification requires a 3-line regex. Word count requires one line. Adding a 200KB+ NLP library (`compromise`, `wink-nlp`) for these two signals is unjustified. The regex approach is zero-dependency, faster, more maintainable, and easier to test.
 
-**Limitations**: This metric cannot assess semantic quality — a message that says "feat: add user authentication for all supported OAuth providers" scores the same as "feat: a." The word-count threshold partially compensates, but it cannot detect technically-compliant messages that are still vague.
+**Limitations**: This metric cannot assess semantic quality. A message that says "feat: add user authentication for all supported OAuth providers" scores the same as "feat: a." The word-count threshold partially compensates, but it cannot detect technically-compliant messages that are still vague.
 
 ---
 
@@ -290,7 +290,7 @@ outlier      = (total_additions + total_deletions) > (mean_lines + 2 × stddev_l
 
 **Per-commit field**: `outlier: boolean`
 
-**Use**: Displayed in the sample commits table in console output. Useful for manual investigation — outlier commits are the ones most likely to warrant direct review.
+**Use**: Displayed in the sample commits table in console output. Useful for manual investigation: outlier commits are the ones most likely to warrant direct review.
 
 ---
 
@@ -336,7 +336,7 @@ mixed-signals:
 
 ## Claude API Integration (Optional)
 
-When `ANTHROPIC_API_KEY` is set in the environment, the toolkit performs a supplementary AI-powered analysis of the highest-risk commits. This feature is completely optional — all eight metrics above run with zero external dependencies when the key is absent.
+When `ANTHROPIC_API_KEY` is set in the environment, the toolkit performs a supplementary AI-powered analysis of the highest-risk commits. This feature is completely optional. All eight metrics above run with zero external dependencies when the key is absent.
 
 ### Pre-Filter Logic
 
@@ -353,7 +353,7 @@ Take top AI_ANALYSIS_MAX_COMMITS
 
 **CONFIG keys**:
 - `AI_ANALYSIS_MAX_COMMITS` (default: 5)
-- `AI_RISK_ADDITIONS_RATIO` (default: 3) — also used in the `generateInsights()` heuristic
+- `AI_RISK_ADDITIONS_RATIO` (default: 3; also used in the `generateInsights()` heuristic)
 
 ### Diff Extraction
 
@@ -386,7 +386,7 @@ The diff is sent with a system prompt describing AI code patterns to detect. The
 - Absent domain language in identifiers
 - Imports that don't match the rest of the file's dependency patterns
 
-**Architectural concerns detected** (contextual — Claude infers from diff context):
+**Architectural concerns detected** (Claude infers these from diff context):
 - Code crossing service/module boundaries in ways inconsistent with established patterns
 - New dependencies on modules that aren't imported elsewhere in the changed files
 - Structural patterns inconsistent with the existing file's approach
@@ -441,7 +441,7 @@ These signals are not addressable by this toolkit. Each gap is noted with the be
 
 4. **Architectural boundary violations without Claude**: Detecting whether code crosses architectural boundaries (service layers, domain boundaries, module dependencies) without semantic analysis requires a dependency graph of the codebase. Without Claude API enabled, this toolkit can detect structural patterns (sprawl, large commits) but not semantic architectural violations.
 
-5. **AI tool usage specifics**: Which AI tools are being used, how frequently suggestions are accepted, and which patterns come from which models require IDE telemetry — not available in git history.
+5. **AI tool usage specifics**: Which AI tools are being used, how frequently suggestions are accepted, and which patterns come from which models require IDE telemetry. This is not available in git history.
 
 6. **DORA capabilities 1, 2, 3, 6, 7**: Organizational AI stance, data ecosystem quality, internal knowledge accessibility, user-centric focus, and platform quality all require organizational survey data or infrastructure telemetry. DORA measures these through their survey instrument.
 
@@ -451,7 +451,7 @@ These signals are not addressable by this toolkit. Each gap is noted with the be
 
 ## Configuration Reference
 
-All thresholds are set in the `CONFIG` object at the top of `local-code-metrics.js`. The GitHub workflows have equivalent values hard-coded in their shell/jq logic — update both locations when adjusting thresholds.
+All thresholds are set in the `CONFIG` object at the top of `local-code-metrics.js`. The GitHub workflows have equivalent values hard-coded in their shell/jq logic. Update both locations when adjusting thresholds.
 
 ```javascript
 const CONFIG = {
@@ -613,7 +613,7 @@ Used for: `quantile()` (p50/p90/p95), `mean()`, `standardDeviation()`, `linearRe
 
 **Why chosen**: Zero dependencies, 47KB, works in Node and browser, comprehensive coverage of the statistical operations needed. Replaces four hand-rolled average calculations with a single well-tested library.
 
-**Why not a larger ML library**: This toolkit needs descriptive statistics and linear trend detection — not machine learning, clustering, or inference. `simple-statistics` covers exactly the needed surface without the overhead of `ml.js`, `tensorflow.js`, or equivalent.
+**Why not a larger ML library**: This toolkit needs descriptive statistics and linear trend detection, not machine learning, clustering, or inference. `simple-statistics` covers exactly the needed surface without the overhead of `ml.js`, `tensorflow.js`, or equivalent.
 
 ### `@anthropic-ai/sdk` (production dependency, optional at runtime)
 
@@ -632,6 +632,6 @@ Used for: Claude API calls in the diff-level analysis feature (Metric 3 suppleme
 | `simple-git` | Shell exec approach in `runGitCommand()` is already abstracted, tested, and working; no benefit from wrapping it further |
 | `nodegit` | Native compilation dependencies; declining maintenance; not worth the complexity for shell-replaceable operations |
 | `isomorphic-git` | No browser requirement; pure-JS advantage doesn't apply to a Node CLI tool |
-| `plato` | Deprecated — last updated 9 years ago, no ES6+ support |
+| `plato` | Deprecated: last updated 9 years ago, no ES6+ support |
 | `escomplex` | Poor TypeScript support; superseded by typhonjs-escomplex, but file complexity analysis is outside the scope of this toolkit's commit-level focus |
 | `@octokit/rest` | Already used in GitHub workflows; not needed in the local script which uses git CLI directly |

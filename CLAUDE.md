@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Purpose
 
-This toolkit detects **AI code drift** — problematic patterns that emerge when teams adopt AI coding tools. It captures metrics *before* merge squashing destroys the signals, making visible how AI tools actually affect code quality.
+This toolkit detects **AI code drift**: problematic patterns that emerge when teams adopt AI coding tools. It captures metrics *before* merge squashing destroys the signals, making visible how AI tools actually affect code quality.
 
 Key insight: Local analysis reveals 10x higher drift rates than remote analysis because `git merge --squash` and branch deletion destroy granular commit-level signals.
 
@@ -26,13 +26,13 @@ npm test                 # run all tests
 npm run test:coverage    # tests with coverage report (thresholds: 80% lines, 90% functions)
 npm run test:watch       # watch mode
 npx jest __tests__/parseGitLog.test.js   # run a single test file
-npm run lint             # ESLint (flat config, globals.node required — already configured)
+npm run lint             # ESLint (flat config, globals.node required; already configured)
 npm run typecheck        # tsc --noEmit (checks local-code-metrics.js via @ts-check + tsconfig.json)
 ```
 
-All tests mock `child_process` and `fs` — no git repository required to run the suite.
+All tests mock `child_process` and `fs`. No git repository is required to run the suite.
 
-A pre-commit hook runs lint → typecheck → test automatically. After cloning, activate it with:
+A pre-commit hook runs lint, typecheck, and test automatically. After cloning, activate it with:
 
 ```bash
 npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
@@ -42,11 +42,11 @@ npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
 
 Three components, no shared code between them:
 
-1. **`local-code-metrics.js`** — Standalone Node.js script (requires Node ≥18). Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
+1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
 
-2. **`.github/workflows/code-metrics.yml`** — Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Outputs a JSON artifact and creates a GitHub issue with the summary.
+2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
-3. **`.github/workflows/pr-metrics.yml`** — Per-PR GitHub Actions workflow. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, and development pattern detection.
+3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, and development pattern detection.
 
 ## Key Metrics and Thresholds
 
@@ -80,7 +80,7 @@ Set `ANTHROPIC_API_KEY` to enable diff-level analysis of high-risk commits. When
 - Results are written to `local_claude_analysis.json`
 - Commit metrics are annotated with `ai_confidence`, `risk_score`, `patterns`, and `architectural_concerns`
 
-The script degrades gracefully when the key is absent — no SDK install required to run.
+The script degrades gracefully when the key is absent. No SDK install is required to run.
 
 ## Configuration
 
@@ -97,7 +97,7 @@ Thresholds are configured in the `CONFIG` object at the top of `local-code-metri
 
 The GitHub workflows have equivalent values hard-coded in their shell/jq logic. When adjusting thresholds, update both places.
 
-Test file detection uses patterns for JS, Python, Go, Java, and C# — extend `TEST_FILE_PATTERNS` in the script or the equivalent grep patterns in the workflows for other languages.
+Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in the script or the equivalent grep patterns in the workflows for other languages.
 
 ## Workflow Permissions
 
