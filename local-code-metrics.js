@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Load .env file if present — allows ANTHROPIC_API_KEY to be set without exporting to the shell
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const { CONFIG } = require('./lib/config');
 const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } = require('./lib/git');
