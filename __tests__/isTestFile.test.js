@@ -2,6 +2,20 @@
 
 const { isTestFile } = require('../local-code-metrics');
 
+// isTestFile must also be available directly from lib/metrics (for workflow require() calls)
+describe('isTestFile available from lib/metrics', () => {
+  test('isTestFile is exported from lib/metrics.js', () => {
+    const { isTestFile: isTestFileFromMetrics } = require('../lib/metrics');
+    expect(typeof isTestFileFromMetrics).toBe('function');
+  });
+
+  test('isTestFile from lib/metrics behaves identically to the one from local-code-metrics', () => {
+    const { isTestFile: isTestFileFromMetrics } = require('../lib/metrics');
+    expect(isTestFileFromMetrics('src/app.test.js')).toBe(true);
+    expect(isTestFileFromMetrics('src/app.js')).toBe(false);
+  });
+});
+
 describe('isTestFile', () => {
   // --- degenerate case ---
   test('returns false for a plain production source file', () => {

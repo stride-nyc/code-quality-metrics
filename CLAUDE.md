@@ -40,20 +40,20 @@ npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
 
 ## Architecture
 
-Three public components with no shared code between them:
+Three public components sharing pure-computation logic via `lib/`:
 
 1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
 
-   The `lib/` directory contains the internal modules (not shared with workflows):
-   - `lib/config.js` — CONFIG object; single source of truth for all thresholds
-   - `lib/git.js` — git shell commands, log parsing, per-commit analysis, diff extraction
-   - `lib/statistics.js` — statistical distributions (p50/p90/p95/stddev), velocity and trend
-   - `lib/metrics.js` — message quality scoring, DORA archetype classification, insights generation
-   - `lib/claude.js` — Anthropic client setup, commit pre-filtering, diff-level API analysis
+   The `lib/` directory contains the internal modules:
+   - `lib/config.js` — CONFIG object; single source of truth for all thresholds (**shared with workflows**)
+   - `lib/statistics.js` — statistical distributions (p50/p90/p95/stddev), velocity and trend (**shared with workflows**)
+   - `lib/metrics.js` — message quality scoring, DORA archetype classification, test file detection, insights generation (**shared with workflows**)
+   - `lib/git.js` — git shell commands, log parsing, per-commit analysis, diff extraction (local only — workflows use REST API)
+   - `lib/claude.js` — Anthropic client setup, commit pre-filtering, diff-level API analysis (local only — workflows use GitHub-managed auth)
 
-2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Outputs a JSON artifact and creates a GitHub issue with the summary.
+2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Requires `lib/config.js`, `lib/statistics.js`, and `lib/metrics.js` via `require()`. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
-3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, and development pattern detection.
+3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js` and `lib/metrics.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, and development pattern detection.
 
 ## Key Metrics and Thresholds
 
@@ -64,7 +64,7 @@ Three public components with no shared code between them:
 | Test-to-production ratio | 0.5–2.0:1 |
 | Avg files changed per commit | <5 |
 | Commit message quality % | >60% |
-| Additions-to-deletions ratio (median) | <3.0 |
+| Net additions ratio (median) | <0.50 |
 
 Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and DORA team archetype are included in the summary.
 
@@ -91,7 +91,7 @@ The script degrades gracefully when the key is absent. No SDK install is require
 
 ## Configuration
 
-Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is the single source of truth for the local script. Key values:
+Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is the single source of truth for **all three components**. The GitHub Actions workflows `require('./lib/config')` directly — changing a value in `lib/config.js` propagates automatically to the local script and both workflows. No manual synchronization needed. Key values:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -102,9 +102,7 @@ Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is th
 | `AI_DIFF_MAX_CHARS` | 4000 | Diff truncation limit for Claude API calls |
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
 
-The GitHub workflows have equivalent values hard-coded in their shell/jq logic. When adjusting thresholds, update both places.
-
-Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` or the equivalent grep patterns in the workflows for other languages.
+Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
 
 ## Workflow Permissions
 
