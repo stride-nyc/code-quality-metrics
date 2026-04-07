@@ -132,6 +132,21 @@ npm run lint      # lint must be clean before moving to next step
 
 When introducing new tooling (new lint rules, type checking, config changes), run the gate immediately after setup — before writing any tests or code — to catch configuration gaps early.
 
+**When modifying `.github/workflows/` or `lib/`**, run a workflow smoke test:
+
+```bash
+gh workflow run code-metrics.yml --ref <your-branch>
+gh run watch                          # wait for completion
+gh run download <run-id> --dir /tmp/smoke && cat /tmp/smoke/*/metrics_summary.json | python3 -m json.tool
+```
+
+Verify:
+- The artifact contains `velocity_commits_per_day` (numeric, not absent)
+- No `Cannot find module` errors in the log
+- Confirm the run's commit SHA matches your branch HEAD: `gh run view <run-id>`
+
+A green run ≠ new code ran. The artifact is the proof.
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.

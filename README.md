@@ -29,18 +29,47 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 ## Quick Start
 
 ### Option 1: GitHub Actions (Recommended)
+
+**Step 1 — Copy the workflow files and shared lib modules into your repository**
 ```bash
-# 1. Copy workflows to your repository
-mkdir -p .github/workflows
-# Copy .github/workflows/code-metrics.yml and pr-metrics.yml from this repo
-
-# 2. Ensure feature branches aren't auto-deleted
-# Go to repo Settings > General > Pull Requests
-# Uncheck "Automatically delete head branches"
-
-# 3. Run manually or wait for weekly schedule
-gh workflow run code-metrics.yml
+mkdir -p .github/workflows lib
+curl -o .github/workflows/code-metrics.yml \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/.github/workflows/code-metrics.yml
+curl -o .github/workflows/pr-metrics.yml \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/.github/workflows/pr-metrics.yml
+curl -o lib/config.js \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/lib/config.js
+curl -o lib/statistics.js \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/lib/statistics.js
+curl -o lib/metrics.js \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/lib/metrics.js
 ```
+
+> The workflows use `require('./lib/config')`, `require('./lib/statistics')`, and `require('./lib/metrics')` at runtime. These three files must be committed alongside the workflow files.
+
+**Step 2 — Create the required issue labels** (used by the weekly report)
+```bash
+gh label create metrics --color 0075ca --description "Code metrics reports"
+gh label create automated --color e4e669 --description "Automated workflow output"
+```
+
+**Step 3 — Ensure feature branches are not auto-deleted**
+
+Go to your repo **Settings → General → Pull Requests** and uncheck  
+"Automatically delete head branches" — the weekly workflow needs branches to exist to analyze them.
+
+**Step 4 — Set workflow permissions**
+
+Go to **Settings → Actions → General → Workflow permissions** and select  
+"Read and write permissions" (required for creating issues and PR comments).
+
+**Step 5 — Trigger the first run**
+```bash
+gh workflow run code-metrics.yml
+gh run watch   # follow the run live
+```
+
+The PR analysis workflow (`pr-metrics.yml`) triggers automatically on every new or updated pull request — no manual step needed.
 
 ### Option 2: Local Analysis
 ```bash
@@ -60,7 +89,7 @@ node local-code-metrics.js
 | **Sprawling Commit %** | <10% | Identifies scattered changes across files |
 | **Test-First Discipline** | >50% | Monitors TDD practices with AI tools |
 | **Message Quality %** | >60% | Conventional commits or descriptive messages |
-| **Additions/Deletions Ratio (median)** | <3.0 | Flags batch-acceptance pattern |
+| **Net Additions Ratio (median)** | <0.50 | Flags batch-acceptance pattern (bounded 0–1: 1.0 = entirely net-new code) |
 | **Avg Files Changed** | <5 | Measures development granularity |
 
 ## Real-World Example
@@ -114,7 +143,7 @@ Large commits: <20%
 Sprawling commits: <10%
 Test-first discipline: >50%
 Message quality: >60%
-Additions ratio (median): <3.0
+Net additions ratio (median): <0.33
 ```
 
 ### Warning Signs
@@ -122,7 +151,7 @@ Additions ratio (median): <3.0
 Large commits: 20-40%
 Sprawling commits: 10-25%
 Test-first discipline: 30-50%
-Additions ratio (median): 3.0-6.0
+Net additions ratio (median): 0.33-0.50
 ```
 
 ### Critical Issues
@@ -130,7 +159,7 @@ Additions ratio (median): 3.0-6.0
 Large commits: >40%
 Sprawling commits: >25%
 Test-first discipline: <30%
-Additions ratio (median): >6.0
+Net additions ratio (median): >0.50
 ```
 
 ## DORA Archetype Classification
