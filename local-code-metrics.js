@@ -177,8 +177,14 @@ async function collectLocalMetrics() {
   const dates = metrics.map(m => m.date);
   const velocity = computeVelocity(dates);
 
-  // Additions ratio distribution
-  const ratios = metrics.map(m => m.total_additions / (m.total_deletions || 1));
+  // Net additions ratio distribution: (additions - deletions) / (additions + deletions)
+  // Bounded [-1, +1]: 1.0 = entirely net-new code, 0.0 = balanced, negative = net deletion (cleanup)
+  // Replaces the unbounded additions / max(deletions, 1) formula, which inflated ratios to ~500
+  // for net-new-file commits (zero deletions), distorting both median and p90.
+  const ratios = metrics.map(m => {
+    const total = m.total_additions + m.total_deletions;
+    return total === 0 ? 0 : (m.total_additions - m.total_deletions) / total;
+  });
   const ratioStats = computeStatistics(ratios, timestamps);
 
   // Message quality
@@ -242,8 +248,8 @@ async function collectLocalMetrics() {
     commit_size_trend: lineStats.trend,
     velocity_commits_per_day: velocity.commits_per_day,
     velocity_trend: velocity.trend,
-    additions_ratio_median: ratioStats.p50,
-    additions_ratio_p90: ratioStats.p90,
+    net_additions_ratio_median: ratioStats.p50,
+    net_additions_ratio_p90: ratioStats.p90,
     message_quality_pct,
     dora_archetype: classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_first_pct, message_quality_pct }),
     config: CONFIG,

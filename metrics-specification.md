@@ -211,21 +211,28 @@ velocity_trend            : "accelerating" | "stable" | "decelerating"
 
 ---
 
-### Metric 7: Additions-to-Deletions Ratio Distribution
+### Metric 7: Net Additions Ratio Distribution
 
-**What it measures**: The median and 90th percentile of the per-commit ratio of lines added to lines deleted. High ratios indicate that new code is being added without commensurate refactoring or removal of replaced code. This is the systematic batch-acceptance pattern DORA associates with architectural debt accumulation.
+**What it measures**: The median and 90th percentile of the per-commit net additions ratio — what fraction of all lines changed in a commit are net-new code. A high ratio indicates new code is being added without commensurate refactoring or removal of replaced code. This is the systematic batch-acceptance pattern DORA associates with architectural debt accumulation.
 
 **Formula**:
 ```
-per-commit ratio = total_additions / max(total_deletions, 1)
-additions_ratio_median = quantile(all_ratios, 0.5)
-additions_ratio_p90    = quantile(all_ratios, 0.9)
+per-commit ratio           = (total_additions - total_deletions) / (total_additions + total_deletions)
+net_additions_ratio_median = quantile(all_ratios, 0.5)
+net_additions_ratio_p90    = quantile(all_ratios, 0.9)
 ```
+
+The formula is bounded **[-1.0, +1.0]**:
+- `1.0` — commit is entirely net-new code (all additions, zero deletions)
+- `0.0` — perfectly balanced additions and deletions
+- negative — net deletion (cleanup or refactoring that removes more than it adds)
+
+Zero-churn commits (no additions and no deletions) are assigned `0.0`.
 
 **Fields**:
 ```
-additions_ratio_median  : float (median ratio across all commits)
-additions_ratio_p90     : float (90th percentile ratio)
+net_additions_ratio_median  : float (median ratio across all commits; bounded [-1, +1])
+net_additions_ratio_p90     : float (90th percentile ratio; bounded [-1, +1])
 ```
 
 **Data source**: `total_additions` and `total_deletions` already collected per commit; no new git calls required
@@ -233,11 +240,15 @@ additions_ratio_p90     : float (90th percentile ratio)
 **Thresholds**:
 | Range (median) | Signal |
 |----------------|--------|
-| < 2.0 | Healthy: balanced additions and deletions |
-| 2.0–3.0 | Monitor: additions outpacing deletions |
-| > 3.0 | Warning: systematic batch-acceptance pattern |
+| < 0.33 | Healthy: balanced additions and deletions |
+| 0.33–0.50 | Monitor: additions outpacing deletions |
+| > 0.50 | Warning: >50% of all churn is net-new code; systematic batch-acceptance pattern |
+
+The 0.50 threshold maps exactly to the prior threshold of 3.0: when `additions = 3 × deletions`, `(3d - d) / (3d + d) = 0.50`.
 
 **Relationship to existing heuristic**: The existing `generateInsights()` function counts commits where `large_commit AND additions > deletions × 3` as "possible AI commits." This metric expresses the same pattern at the aggregate level with a distribution, so outlier commits don't distort the reading.
+
+**Why not `additions / max(deletions, 1)`**: The prior formula yielded ratios approaching `total_additions` for net-new-file commits (zero deletions). A commit adding 500 lines to a new file produced ratio=500, collapsing median and p90 toward the maximum addition count rather than the signal. The bounded formula eliminates this distortion: the same commit correctly produces `(500-0)/(500+0) = 1.0`.
 
 ---
 
@@ -567,9 +578,9 @@ Single summary object for the analysis run:
   velocity_commits_per_day: number,
   velocity_trend: "accelerating" | "stable" | "decelerating",
 
-  // Additions ratio distribution (new)
-  additions_ratio_median: number,
-  additions_ratio_p90: number,
+  // Net additions ratio distribution (bounded [-1, +1])
+  net_additions_ratio_median: number,
+  net_additions_ratio_p90: number,
 
   // Message quality (new)
   message_quality_pct: string,      // "XX.XX"

@@ -141,8 +141,8 @@ describe('collectLocalMetrics — successful run', () => {
     const summary = JSON.parse(summaryCall[1]);
     expect(typeof summary.velocity_commits_per_day).toBe('number');
     expect(['accelerating', 'stable', 'decelerating']).toContain(summary.velocity_trend);
-    expect(typeof summary.additions_ratio_median).toBe('number');
-    expect(typeof summary.additions_ratio_p90).toBe('number');
+    expect(typeof summary.net_additions_ratio_median).toBe('number');
+    expect(typeof summary.net_additions_ratio_p90).toBe('number');
     expect(typeof summary.message_quality_pct).toBe('string');
     expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
       .toContain(summary.dora_archetype);
@@ -211,6 +211,40 @@ describe('collectLocalMetrics — successful run', () => {
     await collectLocalMetrics();
     const allLogs = logSpy.mock.calls.flat().join(' ');
     expect(allLogs).toMatch(/Claude analysis skipped/);
+  });
+
+  test('net_additions_ratio_median is bounded to 1.0 for all-new-file commits', async () => {
+    // Regression test for formula bug: additions / max(deletions, 1) inflates ratio to ~500
+    // for commits with zero deletions (net-new files). The correct bounded formula is:
+    // (additions - deletions) / (additions + deletions) = (500 - 0) / (500 + 0) = 1.0
+    const SHA2 = 'b'.repeat(40);
+    const SHA3 = 'c'.repeat(40);
+    const newFileNumstat = `500\t0\tsrc/newfile.js`;
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      [
+        `${SHA}|2024-01-14T10:00:00Z|Dev|feat: new file one`,
+        `${SHA2}|2024-01-15T10:00:00Z|Dev|feat: new file two`,
+        `${SHA3}|2024-01-16T10:00:00Z|Dev|feat: new file three`
+      ].join('\n'),
+      newFileNumstat,
+      newFileNumstat,
+      newFileNumstat
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    // New field name: net_additions_ratio_median
+    expect(summary.net_additions_ratio_median).toBeDefined();
+    // Must be bounded: 1.0 means 100% net-new code, not 500 (the broken formula's result)
+    expect(summary.net_additions_ratio_median).toBeCloseTo(1.0, 5);
+    expect(summary.net_additions_ratio_median).toBeLessThanOrEqual(1.0);
+    expect(summary.net_additions_ratio_p90).toBeLessThanOrEqual(1.0);
   });
 
   test('deduplicates commits with the same SHA across branches', async () => {
