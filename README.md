@@ -29,18 +29,39 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 ## Quick Start
 
 ### Option 1: GitHub Actions (Recommended)
+
+**Step 1 — Copy the workflow files into your repository**
 ```bash
-# 1. Copy workflows to your repository
 mkdir -p .github/workflows
-# Copy .github/workflows/code-metrics.yml and pr-metrics.yml from this repo
-
-# 2. Ensure feature branches aren't auto-deleted
-# Go to repo Settings > General > Pull Requests
-# Uncheck "Automatically delete head branches"
-
-# 3. Run manually or wait for weekly schedule
-gh workflow run code-metrics.yml
+curl -o .github/workflows/code-metrics.yml \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/.github/workflows/code-metrics.yml
+curl -o .github/workflows/pr-metrics.yml \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/.github/workflows/pr-metrics.yml
 ```
+
+**Step 2 — Create the required issue labels** (used by the weekly report)
+```bash
+gh label create metrics --color 0075ca --description "Code metrics reports"
+gh label create automated --color e4e669 --description "Automated workflow output"
+```
+
+**Step 3 — Ensure feature branches are not auto-deleted**
+
+Go to your repo **Settings → General → Pull Requests** and uncheck  
+"Automatically delete head branches" — the weekly workflow needs branches to exist to analyze them.
+
+**Step 4 — Set workflow permissions**
+
+Go to **Settings → Actions → General → Workflow permissions** and select  
+"Read and write permissions" (required for creating issues and PR comments).
+
+**Step 5 — Trigger the first run**
+```bash
+gh workflow run code-metrics.yml
+gh run watch   # follow the run live
+```
+
+The PR analysis workflow (`pr-metrics.yml`) triggers automatically on every new or updated pull request — no manual step needed.
 
 ### Option 2: Local Analysis
 ```bash
