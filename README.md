@@ -30,14 +30,22 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 
 ### Option 1: GitHub Actions (Recommended)
 
-**Step 1 — Copy the workflow files into your repository**
+**Step 1 — Copy the workflow files and shared lib modules into your repository**
 ```bash
-mkdir -p .github/workflows
+mkdir -p .github/workflows lib
 curl -o .github/workflows/code-metrics.yml \
   https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/.github/workflows/code-metrics.yml
 curl -o .github/workflows/pr-metrics.yml \
   https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/.github/workflows/pr-metrics.yml
+curl -o lib/config.js \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/lib/config.js
+curl -o lib/statistics.js \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/lib/statistics.js
+curl -o lib/metrics.js \
+  https://raw.githubusercontent.com/stride-nyc/code-quality-metrics/main/lib/metrics.js
 ```
+
+> The workflows use `require('./lib/config')`, `require('./lib/statistics')`, and `require('./lib/metrics')` at runtime. These three files must be committed alongside the workflow files.
 
 **Step 2 — Create the required issue labels** (used by the weekly report)
 ```bash
