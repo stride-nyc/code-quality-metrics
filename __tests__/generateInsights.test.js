@@ -7,7 +7,9 @@ function makeSummary(overrides = {}) {
   return {
     large_commits_pct: '0.00',
     sprawling_commits_pct: '0.00',
-    test_first_pct: '60.00',
+    test_coverage_rate: '60.00',
+    test_isolation_rate: '10.00',
+    uncovered_prod_rate: '0.00',
     avg_lines_changed: '50.00',
     ...overrides
   };
@@ -41,12 +43,12 @@ describe('generateInsights', () => {
   // --- degenerate / zero case ---
   test('returns empty arrays when metrics list is empty and values are zero', () => {
     const { insights, warnings, recommendations } = generateInsights(
-      makeSummary({ large_commits_pct: '0.00', sprawling_commits_pct: '0.00', test_first_pct: '60.00' }),
+      makeSummary({ large_commits_pct: '0.00', sprawling_commits_pct: '0.00', test_coverage_rate: '60.00', uncovered_prod_rate: '0.00' }),
       []
     );
     expect(warnings).toEqual([]);
     expect(recommendations).toEqual([]);
-    expect(insights).toHaveLength(3); // healthy large + healthy sprawling + strong test-first (60% > 50)
+    expect(insights).toHaveLength(3); // healthy large + healthy sprawling + strong test coverage (60% > 50)
   });
 
   // --- healthy thresholds produce positive insights, no warnings ---
@@ -62,9 +64,9 @@ describe('generateInsights', () => {
     expect(insights.some(i => i.includes('Good sprawling commit control'))).toBe(true);
   });
 
-  test('emits positive insight for test_first_pct above 50', () => {
-    const { insights } = generateInsights(makeSummary({ test_first_pct: '55.00' }), []);
-    expect(insights.some(i => i.includes('Strong test-first discipline'))).toBe(true);
+  test('emits positive insight for test_coverage_rate above 50', () => {
+    const { insights } = generateInsights(makeSummary({ test_coverage_rate: '55.00' }), []);
+    expect(insights.some(i => i.includes('Strong test coverage'))).toBe(true);
   });
 
   // --- warning thresholds ---
@@ -92,9 +94,38 @@ describe('generateInsights', () => {
     expect(recommendations.length).toBeGreaterThan(0);
   });
 
-  test('emits warning for test_first_pct below 30', () => {
-    const { warnings } = generateInsights(makeSummary({ test_first_pct: '20.00' }), []);
-    expect(warnings.some(w => w.includes('Low test-first discipline'))).toBe(true);
+  test('emits warning for test_coverage_rate below 30', () => {
+    const { warnings } = generateInsights(makeSummary({ test_coverage_rate: '20.00' }), []);
+    expect(warnings.some(w => w.includes('Low test coverage'))).toBe(true);
+  });
+
+  // --- uncovered_prod_rate ---
+  test('emits critical warning for uncovered_prod_rate above 20', () => {
+    const { warnings, recommendations } = generateInsights(makeSummary({ uncovered_prod_rate: '25.00' }), []);
+    expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(true);
+    expect(recommendations.length).toBeGreaterThan(0);
+  });
+
+  test('emits warning (not critical) for uncovered_prod_rate between 10 and 20', () => {
+    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '15.00' }), []);
+    expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(true);
+    expect(warnings.some(w => w.includes('🚨'))).toBe(false);
+  });
+
+  test('emits no uncovered_prod warning when rate is below 10', () => {
+    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '5.00' }), []);
+    expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(false);
+  });
+
+  // --- test_isolation_rate ---
+  test('emits positive insight for test_isolation_rate above 10', () => {
+    const { insights } = generateInsights(makeSummary({ test_isolation_rate: '15.00' }), []);
+    expect(insights.some(i => i.includes('test-only commits'))).toBe(true);
+  });
+
+  test('emits no test isolation insight when rate is below 10', () => {
+    const { insights } = generateInsights(makeSummary({ test_isolation_rate: '5.00' }), []);
+    expect(insights.some(i => i.includes('test-only commits'))).toBe(false);
   });
 
   test('emits warning for avg_lines_changed above 500', () => {

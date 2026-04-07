@@ -27,7 +27,7 @@ const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWi
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, test_first_indicator: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -224,7 +224,9 @@ async function collectLocalMetrics() {
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
   const large_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const sprawling_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
-  const test_first_pct = metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const test_coverage_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const test_isolation_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_only_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const uncovered_prod_rate = metrics.length > 0 ? ((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
 
   // Generate summary statistics
   const summary = {
@@ -236,7 +238,9 @@ async function collectLocalMetrics() {
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,
     sprawling_commits_pct,
-    test_first_pct,
+    test_coverage_rate,
+    test_isolation_rate,
+    uncovered_prod_rate,
     avg_files_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.files_changed, 0) / metrics.length).toFixed(2) : "0.00",
     avg_lines_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.total_additions + m.total_deletions, 0) / metrics.length).toFixed(2) : "0.00",
     p50_lines_changed: lineStats.p50,
@@ -251,7 +255,7 @@ async function collectLocalMetrics() {
     net_additions_ratio_median: ratioStats.p50,
     net_additions_ratio_p90: ratioStats.p90,
     message_quality_pct,
-    dora_archetype: classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_first_pct, message_quality_pct }),
+    dora_archetype: classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };
@@ -286,7 +290,9 @@ async function collectLocalMetrics() {
   console.log(`📈 Total commits analyzed: ${summary.total_commits}`);
   console.log(`📏 Large commits (>${CONFIG.LARGE_COMMIT_THRESHOLD} lines): ${summary.large_commits_pct}%`);
   console.log(`📁 Sprawling commits (>${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files): ${summary.sprawling_commits_pct}%`);
-  console.log(`🧪 Test-first discipline: ${summary.test_first_pct}%`);
+  console.log(`🧪 Test coverage (test+prod): ${summary.test_coverage_rate}%`);
+  console.log(`🧪 Test isolation (test-only): ${summary.test_isolation_rate}%`);
+  console.log(`🚨 Uncovered prod (large, no tests): ${summary.uncovered_prod_rate}%`);
   console.log(`📂 Average files changed: ${summary.avg_files_changed}`);
   console.log(`📝 Average lines changed: ${summary.avg_lines_changed}`);
   console.log('');

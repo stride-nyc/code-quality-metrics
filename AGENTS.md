@@ -125,6 +125,8 @@ For more details, see README.md and docs/QUICKSTART.md.
 
 Run these after each implementation step, not only at the end of a session:
 
+**When renaming a field that appears in another file's JSDoc `@param` type**, update the JSDoc in the same step as the rename — do not defer to a later step. A transient typecheck failure between steps is a process violation. Run `npm run typecheck` immediately after any rename before proceeding.
+
 ```bash
 npm test          # all tests must pass before moving to next step
 npm run lint      # lint must be clean before moving to next step

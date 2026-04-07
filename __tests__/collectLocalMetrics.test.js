@@ -148,6 +148,17 @@ describe('collectLocalMetrics — successful run', () => {
       .toContain(summary.dora_archetype);
   });
 
+  test('writes local_metrics_summary.json with three-way test classification rates', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(typeof summary.test_coverage_rate).toBe('string');
+    expect(typeof summary.test_isolation_rate).toBe('string');
+    expect(typeof summary.uncovered_prod_rate).toBe('string');
+    expect(summary.test_first_pct).toBeUndefined();
+  });
+
   test('writes local_metrics_summary.json with statistical distribution fields', async () => {
     await collectLocalMetrics();
 

@@ -106,7 +106,9 @@ jobs:
                     branch_commit_counts: branchCommitCounts,
                     large_commits_pct: "0.00",
                     sprawling_commits_pct: "0.00",
-                    test_first_pct: "0.00",
+                    test_coverage_rate: "0.00",
+                    test_isolation_rate: "0.00",
+                    uncovered_prod_rate: "0.00",
                     avg_files_changed: "0.00",
                     avg_lines_changed: "0.00",
                     avg_prod_lines_changed: "0.00",
@@ -156,6 +158,8 @@ jobs:
                       test_files_count: testFiles.length,
                       prod_files_count: prodFiles.length,
                       test_first_indicator: testFiles.length > 0 && prodFiles.length > 0,
+                      test_only_commit: testFiles.length > 0 && prodFiles.length === 0,
+                      uncovered_prod_commit: testFiles.length === 0 && prodFiles.length > 0 && (prodFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0)) > CONFIG.LARGE_COMMIT_THRESHOLD,
                       prod_additions: prodFiles.reduce((sum, f) => sum + f.additions, 0),
                       prod_deletions: prodFiles.reduce((sum, f) => sum + f.deletions, 0),
                       large_commit: (prodFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0)) > CONFIG.LARGE_COMMIT_THRESHOLD,
@@ -192,7 +196,9 @@ jobs:
 
                 const largePct = parseFloat((metrics.filter(m => m.large_commit).length / metrics.length * 100).toFixed(2));
                 const sprawlingPct = parseFloat((metrics.filter(m => m.sprawling_commit).length / metrics.length * 100).toFixed(2));
-                const testFirstPct = parseFloat((metrics.filter(m => m.test_first_indicator).length / metrics.length * 100).toFixed(2));
+                const testCoveragePct = parseFloat((metrics.filter(m => m.test_first_indicator).length / metrics.length * 100).toFixed(2));
+                const testIsolationPct = parseFloat((metrics.filter(m => m.test_only_commit).length / metrics.length * 100).toFixed(2));
+                const uncoveredProdPct = parseFloat((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length * 100).toFixed(2));
 
                 const summary = {
                   total_commits: metrics.length,
@@ -201,7 +207,9 @@ jobs:
                   branch_commit_counts: branchCommitCounts,
                   large_commits_pct: largePct.toFixed(2),
                   sprawling_commits_pct: sprawlingPct.toFixed(2),
-                  test_first_pct: testFirstPct.toFixed(2),
+                  test_coverage_rate: testCoveragePct.toFixed(2),
+                  test_isolation_rate: testIsolationPct.toFixed(2),
+                  uncovered_prod_rate: uncoveredProdPct.toFixed(2),
                   avg_files_changed: (metrics.reduce((sum, m) => sum + m.files_changed, 0) / metrics.length).toFixed(2),
                   avg_lines_changed: (metrics.reduce((sum, m) => sum + (m.prod_additions || 0) + (m.prod_deletions || 0), 0) / metrics.length).toFixed(2),
                   avg_prod_lines_changed: (metrics.reduce((sum, m) => sum + (m.prod_additions || 0) + (m.prod_deletions || 0), 0) / metrics.length).toFixed(2),
@@ -216,7 +224,7 @@ jobs:
                   net_additions_ratio_median: parseFloat(ratioStats.p50.toFixed(2)),
                   net_additions_ratio_p90: parseFloat(ratioStats.p90.toFixed(2)),
                   message_quality_pct: msgQualityPct,
-                  dora_archetype: classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_first_pct: testFirstPct.toFixed(2), message_quality_pct: msgQualityPct }),
+                  dora_archetype: classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2), message_quality_pct: msgQualityPct }),
                   note: "Feature branches only - main/master excluded. Large commit threshold applied to production code only."
                 };
 
@@ -281,7 +289,9 @@ jobs:
               '|--------|-------|--------|--------|',
               `| Large Commits (>100 prod lines) | ${summary.large_commits_pct}% | <20% | ${statusMark(summary.large_commits_pct, 20)} |`,
               `| Sprawling Commits (>5 files) | ${summary.sprawling_commits_pct}% | <10% | ${statusMark(summary.sprawling_commits_pct, 10)} |`,
-              `| Test-First Discipline | ${summary.test_first_pct}% | >50% | ${statusMark(summary.test_first_pct, 50, 'above')} |`,
+              `| Test Coverage (test+prod commits) | ${summary.test_coverage_rate}% | >50% | ${statusMark(summary.test_coverage_rate, 50, 'above')} |`,
+              `| Test Isolation (test-only commits) | ${summary.test_isolation_rate}% | >10% | ${statusMark(summary.test_isolation_rate, 10, 'above')} |`,
+              `| Uncovered Prod (large, no tests) | ${summary.uncovered_prod_rate}% | <10% | ${statusMark(summary.uncovered_prod_rate, 10)} |`,
               `| Message Quality | ${summary.message_quality_pct}% | >60% | ${statusMark(summary.message_quality_pct, 60, 'above')} |`,
               `| Net Additions Ratio (median) | ${summary.net_additions_ratio_median} | <0.50 | ${parseFloat(summary.net_additions_ratio_median) < 0.50 ? 'OK' : 'Warning'} |`,
               '',
