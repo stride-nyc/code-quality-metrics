@@ -5,6 +5,7 @@ on:
 jobs:
   analyze-pr:
     runs-on: ubuntu-latest
+    if: github.actor != 'dependabot[bot]'
     steps:
       - name: Checkout with full history
         uses: actions/checkout@v4
@@ -81,6 +82,8 @@ jobs:
                   large_commit: prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
                   sprawling_commit: (detail.data.files?.length || 0) > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
                   test_first_indicator: commitTestFiles.length > 0 && commitProdFiles.length > 0,
+                  test_only_commit: commitTestFiles.length > 0 && commitProdFiles.length === 0,
+                  uncovered_prod_commit: commitTestFiles.length === 0 && commitProdFiles.length > 0 && prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
                   test_only: commitTestFiles.length > 0 && commitProdFiles.length === 0,
                   prod_only: commitProdFiles.length > 0 && commitTestFiles.length === 0,
                   test_ratio: prodChanges > 0 ? (testChanges / prodChanges) : 0,
@@ -131,6 +134,8 @@ jobs:
             const largePct = commitMetrics.length > 0 ? (largeCommits / commitMetrics.length * 100) : 0;
             const sprawlingPct = commitMetrics.length > 0 ? (sprawlingCommits / commitMetrics.length * 100) : 0;
             const testFirstPct = commitMetrics.length > 0 ? (testFirstCommits / commitMetrics.length * 100) : 0;
+            const testCoveragePct = testFirstPct;
+            const uncoveredProdPct = commitMetrics.length > 0 ? (commitMetrics.filter(c => c.uncovered_prod_commit).length / commitMetrics.length * 100) : 0;
             const msgQualityPct = commitMetrics.length > 0 ? (qualityCommits / commitMetrics.length * 100) : 0;
 
             const medianAdditionsRatio = (() => {
@@ -250,7 +255,7 @@ jobs:
             // ---------------------------------------------------------------
 
             const archetype = commitMetrics.length > 0
-              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_first_pct: testFirstPct.toFixed(2), message_quality_pct: msgQualityPct.toFixed(2) })
+              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2), message_quality_pct: msgQualityPct.toFixed(2) })
               : 'mixed-signals';
 
             const archetypeDescriptions = {

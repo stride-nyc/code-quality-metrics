@@ -102,4 +102,53 @@ describe('analyzeCommit', () => {
     execSync.mockReturnValue(numstatLine(5, 2, 'src/app.js'));
     expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).source_branch).toBe(MOCK_BRANCH);
   });
+
+  // --- test_only_commit ---
+  test('sets test_only_commit true when only test files changed', () => {
+    execSync.mockReturnValue(numstatLine(10, 2, 'src/app.test.js'));
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+    expect(result.test_only_commit).toBe(true);
+  });
+
+  test('sets test_only_commit false when both test and prod files changed', () => {
+    execSync.mockReturnValue([
+      numstatLine(10, 2, 'src/app.js'),
+      numstatLine(5, 1, 'src/app.test.js')
+    ].join('\n'));
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+    expect(result.test_only_commit).toBe(false);
+  });
+
+  test('sets test_only_commit false when only prod files changed', () => {
+    execSync.mockReturnValue(numstatLine(20, 5, 'src/app.js'));
+    expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).test_only_commit).toBe(false);
+  });
+
+  // --- uncovered_prod_commit ---
+  test('sets uncovered_prod_commit true when only large prod commit with no tests', () => {
+    const lines = CONFIG.LARGE_COMMIT_THRESHOLD + 1;
+    execSync.mockReturnValue(numstatLine(lines, 0, 'src/app.js'));
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+    expect(result.uncovered_prod_commit).toBe(true);
+  });
+
+  test('sets uncovered_prod_commit false when prod-only commit is not large', () => {
+    execSync.mockReturnValue(numstatLine(10, 0, 'src/app.js'));
+    expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).uncovered_prod_commit).toBe(false);
+  });
+
+  test('sets uncovered_prod_commit false when large commit includes test files', () => {
+    const lines = CONFIG.LARGE_COMMIT_THRESHOLD + 1;
+    execSync.mockReturnValue([
+      numstatLine(lines, 0, 'src/app.js'),
+      numstatLine(5, 0, 'src/app.test.js')
+    ].join('\n'));
+    expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).uncovered_prod_commit).toBe(false);
+  });
+
+  test('sets uncovered_prod_commit false when large commit is test-only', () => {
+    const lines = CONFIG.LARGE_COMMIT_THRESHOLD + 1;
+    execSync.mockReturnValue(numstatLine(lines, 0, 'src/app.test.js'));
+    expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).uncovered_prod_commit).toBe(false);
+  });
 });

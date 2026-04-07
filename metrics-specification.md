@@ -94,29 +94,38 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 
 ---
 
-### Metric 3: Test-First Discipline Rate
+### Metric 3: Three-Way Test Coverage Classification
 
-**What it measures**: The proportion of commits that modify both test files and production files in the same commit, used as a proxy for test discipline under AI-assisted development.
+**What it measures**: Replaces the binary `test_first_indicator` with three distinct commit categories, each carrying different signal quality for AI drift detection.
 
-**Formula**:
+| Category | Formula | Per-commit flag | Summary field |
+|----------|---------|----------------|---------------|
+| Test Coverage | test AND prod files in same commit | `test_first_indicator` | `test_coverage_rate` |
+| Test Isolation | test files only (no prod files) | `test_only_commit` | `test_isolation_rate` |
+| Uncovered Prod | prod files only AND large commit | `uncovered_prod_commit` | `uncovered_prod_rate` |
+
+**Formulas**:
 ```
-test_first_pct = (commits where test_files_count > 0 AND prod_files_count > 0) / total_commits × 100
+test_coverage_rate   = (commits where test_files_count > 0 AND prod_files_count > 0) / total_commits × 100
+test_isolation_rate  = (commits where test_files_count > 0 AND prod_files_count = 0) / total_commits × 100
+uncovered_prod_rate  = (commits where test_files_count = 0 AND prod_files_count > 0 AND large_commit = true) / total_commits × 100
 ```
-
-**Per-commit flag**: `test_first_indicator: boolean`
 
 **Data source**: `git show --numstat {sha}` (file paths matched against `TEST_FILE_PATTERNS`)
 
 **CONFIG key**: `TEST_FILE_PATTERNS` (array of 8 regex patterns; covers JS/TS, Python, Go, Java, C#)
 
 **Thresholds**:
-| Range | Signal |
-|-------|--------|
-| > 50% | Healthy: strong test discipline |
-| 30–50% | Warning: monitor AI tool usage patterns |
-| < 30% | Critical: AI tools may be bypassing TDD practices |
+| Metric | Range | Signal |
+|--------|-------|--------|
+| `test_coverage_rate` | > 50% | Healthy: test discipline present |
+| `test_coverage_rate` | < 30% | Warning: low paired test+prod commits |
+| `test_isolation_rate` | > 10% | Positive: TDD red-phase or test-improvement commits visible |
+| `uncovered_prod_rate` | < 10% | Healthy |
+| `uncovered_prod_rate` | 10–20% | Warning: elevated AI drift risk |
+| `uncovered_prod_rate` | > 20% | Critical: "accepted AI output without writing tests" pattern |
 
-**Limitations**: This metric cannot distinguish test-first (TDD) from test-after. It measures co-occurrence, not ordering. A commit that adds production code and test code written afterward scores the same as one where tests were written first.
+**Why `uncovered_prod_rate` matters**: A commit that is both prod-only and large is the clearest AI drift signal in this toolkit — it matches the pattern of a developer accepting a large AI-generated code block without writing any tests. `test_isolation_rate` is a positive signal: test-only commits indicate TDD red-phase work or deliberate test improvements, both of which the binary metric incorrectly classified as "bad".
 
 **DORA connection**: DORA's research identifies automated testing as the single strongest predictor of whether AI tools help or hurt a team. Teams without it when they adopt AI see the fastest debt accumulation.
 
@@ -315,7 +324,8 @@ outlier      = (total_additions + total_deletions) > (mean_lines + 2 × stddev_l
 harmonious-high-achiever:
   large_commits_pct < 20
   AND sprawling_commits_pct < 10
-  AND test_first_pct > 50
+  AND test_coverage_rate > 50
+  AND uncovered_prod_rate < 10
   AND message_quality_pct > 60
 
 legacy-bottleneck:
@@ -324,7 +334,7 @@ legacy-bottleneck:
 
 foundational-challenges:
   large_commits_pct > 40
-  OR (test_first_pct < 30 AND large_commits_pct > 20)
+  OR uncovered_prod_rate > 20
 
 mixed-signals:
   (all other combinations)
@@ -558,10 +568,12 @@ Single summary object for the analysis run:
   branches_analyzed: string[],
   branch_commit_counts: Record<string, number>,
 
-  // Original 5 metrics (preserved for backwards compatibility)
+  // Core metrics
   large_commits_pct: string,        // "XX.XX"
   sprawling_commits_pct: string,
-  test_first_pct: string,
+  test_coverage_rate: string,       // commits with test AND prod files / total
+  test_isolation_rate: string,      // commits with test files only / total
+  uncovered_prod_rate: string,      // large commits with prod files only / total
   avg_files_changed: string,
   avg_lines_changed: string,
 
