@@ -60,7 +60,7 @@ node local-code-metrics.js
 | **Sprawling Commit %** | <10% | Identifies scattered changes across files |
 | **Test-First Discipline** | >50% | Monitors TDD practices with AI tools |
 | **Message Quality %** | >60% | Conventional commits or descriptive messages |
-| **Additions/Deletions Ratio (median)** | <3.0 | Flags batch-acceptance pattern |
+| **Net Additions Ratio (median)** | <0.50 | Flags batch-acceptance pattern (bounded 0–1: 1.0 = entirely net-new code) |
 | **Avg Files Changed** | <5 | Measures development granularity |
 
 ## Real-World Example
@@ -114,7 +114,7 @@ Large commits: <20%
 Sprawling commits: <10%
 Test-first discipline: >50%
 Message quality: >60%
-Additions ratio (median): <3.0
+Net additions ratio (median): <0.33
 ```
 
 ### Warning Signs
@@ -122,7 +122,7 @@ Additions ratio (median): <3.0
 Large commits: 20-40%
 Sprawling commits: 10-25%
 Test-first discipline: 30-50%
-Additions ratio (median): 3.0-6.0
+Net additions ratio (median): 0.33-0.50
 ```
 
 ### Critical Issues
@@ -130,7 +130,7 @@ Additions ratio (median): 3.0-6.0
 Large commits: >40%
 Sprawling commits: >25%
 Test-first discipline: <30%
-Additions ratio (median): >6.0
+Net additions ratio (median): >0.50
 ```
 
 ## DORA Archetype Classification
