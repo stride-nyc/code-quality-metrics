@@ -13,8 +13,8 @@
 .env.local
 
 # Generated output files
-local_commit_metrics.json
-local_metrics_summary.json
+local_*.json
+demo/*.txt
 RETROSPECTIVE*.md
 
 # Test coverage
