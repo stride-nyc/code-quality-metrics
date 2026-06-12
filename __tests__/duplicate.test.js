@@ -5,7 +5,7 @@ jest.mock('fs');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
-const { runDuplicateCheck } = require('../lib/duplicate');
+const { runDuplicateCheck, resolveModuleNeighbors } = require('../lib/duplicate');
 
 const FIXTURE_DUPLICATE = {
   firstFile:  { name: 'src/lib/git.js',     start: 10, end: 25 },
@@ -47,5 +47,54 @@ describe('runDuplicateCheck', () => {
     execSync.mockImplementation(() => { throw new Error('exit code 1'); });
     const result = runDuplicateCheck(['src/lib/git.js']);
     expect(result).toEqual([]);
+  });
+});
+
+describe('resolveModuleNeighbors', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    fs.existsSync.mockReturnValue(true);
+  });
+
+  test('returns only the input files when they have no local imports', () => {
+    fs.readFileSync.mockReturnValue('const x = 1;');
+    const input = ['/project/src/lib/git.js'];
+    const result = resolveModuleNeighbors(input);
+    expect(result).toContain('/project/src/lib/git.js');
+    expect(result).toHaveLength(1);
+  });
+
+  test('returns changed files plus resolved local imports', () => {
+    fs.readFileSync.mockReturnValue("const { CONFIG } = require('./config');");
+    const input = ['/project/src/lib/git.js'];
+    const result = resolveModuleNeighbors(input);
+    expect(result).toContain('/project/src/lib/git.js');
+    expect(result).toContain('/project/src/lib/config.js');
+    expect(result).toHaveLength(2);
+  });
+
+  test('skips import resolution for non-JS files and includes them as-is', () => {
+    const input = ['/project/.github/workflows/pr-metrics.yml'];
+    const result = resolveModuleNeighbors(input);
+    expect(result).toContain('/project/.github/workflows/pr-metrics.yml');
+    expect(fs.readFileSync).not.toHaveBeenCalled();
+  });
+
+  test('skips files that do not exist on disk', () => {
+    fs.existsSync.mockReturnValue(false);
+    const input = ['/project/src/deleted.js'];
+    const result = resolveModuleNeighbors(input);
+    expect(result).toEqual([]);
+  });
+
+  test('ignores external and node_modules imports', () => {
+    fs.readFileSync.mockReturnValue(
+      "const fs = require('fs');\nconst x = require('lodash');\nconst y = require('./local');"
+    );
+    const input = ['/project/src/lib/git.js'];
+    const result = resolveModuleNeighbors(input);
+    expect(result).toContain('/project/src/lib/local.js');
+    expect(result.some(p => p.includes('lodash'))).toBe(false);
+    expect(result.some(p => p.includes('node_modules'))).toBe(false);
   });
 });
