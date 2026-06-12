@@ -20,6 +20,7 @@ jest.mock('child_process');
 jest.mock('fs');
 
 const { execSync } = require('child_process');
+const fs = require('fs');
 const {
   getAnthropicClient,
   selectClaudeCommits,
@@ -27,6 +28,7 @@ const {
   analyzeWithClaude,
   CONFIG,
 } = require('../local-code-metrics');
+const { analyzeDuplicatesWithClaude } = require('../lib/claude');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -211,5 +213,60 @@ describe('selectClaudeCommits', () => {
     ];
     const result = selectClaudeCommits(metrics);
     expect(result[0].sha).toBe('large');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// analyzeDuplicatesWithClaude
+// ---------------------------------------------------------------------------
+
+describe('analyzeDuplicatesWithClaude', () => {
+  const FIXTURE_FINDING = {
+    file1: 'src/lib/git.js',
+    file2: 'src/lib/metrics.js',
+    similarity: 'both parse line-delimited data with the same loop structure',
+    concern: 'copy-paste risk in parsing logic',
+    confidence: 'high'
+  };
+
+  function makeClient(responsePayload) {
+    const mockCreate = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(responsePayload || [FIXTURE_FINDING]) }]
+    });
+    return { messages: { create: mockCreate } };
+  }
+
+  test('returns empty array when client is null', async () => {
+    const result = await analyzeDuplicatesWithClaude(null, ['src/lib/git.js'], []);
+    expect(result).toEqual([]);
+  });
+
+  test('calls messages.create with file contents and staticFindings count', async () => {
+    const client = makeClient();
+    fs.readFileSync.mockReturnValue('function parse(line) {}');
+    await analyzeDuplicatesWithClaude(client, ['src/lib/git.js'], [{ lines: 10 }]);
+    expect(client.messages.create).toHaveBeenCalled();
+    const call = client.messages.create.mock.calls[0][0];
+    expect(call.messages[0].content).toContain('src/lib/git.js');
+    expect(call.messages[0].content).toContain('1 static finding');
+  });
+
+  test('parses structured response into file1/file2/similarity/concern/confidence', async () => {
+    const client = makeClient();
+    fs.readFileSync.mockReturnValue('function parse(line) {}');
+    const result = await analyzeDuplicatesWithClaude(client, ['src/lib/git.js'], []);
+    expect(result).toHaveLength(1);
+    expect(result[0].file1).toBe('src/lib/git.js');
+    expect(result[0].confidence).toBe('high');
+  });
+
+  test('returns empty array when API response is malformed', async () => {
+    const client = makeClient('not-json-array');
+    client.messages.create.mockResolvedValue({
+      content: [{ type: 'text', text: 'not valid json at all {{{' }]
+    });
+    fs.readFileSync.mockReturnValue('function parse(line) {}');
+    const result = await analyzeDuplicatesWithClaude(client, ['src/lib/git.js'], []);
+    expect(result).toEqual([]);
   });
 });

@@ -53,7 +53,7 @@ Three public components sharing pure-computation logic via `lib/`:
 
 2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Requires `lib/config.js`, `lib/statistics.js`, and `lib/metrics.js` via `require()`. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
-3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js` and `lib/metrics.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, and development pattern detection.
+3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js`, `lib/metrics.js`, `lib/duplicate.js`, and `lib/claude.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, development pattern detection, and two-layer duplicate code detection (Layer 1 jscpd always-on; Layer 2 semantic via Claude when `ANTHROPIC_API_KEY` is set).
 
 ## Key Metrics and Thresholds
 
@@ -101,8 +101,33 @@ Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is th
 | `AI_ANALYSIS_MAX_COMMITS` | 5 | Max commits sent to Claude per run |
 | `AI_DIFF_MAX_CHARS` | 4000 | Diff truncation limit for Claude API calls |
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
+| `DUPLICATE_MIN_LINES` | 5 | Minimum lines for jscpd to flag a duplicate block |
+| `DUPLICATE_MIN_TOKENS` | 50 | Minimum tokens for jscpd to flag a duplicate block |
+| `DUPLICATE_IGNORE_PATTERNS` | `[]` | Glob patterns for jscpd to ignore (e.g. generated files) |
+| `DUPLICATE_SCAN_PATHS` | `[]` | Paths jscpd scans; empty means all provided file paths |
 
 Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
+
+### Duplicate Detection Tuning
+
+The defaults (`DUPLICATE_MIN_LINES: 5`, `DUPLICATE_MIN_TOKENS: 50`) are calibrated for JavaScript. Other languages typically need higher thresholds to suppress boilerplate false positives:
+
+```js
+// Java — longer method signatures and boilerplate
+DUPLICATE_MIN_LINES: 10,
+DUPLICATE_MIN_TOKENS: 100,
+DUPLICATE_IGNORE_PATTERNS: ['**/*Test.java', '**/generated/**'],
+
+// Python — decorators and docstrings inflate token counts
+DUPLICATE_MIN_LINES: 8,
+DUPLICATE_MIN_TOKENS: 80,
+DUPLICATE_IGNORE_PATTERNS: ['**/migrations/**', '**/__pycache__/**'],
+
+// Go — interface implementations repeat predictably
+DUPLICATE_MIN_LINES: 8,
+DUPLICATE_MIN_TOKENS: 75,
+DUPLICATE_IGNORE_PATTERNS: ['**/*_test.go', '**/vendor/**'],
+```
 
 ## Workflow Permissions
 

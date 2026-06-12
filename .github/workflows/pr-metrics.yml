@@ -24,6 +24,8 @@ jobs:
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
             const { scoreMessageQuality, classifyDoraArchetype, isTestFile } = require('./lib/metrics');
+            const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
+            const { getAnthropicClient, analyzeDuplicatesWithClaude } = require('./lib/claude');
 
             // ---------------------------------------------------------------
             // Fetch PR data
@@ -113,6 +115,16 @@ jobs:
             const prodDeletions = prodFiles.reduce((sum, f) => sum + f.deletions, 0);
             const prodChanges = prodAdditions + prodDeletions;
             const prodFilesCount = prodFiles.length;
+
+            const staticDuplicates = runDuplicateCheck(prodFiles.map(f => f.filename));
+            const anthropicClient = await getAnthropicClient();
+            const semanticFindings = anthropicClient
+              ? await analyzeDuplicatesWithClaude(
+                  anthropicClient,
+                  resolveModuleNeighbors(prodFiles.map(f => f.filename)),
+                  staticDuplicates
+                )
+              : [];
 
             const testAdditions = testFiles.reduce((sum, f) => sum + f.additions, 0);
             const testDeletions = testFiles.reduce((sum, f) => sum + f.deletions, 0);
@@ -304,6 +316,35 @@ jobs:
               `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | <0.50 |`
             ].join('\n') : '';
 
+            const layerIndicator = anthropicClient
+              ? '_Layer 1 (static) and Layer 2 (semantic) ran._'
+              : '_Layer 1 (static) ran. Set ANTHROPIC_API_KEY to enable semantic analysis._';
+
+            const showDuplicationSection = staticDuplicates.length > 0 || semanticFindings.length > 0 || anthropicClient !== null;
+
+            const staticBlock = staticDuplicates.length > 0 ? [
+              `Found ${staticDuplicates.length} duplicate block(s) across the changed files:`,
+              ...staticDuplicates.slice(0, 10).map(d =>
+                `- \`${d.firstFile.name}:${d.firstFile.start}-${d.firstFile.end}\` duplicates \`${d.secondFile.name}:${d.secondFile.start}-${d.secondFile.end}\` (${d.lines} lines, ${d.tokens} tokens)`
+              ),
+              ...(staticDuplicates.length > 10 ? [`and ${staticDuplicates.length - 10} more...`] : [])
+            ].join('\n') : 'No static duplicates found.';
+
+            const semanticBlock = semanticFindings.length > 0 ? [
+              '### Semantic Similarity',
+              ...semanticFindings.map(f => `- \`${f.file1}\` / \`${f.file2}\`: ${f.similarity} (confidence: ${f.confidence})`)
+            ].join('\n') : '';
+
+            const duplicationSection = showDuplicationSection ? [
+              '## Duplicate Code',
+              '',
+              staticBlock,
+              '',
+              semanticBlock,
+              '',
+              layerIndicator
+            ].filter(s => s !== '').join('\n') : '';
+
             const commentParts = [
               '## PR Analysis',
               '',
@@ -349,6 +390,8 @@ jobs:
               ].join('\n') : '',
               '',
               doraSection,
+              '',
+              duplicationSection,
               '',
               '_Automated by Code Metrics Workflow_'
             ].filter(s => s !== '').join('\n');
