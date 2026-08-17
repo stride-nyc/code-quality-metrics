@@ -62,6 +62,37 @@ describe('generateReport', () => {
     expect(html.trim().toLowerCase().startsWith('<!doctype html>')).toBe(true);
   });
 
+  it('reads local_duplicate_analysis.json when present and includes its findings in the rendered report', () => {
+    const dir = makeTmpDir();
+    writeFixtureInputs(dir);
+    const duplicateAnalysis = {
+      analyzed_at: '2026-08-17T00:00:00.000Z',
+      files_scanned: 2,
+      static_duplicates: [
+        { firstFile: { name: 'src/dup-a.js', start: 1, end: 10 }, secondFile: { name: 'src/dup-b.js', start: 1, end: 10 }, lines: 10, tokens: 90 }
+      ],
+      semantic_findings: [],
+      layers_run: { static: true, semantic: false }
+    };
+    fs.writeFileSync(path.join(dir, 'local_duplicate_analysis.json'), JSON.stringify(duplicateAnalysis, null, 2));
+
+    const outputPath = generateReport(dir);
+    const html = fs.readFileSync(outputPath, 'utf8');
+
+    expect(html).toContain('Duplicate Code');
+    expect(html).toContain('src/dup-a.js');
+  });
+
+  it('omits the Duplicate Code section when local_duplicate_analysis.json is absent (older analysis runs)', () => {
+    const dir = makeTmpDir();
+    writeFixtureInputs(dir);
+
+    const outputPath = generateReport(dir);
+    const html = fs.readFileSync(outputPath, 'utf8');
+
+    expect(html).not.toContain('Duplicate Code');
+  });
+
   it('throws a clear error mentioning the missing filename when local_metrics_summary.json is absent', () => {
     const dir = makeTmpDir();
     const metrics = [];

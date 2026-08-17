@@ -50,19 +50,34 @@ function readRequiredJson(dir, filename) {
 }
 
 /**
+ * Read local_duplicate_analysis.json from dir if it exists, returning
+ * undefined otherwise (older local-code-metrics.js runs, or runs that
+ * touched no production files, will not have written this file; the
+ * report renders unchanged without a Duplicate Code section in that case).
+ * @param {string} dir
+ * @returns {object|undefined}
+ */
+function readOptionalDuplicateAnalysis(dir) {
+  const filePath = path.join(dir, 'local_duplicate_analysis.json');
+  if (!fs.existsSync(filePath)) return undefined;
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+/**
  * Read and compute everything generateReport and generateReportWithNarrative
  * both need: the two required JSON inputs, the vendored fonts, and the
  * deterministic metric catalog. Kept in one place so both entry points stay
  * in sync on how inputs are read.
  * @param {string} dir
- * @returns {{ summary: object, metrics: Array<object>, fontData: object, catalog: Array<object> }}
+ * @returns {{ summary: object, metrics: Array<object>, fontData: object, catalog: Array<object>, duplicates: (object|undefined) }}
  */
 function readReportInputs(dir) {
   const summary = readRequiredJson(dir, 'local_metrics_summary.json');
   const metrics = readRequiredJson(dir, 'local_commit_metrics.json');
   const fontData = readFontData();
   const catalog = buildMetricCatalog(summary);
-  return { summary, metrics, fontData, catalog };
+  const duplicates = readOptionalDuplicateAnalysis(dir);
+  return { summary, metrics, fontData, catalog, duplicates };
 }
 
 /**
@@ -74,8 +89,8 @@ function readReportInputs(dir) {
  * @returns {string} the path of the written HTML file
  */
 function generateReport(dir = process.cwd()) {
-  const { summary, metrics, fontData, catalog } = readReportInputs(dir);
-  const html = renderReportHtml({ summary, metrics, catalog, fontData });
+  const { summary, metrics, fontData, catalog, duplicates } = readReportInputs(dir);
+  const html = renderReportHtml({ summary, metrics, catalog, fontData, duplicates });
 
   const outputPath = path.join(dir, 'local_drift_report.html');
   fs.writeFileSync(outputPath, html);
@@ -95,12 +110,12 @@ function generateReport(dir = process.cwd()) {
  * @returns {Promise<string>} the path of the written HTML file
  */
 async function generateReportWithNarrative(dir = process.cwd()) {
-  const { summary, metrics, fontData, catalog } = readReportInputs(dir);
+  const { summary, metrics, fontData, catalog, duplicates } = readReportInputs(dir);
 
   const client = await getAnthropicClient();
   const findings = await generateFindingsNarrative(client, catalog, topCommits(metrics));
 
-  const html = renderReportHtml({ summary, metrics, catalog, fontData, findings });
+  const html = renderReportHtml({ summary, metrics, catalog, fontData, findings, duplicates });
 
   const outputPath = path.join(dir, 'local_drift_report.html');
   fs.writeFileSync(outputPath, html);
