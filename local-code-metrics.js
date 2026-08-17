@@ -33,8 +33,12 @@ const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWi
 
 /**
  * Main analysis function
+ * @param {{ days?: number, since?: string }} [options] CLI window override: since (an explicit
+ *   YYYY-MM-DD boundary) takes precedence over days (a count replacing CONFIG.ANALYSIS_DAYS).
  */
-async function collectLocalMetrics() {
+async function collectLocalMetrics(options = {}) {
+  const analysisDays = options.days ?? CONFIG.ANALYSIS_DAYS;
+
   console.log('=== AI Code Drift Local Analysis ===');
   console.log('');
 
@@ -49,7 +53,7 @@ async function collectLocalMetrics() {
 
   console.log(`📁 Repository: ${remoteUrl}`);
   console.log(`📍 Local path: ${repoRoot}`);
-  console.log(`📅 Analysis period: Last ${CONFIG.ANALYSIS_DAYS} days`);
+  console.log(`📅 Analysis period: Last ${analysisDays} days`);
   console.log('');
 
   // Get all local and remote branches except main/master
@@ -112,10 +116,16 @@ async function collectLocalMetrics() {
     console.log('');
   }
 
-  // Calculate date range
-  const since = new Date();
-  since.setDate(since.getDate() - CONFIG.ANALYSIS_DAYS);
-  const sinceStr = since.toISOString().split('T')[0];
+  // Calculate date range. An explicit --since date takes precedence over the
+  // day-count window; otherwise derive the boundary from analysisDays.
+  let sinceStr;
+  if (options.since) {
+    sinceStr = options.since;
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - analysisDays);
+    sinceStr = since.toISOString().split('T')[0];
+  }
 
   console.log(`🔍 Looking for commits since: ${sinceStr}`);
   console.log('');
@@ -270,7 +280,7 @@ async function collectLocalMetrics() {
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
-    analysis_period_days: CONFIG.ANALYSIS_DAYS,
+    analysis_period_days: analysisDays,
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
     workflow_type: workflowType,
@@ -417,10 +427,33 @@ module.exports = {
   CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude
 };
 
-// Script execution — placed after all definitions and module.exports so all
+/**
+ * Parse --since <date> / --days <n> CLI flags into a collectLocalMetrics options object.
+ * Not unit tested directly (same category as the require.main block below); the
+ * behavior it feeds (options.since, options.days) is covered by the CLI window
+ * override tests in __tests__/collectLocalMetrics.test.js.
+ * @param {string[]} argv process.argv.slice(2)
+ * @returns {{ days?: number, since?: string }}
+ */
+function parseCliArgs(argv) {
+  /** @type {{ days?: number, since?: string }} */
+  const options = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--since' && argv[i + 1]) {
+      options.since = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--days' && argv[i + 1]) {
+      options.days = Number(argv[i + 1]);
+      i++;
+    }
+  }
+  return options;
+}
+
+// Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  collectLocalMetrics().catch(error => {
+  collectLocalMetrics(parseCliArgs(process.argv.slice(2))).catch(error => {
     console.error('❌ Analysis failed:', error.message);
     process.exit(1);
   });

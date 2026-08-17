@@ -127,6 +127,45 @@ describe('collectLocalMetrics — remote branch listing', () => {
   });
 });
 
+describe('collectLocalMetrics — CLI window override', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('applies a --days override to widen the analysis window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-15T00:00:00Z'));
+    const SHA = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x', // git branch -a
+      `${SHA}|2026-03-20T10:00:00Z|Dev|feat: old commit outside the default 30-day window`,
+      `3\t0\tsrc/old.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ days: 90 });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.analysis_period_days).toBe(90);
+  });
+
+  test('applies a --since override directly as the git log boundary date', async () => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x', // git branch -a
+      ''             // git log — no commits, short-circuits before deeper processing
+    );
+
+    await collectLocalMetrics({ since: '2026-04-01' });
+
+    const sawExplicitSince = execSync.mock.calls.some(call => String(call[0]).includes('2026-04-01'));
+    expect(sawExplicitSince).toBe(true);
+  });
+});
+
 describe('collectLocalMetrics — early exits', () => {
   test('exits with code 1 when not in a git repository', async () => {
     mockExecSequence(''); // git rev-parse returns empty
