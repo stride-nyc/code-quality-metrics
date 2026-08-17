@@ -204,4 +204,23 @@ describe('renderReportHtml', () => {
 
     expect(html).toMatch(/<footer[^>]*>[\s\S]*<\/footer>/);
   });
+
+  it('includes functional CSS rules for the component classes it emits, not just font-face and token declarations', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const styleBlock = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+
+    // The markup emits these classes/elements on every render (masthead,
+    // metric-grid, gauge and stat cards, flight log, findings, footer).
+    // Each one needs an actual selector plus declarations, a bare :root
+    // token definition does not style anything that references it.
+    for (const selector of [
+      'body', '.metric-grid', '.metric-card', '.gauge',
+      '.gauge-band', '.gauge-needle', '.gauge-hub',
+      '.status-chip', '.metric-value', '.metric-label',
+      '.flight-log', '.findings', 'footer'
+    ]) {
+      const pattern = new RegExp(selector.replace(/\./g, '\\.') + '\\s*(,[^{]*)?\\{[^}]+\\}');
+      expect(styleBlock).toMatch(pattern);
+    }
+  });
 });
