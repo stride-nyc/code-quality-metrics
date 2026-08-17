@@ -132,21 +132,23 @@ as `workflow_type` in `local_metrics_summary.json`:
 
 | `workflow_type` | When it applies | `branches_analyzed` |
 |---|---|---|
-| `feature_branch` | At least one branch other than `main`/`master` exists, local or remote | The feature branches found |
-| `trunk` | No feature branches exist | The resolved default branch (`main`, `master`, or `HEAD` if neither is found) |
+| `feature_branch` | At least one branch other than `main`/`master` exists, local or remote, and still has commits of its own | The unmerged feature branches found |
+| `trunk` | No such branches exist, whether because there are none or because every survivor is fully merged | The resolved default branch (`main`, `master`, or `HEAD` if neither is found) |
 
 Branch discovery uses `git branch -a`, so feature branches that exist only on
 the remote (never checked out locally) are included, deduplicated against
 local branches of the same name.
 
-**Known limitation:** branch discovery only checks whether a branch *exists*,
-not whether it has been fully merged. A repo using a merge-without-delete
-workflow, where a branch's PR merged into `main` long ago but the branch ref
-was never deleted, is still classified as `feature_branch`, even though that
-branch contributes no commits beyond what is already on `main`. If your repo
-has stale, fully-merged branches lying around, drop the local
-remote-tracking ref with `git branch -dr <remote>/<branch>` (reversible with
-`git fetch`) before running the script for an accurate `workflow_type`.
+Fully-merged branches are excluded automatically. A branch with no commits
+unique to the default branch is a merged remnant: under a merge-without-delete
+workflow its PR landed long ago but the ref was never removed, so it
+contributes nothing beyond the default branch. Discovery drops these before
+choosing `feature_branch` or `trunk`, so a repo whose only surviving branches
+are remnants is correctly analyzed as `trunk` with no manual cleanup.
+
+Merge status comes from a single `git branch -a --merged <default>` call. If
+that call fails, no branches are filtered and discovery behaves as it did
+before, rather than guessing at merge state.
 
 ## Drift Report
 
