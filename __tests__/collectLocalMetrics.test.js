@@ -40,6 +40,33 @@ function mockExecSequence(...values) {
   });
 }
 
+describe('collectLocalMetrics — trunk fallback', () => {
+  test('falls back to trunk analysis when no feature branches exist', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',                                              // git branch — only main, no feature branches
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,   // git log against the resolved default branch
+      `10\t5\tsrc/app.js`                                   // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).toHaveBeenCalled();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.workflow_type).toBe('trunk');
+    expect(summary.branches_analyzed).toEqual(['main']);
+
+    const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+    const metrics = JSON.parse(metricsCall[1]);
+    expect(metrics[0].commit_type).toBe('trunk');
+  });
+});
+
 describe('collectLocalMetrics — early exits', () => {
   test('exits with code 1 when not in a git repository', async () => {
     mockExecSequence(''); // git rev-parse returns empty

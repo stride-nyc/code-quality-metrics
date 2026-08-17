@@ -63,15 +63,22 @@ async function collectLocalMetrics() {
     .map(line => line.replace(/^\*?\s*/, '').trim())
     .filter(branch => branch && !['main', 'master'].includes(branch.toLowerCase()));
 
-  if (allBranches.length === 0) {
-    console.log('⚠️ No feature branches found. Analysis works best with feature branch workflows.');
-    console.log('Consider preserving feature branches after merging for better AI drift detection.');
-    return;
-  }
+  // workflowType and branchesToAnalyze default to the feature-branch path; the
+  // no-feature-branches fallback below overrides both for repos whose history
+  // lives on main (trunk workflow), instead of returning early.
+  let workflowType = 'feature_branch';
+  let branchesToAnalyze = allBranches;
 
-  console.log(`🌿 Found ${allBranches.length} feature branches:`);
-  allBranches.forEach(branch => console.log(`   • ${branch}`));
-  console.log('');
+  if (allBranches.length === 0) {
+    workflowType = 'trunk';
+    branchesToAnalyze = ['main'];
+    console.log("⚠️ No feature branches found. Falling back to trunk analysis on 'main'.");
+    console.log('');
+  } else {
+    console.log(`🌿 Found ${allBranches.length} feature branches:`);
+    allBranches.forEach(branch => console.log(`   • ${branch}`));
+    console.log('');
+  }
 
   // Calculate date range
   const since = new Date();
@@ -87,7 +94,7 @@ async function collectLocalMetrics() {
   /** @type {Record<string, number>} */
   const branchCommitCounts = {};
 
-  for (const branch of allBranches) {
+  for (const branch of branchesToAnalyze) {
     process.stdout.write(`📊 Analyzing branch: ${branch}... `);
 
     try {
@@ -154,7 +161,7 @@ async function collectLocalMetrics() {
       metrics.push(/** @type {CommitMetric} */ ({
         ...commit,
         ...analysis,
-        commit_type: 'feature_branch'
+        commit_type: workflowType
       }));
     }
   }
@@ -234,7 +241,8 @@ async function collectLocalMetrics() {
     analysis_period_days: CONFIG.ANALYSIS_DAYS,
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
-    branches_analyzed: allBranches,
+    workflow_type: workflowType,
+    branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,
     sprawling_commits_pct,
