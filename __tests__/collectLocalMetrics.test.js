@@ -3,10 +3,12 @@
 jest.mock('child_process');
 jest.mock('fs');
 jest.mock('../lib/claude');
+jest.mock('../lib/duplicate');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
 const claude = require('../lib/claude');
+const duplicate = require('../lib/duplicate');
 const { collectLocalMetrics } = require('../local-code-metrics');
 
 const FAKE_ROOT = '/fake/repo';
@@ -21,6 +23,10 @@ beforeEach(() => {
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   // Default: Claude skipped — overridden only in Claude-active tests
   claude.getAnthropicClient.mockResolvedValue(null);
+  // Default: no static/semantic duplicate findings — overridden only in duplicate-detection tests
+  duplicate.runDuplicateCheck.mockReturnValue([]);
+  duplicate.resolveModuleNeighbors.mockImplementation(paths => paths);
+  claude.analyzeDuplicatesWithClaude.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -307,9 +313,12 @@ describe('collectLocalMetrics — successful run', () => {
     fs.writeFileSync.mockImplementation(() => {});
   });
 
-  test('writes two output files', async () => {
+  test('writes three output files: metrics, summary, and duplicate analysis', async () => {
+    // Layer 1 (jscpd, static) duplicate detection always runs when the
+    // analyzed commits touch production files, adding a third output file
+    // alongside the metrics and summary JSON.
     await collectLocalMetrics();
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
   });
 
   test('writes local_commit_metrics.json with array of commit metrics', async () => {
@@ -519,8 +528,9 @@ describe('collectLocalMetrics — Claude API active', () => {
 
     await collectLocalMetrics();
 
-    // Three files: metrics, summary, claude analysis
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(3);
+    // Four files: metrics, summary, claude analysis, and duplicate analysis
+    // (Layer 1 always runs when the analyzed commits touch production files).
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(4);
 
     const claudeCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_claude_analysis'));
     expect(claudeCall).toBeDefined();
@@ -631,5 +641,87 @@ describe('collectLocalMetrics — merged branch exclusion', () => {
     const summary = JSON.parse(summaryCall[1]);
     expect(summary.workflow_type).toBe('feature_branch');
     expect(summary.branches_analyzed).toEqual(['feature/x']);
+  });
+});
+
+describe('collectLocalMetrics — duplicate detection', () => {
+  const SHA = 'a'.repeat(40);
+  const NUMSTAT = `10\t5\tsrc/app.js\n3\t1\tsrc/app.test.js`;
+
+  beforeEach(() => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+  });
+
+  test("writes local_duplicate_analysis.json with static duplicates found across analyzed commits' production files", async () => {
+    const fixtureDuplicate = { firstFile: { name: 'src/app.js', start: 1, end: 5 }, secondFile: { name: 'src/other.js', start: 1, end: 5 }, lines: 5, tokens: 60 };
+    duplicate.runDuplicateCheck.mockReturnValue([fixtureDuplicate]);
+
+    await collectLocalMetrics();
+
+    expect(duplicate.runDuplicateCheck).toHaveBeenCalledWith(['src/app.js']);
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    expect(dupCall).toBeDefined();
+    const output = JSON.parse(dupCall[1]);
+    expect(output.static_duplicates).toEqual([fixtureDuplicate]);
+  });
+
+  test('does not call the Claude semantic layer when no ANTHROPIC_API_KEY is set', async () => {
+    await collectLocalMetrics();
+
+    expect(claude.analyzeDuplicatesWithClaude).not.toHaveBeenCalled();
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.layers_run).toEqual({ static: true, semantic: false });
+  });
+
+  test('calls the Claude semantic layer with module-neighbor-resolved files when a client is available', async () => {
+    claude.getAnthropicClient.mockResolvedValue({});
+    claude.selectClaudeCommits.mockReturnValue([]);
+    duplicate.resolveModuleNeighbors.mockReturnValue(['src/app.js', 'src/util.js']);
+    claude.analyzeDuplicatesWithClaude.mockResolvedValue([
+      { file1: 'src/app.js', file2: 'src/util.js', similarity: 'high', confidence: 0.9 }
+    ]);
+
+    await collectLocalMetrics();
+
+    expect(duplicate.resolveModuleNeighbors).toHaveBeenCalledWith(['src/app.js']);
+    expect(claude.analyzeDuplicatesWithClaude).toHaveBeenCalledWith({}, ['src/app.js', 'src/util.js'], []);
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.semantic_findings).toEqual([
+      { file1: 'src/app.js', file2: 'src/util.js', similarity: 'high', confidence: 0.9 }
+    ]);
+    expect(output.layers_run).toEqual({ static: true, semantic: true });
+  });
+
+  // Locks in the guard in local-code-metrics.js (`if (prodFilePaths.length > 0)`):
+  // when every analyzed commit is test-only, there is nothing for jscpd to scan,
+  // so local_duplicate_analysis.json is omitted entirely rather than written
+  // with empty arrays. This mirrors generate-drift-report.js's graceful handling
+  // of a missing file, so a test-only analysis run still renders a clean report.
+  test('does not write local_duplicate_analysis.json when the analyzed commits touch no production files', async () => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      '3\t1\tsrc/app.test.js' // test-only commit: no production files touched
+    );
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    expect(dupCall).toBeUndefined();
   });
 });

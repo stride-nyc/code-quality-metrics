@@ -218,7 +218,8 @@ describe('renderReportHtml', () => {
       '.gauge-band', '.gauge-needle', '.gauge-hub',
       '.status-chip', '.metric-value', '.metric-label', '.metric-threshold',
       '.metric-description-measures', '.metric-description-dora',
-      '.flight-log', '.findings', 'footer'
+      '.flight-log', '.findings',
+      '.duplicate-code', '.duplicate-static', '.duplicate-layer-indicator', 'footer'
     ]) {
       const pattern = new RegExp(selector.replace(/\./g, '\\.') + '\\s*(,[^{]*)?\\{[^}]+\\}');
       expect(styleBlock).toMatch(pattern);
@@ -274,5 +275,48 @@ describe('renderReportHtml', () => {
       expect(precedingIndex).toBeGreaterThanOrEqual(0);
       expect(descIndex).toBeGreaterThan(precedingIndex);
     }
+  });
+
+  it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
+    const duplicates = {
+      files_scanned: 3,
+      static_duplicates: [
+        { firstFile: { name: 'src/a.js', start: 1, end: 10 }, secondFile: { name: 'src/b.js', start: 1, end: 10 }, lines: 10, tokens: 80 }
+      ],
+      semantic_findings: [
+        { file1: 'src/a.js', file2: 'src/c.js', similarity: 'high', confidence: 0.85 }
+      ],
+      layers_run: { static: true, semantic: true }
+    };
+    const args = fixtureArgs();
+    args.duplicates = duplicates;
+    const html = renderReportHtml(args);
+
+    expect(html).toContain('Duplicate Code');
+    expect(html).toContain('src/a.js');
+    expect(html).toContain('src/b.js');
+    expect(html).toContain('src/c.js');
+    expect(html).toContain('Layer 1');
+    expect(html).toContain('Layer 2');
+  });
+
+  it('shows only the Layer 1 indicator and no semantic findings when semantic did not run', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 1,
+      static_duplicates: [],
+      semantic_findings: [],
+      layers_run: { static: true, semantic: false }
+    };
+    const html = renderReportHtml(args);
+
+    expect(html).toContain('Duplicate Code');
+    expect(html).toContain('No static duplicates found');
+    expect(html).not.toContain('Layer 2 (semantic) ran');
+  });
+
+  it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
+    const html = renderReportHtml(fixtureArgs());
+    expect(html).not.toContain('Duplicate Code');
   });
 });
