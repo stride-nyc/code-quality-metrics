@@ -32,6 +32,44 @@ const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWi
  */
 
 /**
+ * Parses `git branch -a` (or `git branch -a --merged <ref>`) output into a flat list of
+ * normalized branch names. Strips the current-branch "* " marker, drops the
+ * "remotes/origin/HEAD -> origin/main" pointer line (it names no real branch), and strips
+ * only the "remotes/" segment from remote-only branches, keeping the remote qualifier
+ * (e.g. "origin/pl/alerts-history"): a bare branch name with no local counterpart is not a
+ * resolvable git ref, only "<remote>/<name>" is. A remote branch mirroring a local one of the
+ * same name is deduped to the local entry rather than counted twice.
+ * @param {string} output
+ * @returns {string[]}
+ */
+function parseBranchList(output) {
+  const rawLines = output.split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.includes('->'))
+    .map(line => line.replace(/^\*?\s*/, '').trim())
+    .filter(Boolean);
+
+  const localBranchNames = new Set(
+    rawLines.filter(name => !name.startsWith('remotes/'))
+  );
+
+  const seenBranches = new Set();
+  const branchLines = [];
+  for (const name of rawLines) {
+    if (!name.startsWith('remotes/')) {
+      branchLines.push(name);
+      continue;
+    }
+    const remoteQualified = name.split('/').slice(1).join('/');
+    const nameWithoutRemote = name.split('/').slice(2).join('/');
+    if (localBranchNames.has(nameWithoutRemote) || seenBranches.has(remoteQualified)) continue;
+    seenBranches.add(remoteQualified);
+    branchLines.push(remoteQualified);
+  }
+  return branchLines;
+}
+
+/**
  * Main analysis function
  * @param {{ days?: number, since?: string }} [options] CLI window override: since (an explicit
  *   YYYY-MM-DD boundary) takes precedence over days (a count replacing CONFIG.ANALYSIS_DAYS).
@@ -63,43 +101,24 @@ async function collectLocalMetrics(options = {}) {
     process.exit(1);
   }
 
-  const rawBranchLines = branchesOutput.split('\n')
-    .map(line => line.trim())
-    // Drop the "remotes/origin/HEAD -> origin/main" pointer line: it names no
-    // real branch and would otherwise survive as a phantom entry.
-    .filter(line => line && !line.includes('->'))
-    .map(line => line.replace(/^\*?\s*/, '').trim())
-    .filter(Boolean);
-
-  const localBranchNames = new Set(
-    rawBranchLines.filter(name => !name.startsWith('remotes/'))
-  );
-
-  // Strip only the "remotes/" segment from remote-only branches, keeping the
-  // remote qualifier (e.g. "origin/pl/alerts-history"): a bare branch name
-  // with no local counterpart is not a resolvable git ref, only
-  // "<remote>/<name>" is. Dedupe against local branches already tracked (a
-  // remote branch mirroring a local one is the same branch, not a second entry).
-  const seenBranches = new Set();
-  const branchLines = [];
-  for (const name of rawBranchLines) {
-    if (!name.startsWith('remotes/')) {
-      branchLines.push(name);
-      continue;
-    }
-    const remoteQualified = name.split('/').slice(1).join('/');
-    const nameWithoutRemote = name.split('/').slice(2).join('/');
-    if (localBranchNames.has(nameWithoutRemote) || seenBranches.has(remoteQualified)) continue;
-    seenBranches.add(remoteQualified);
-    branchLines.push(remoteQualified);
-  }
+  const branchLines = parseBranchList(branchesOutput);
 
   // Capture the main/master entry the filter below would otherwise discard,
   // so the trunk fallback can resolve the repo's actual default branch name
   // instead of assuming main. First match wins if a repo somehow has both.
   const defaultBranch = branchLines.find(branch => ['main', 'master'].includes(branch.toLowerCase())) ?? null;
 
-  const allBranches = branchLines.filter(branch => !['main', 'master'].includes(branch.toLowerCase()));
+  let allBranches = branchLines.filter(branch => !['main', 'master'].includes(branch.toLowerCase()));
+
+  // A branch with no commits unique to the default branch is a merged remnant: it
+  // contributes nothing beyond the default branch and must not stand in for it.
+  // Degrade to filtering nothing when the merged listing is unavailable (e.g. the
+  // git call failed), preserving prior behavior rather than guessing.
+  const mergedOutput = defaultBranch ? runGitCommand(`git branch -a --merged ${defaultBranch}`) : '';
+  if (mergedOutput) {
+    const mergedBranches = new Set(parseBranchList(mergedOutput));
+    allBranches = allBranches.filter(branch => !mergedBranches.has(branch));
+  }
 
   // workflowType and branchesToAnalyze default to the feature-branch path; the
   // no-feature-branches fallback below overrides both for repos whose history
