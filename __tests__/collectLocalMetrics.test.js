@@ -66,6 +66,42 @@ describe('collectLocalMetrics — trunk fallback', () => {
     expect(metrics[0].commit_type).toBe('trunk');
   });
 
+  // GUARD, not a called-shot RED: nothing in the trunk fallback path suppresses
+  // or nulls any rate. Written after the real implementation as an explicit
+  // regression guard against parseFloat(undefined) -> NaN silently forcing
+  // every trunk-mode repo to classify as mixed-signals (see plan critique #4).
+  test('trunk fallback still reports all five metric rates as measured', async () => {
+    const SHA = 'f'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-20T10:00:00Z|Dev|feat: trunk commit`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.workflow_type).toBe('trunk');
+    for (const field of [
+      'test_coverage_rate',
+      'test_isolation_rate',
+      'uncovered_prod_rate',
+      'large_commits_pct',
+      'sprawling_commits_pct',
+      'message_quality_pct'
+    ]) {
+      expect(typeof summary[field]).toBe('string');
+      expect(Number.isNaN(parseFloat(summary[field]))).toBe(false);
+    }
+    expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
+      .toContain(summary.dora_archetype);
+  });
+
   test('resolves default branch to master when the repo has no main', async () => {
     const SHA = 'b'.repeat(40);
     mockExecSequence(
