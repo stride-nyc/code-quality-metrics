@@ -59,9 +59,16 @@ async function collectLocalMetrics() {
     process.exit(1);
   }
 
-  const allBranches = branchesOutput.split('\n')
+  const branchLines = branchesOutput.split('\n')
     .map(line => line.replace(/^\*?\s*/, '').trim())
-    .filter(branch => branch && !['main', 'master'].includes(branch.toLowerCase()));
+    .filter(Boolean);
+
+  // Capture the main/master entry the filter below would otherwise discard,
+  // so the trunk fallback can resolve the repo's actual default branch name
+  // instead of assuming main. First match wins if a repo somehow has both.
+  const defaultBranch = branchLines.find(branch => ['main', 'master'].includes(branch.toLowerCase())) ?? null;
+
+  const allBranches = branchLines.filter(branch => !['main', 'master'].includes(branch.toLowerCase()));
 
   // workflowType and branchesToAnalyze default to the feature-branch path; the
   // no-feature-branches fallback below overrides both for repos whose history
@@ -70,9 +77,10 @@ async function collectLocalMetrics() {
   let branchesToAnalyze = allBranches;
 
   if (allBranches.length === 0) {
+    const fallbackRef = defaultBranch ?? 'HEAD';
     workflowType = 'trunk';
-    branchesToAnalyze = ['main'];
-    console.log("⚠️ No feature branches found. Falling back to trunk analysis on 'main'.");
+    branchesToAnalyze = [fallbackRef];
+    console.log(`⚠️ No feature branches found. Falling back to trunk analysis on '${fallbackRef}'.`);
     console.log('');
   } else {
     console.log(`🌿 Found ${allBranches.length} feature branches:`);

@@ -65,6 +65,25 @@ describe('collectLocalMetrics — trunk fallback', () => {
     const metrics = JSON.parse(metricsCall[1]);
     expect(metrics[0].commit_type).toBe('trunk');
   });
+
+  test('resolves default branch to master when the repo has no main', async () => {
+    const SHA = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'master',                                             // git branch — only master, no main, no feature branches
+      `${SHA}|2024-02-01T10:00:00Z|Dev|feat: add other thing`,
+      `4\t2\tsrc/other.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.branches_analyzed).toEqual(['master']);
+    expect(summary.total_commits).toBe(1);
+  });
 });
 
 describe('collectLocalMetrics — early exits', () => {
