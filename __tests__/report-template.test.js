@@ -217,7 +217,7 @@ describe('renderReportHtml', () => {
       'body', '.metric-grid', '.metric-card', '.gauge',
       '.gauge-band', '.gauge-needle', '.gauge-hub',
       '.status-chip', '.metric-value', '.metric-label', '.metric-threshold',
-      '.metric-tile', '.metric-description-measures', '.metric-description-dora',
+      '.metric-description-measures', '.metric-description-dora',
       '.flight-log', '.findings', 'footer'
     ]) {
       const pattern = new RegExp(selector.replace(/\./g, '\\.') + '\\s*(,[^{]*)?\\{[^}]+\\}');
@@ -251,7 +251,7 @@ describe('renderReportHtml', () => {
     expect(velocityCard).not.toMatch(/Healthy (above|below)/);
   });
 
-  it('renders a description of what each metric measures and its DORA connection above the card', () => {
+  it('renders a description of what each metric measures and its DORA connection inside the card', () => {
     const html = renderReportHtml(fixtureArgs());
 
     // Sourced from lib/metric-descriptions.js, which traces to
@@ -260,13 +260,19 @@ describe('renderReportHtml', () => {
     expect(html).toContain('proxy for wholesale AI code acceptance');
     expect(html).toContain('Working in Small Batches');
 
-    const tiles = html.split('<div class="metric-tile">').slice(1);
-    expect(tiles).toHaveLength(13);
-    for (const tile of tiles) {
-      const descIndex = tile.indexOf('class="metric-description"');
-      const cardIndex = tile.indexOf('<article class="metric-card"');
+    const cards = html.split('<article class="metric-card"').slice(1);
+    expect(cards).toHaveLength(13);
+    for (const card of cards) {
+      const descIndex = card.indexOf('class="metric-description"');
       expect(descIndex).toBeGreaterThanOrEqual(0);
-      expect(cardIndex).toBeGreaterThan(descIndex);
+
+      // Description comes after the threshold line when one is present,
+      // otherwise after the label (the last thing before it).
+      const thresholdIndex = card.indexOf('class="metric-threshold"');
+      const labelIndex = card.indexOf('class="metric-label"');
+      const precedingIndex = thresholdIndex >= 0 ? thresholdIndex : labelIndex;
+      expect(precedingIndex).toBeGreaterThanOrEqual(0);
+      expect(descIndex).toBeGreaterThan(precedingIndex);
     }
   });
 });
