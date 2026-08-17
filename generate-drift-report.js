@@ -4,8 +4,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const { buildMetricCatalog } = require('./lib/report');
+const { buildMetricCatalog, topCommits } = require('./lib/report');
 const { renderReportHtml } = require('./lib/report-template');
+const { getAnthropicClient } = require('./lib/claude');
+const { generateFindingsNarrative } = require('./lib/narrative');
 
 /** Vendored font files, keyed by basename (without extension). */
 const FONT_FILES = [
@@ -48,17 +50,31 @@ function readRequiredJson(dir, filename) {
 }
 
 /**
+ * Read and compute everything generateReport and generateReportWithNarrative
+ * both need: the two required JSON inputs, the vendored fonts, and the
+ * deterministic metric catalog. Kept in one place so both entry points stay
+ * in sync on how inputs are read.
+ * @param {string} dir
+ * @returns {{ summary: object, metrics: Array<object>, fontData: object, catalog: Array<object> }}
+ */
+function readReportInputs(dir) {
+  const summary = readRequiredJson(dir, 'local_metrics_summary.json');
+  const metrics = readRequiredJson(dir, 'local_commit_metrics.json');
+  const fontData = readFontData();
+  const catalog = buildMetricCatalog(summary);
+  return { summary, metrics, fontData, catalog };
+}
+
+/**
  * Generate local_drift_report.html in dir from local_metrics_summary.json
- * and local_commit_metrics.json.
+ * and local_commit_metrics.json. The Findings section uses the plain
+ * templated fallback bullets; see generateReportWithNarrative for the
+ * variant that can optionally enhance it with an LLM-generated narrative.
  * @param {string} [dir]
  * @returns {string} the path of the written HTML file
  */
 function generateReport(dir = process.cwd()) {
-  const summary = readRequiredJson(dir, 'local_metrics_summary.json');
-  const metrics = readRequiredJson(dir, 'local_commit_metrics.json');
-
-  const fontData = readFontData();
-  const catalog = buildMetricCatalog(summary);
+  const { summary, metrics, fontData, catalog } = readReportInputs(dir);
   const html = renderReportHtml({ summary, metrics, catalog, fontData });
 
   const outputPath = path.join(dir, 'local_drift_report.html');
@@ -66,15 +82,39 @@ function generateReport(dir = process.cwd()) {
   return outputPath;
 }
 
-module.exports = { generateReport };
+/**
+ * Generate local_drift_report.html in dir, additionally attempting an
+ * optional LLM-generated Findings narrative (see lib/narrative.js). Every
+ * number in the report still comes only from the deterministic catalog
+ * built here; the narrative call may only add connecting prose over those
+ * already-computed values. When ANTHROPIC_API_KEY is not set, or the API
+ * call fails for any reason, this produces output identical to
+ * generateReport, since generateFindingsNarrative falls back to the same
+ * deterministic bullets in both cases.
+ * @param {string} [dir]
+ * @returns {Promise<string>} the path of the written HTML file
+ */
+async function generateReportWithNarrative(dir = process.cwd()) {
+  const { summary, metrics, fontData, catalog } = readReportInputs(dir);
+
+  const client = await getAnthropicClient();
+  const findings = await generateFindingsNarrative(client, catalog, topCommits(metrics));
+
+  const html = renderReportHtml({ summary, metrics, catalog, fontData, findings });
+
+  const outputPath = path.join(dir, 'local_drift_report.html');
+  fs.writeFileSync(outputPath, html);
+  return outputPath;
+}
+
+module.exports = { generateReport, generateReportWithNarrative };
 
 if (require.main === module) {
   const targetDir = process.argv[2] || process.cwd();
-  try {
-    const outputPath = generateReport(targetDir);
-    console.log(`Wrote ${outputPath}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
+  generateReportWithNarrative(targetDir)
+    .then(outputPath => console.log(`Wrote ${outputPath}`))
+    .catch(error => {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    });
 }
