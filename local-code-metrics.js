@@ -75,9 +75,11 @@ async function collectLocalMetrics(options = {}) {
     rawBranchLines.filter(name => !name.startsWith('remotes/'))
   );
 
-  // Strip the "remotes/<remote>/" prefix from remote-only branches, and
-  // dedupe against local branches already tracked (a remote branch mirroring
-  // a local one is the same branch, not a second entry).
+  // Strip only the "remotes/" segment from remote-only branches, keeping the
+  // remote qualifier (e.g. "origin/pl/alerts-history"): a bare branch name
+  // with no local counterpart is not a resolvable git ref, only
+  // "<remote>/<name>" is. Dedupe against local branches already tracked (a
+  // remote branch mirroring a local one is the same branch, not a second entry).
   const seenBranches = new Set();
   const branchLines = [];
   for (const name of rawBranchLines) {
@@ -85,10 +87,11 @@ async function collectLocalMetrics(options = {}) {
       branchLines.push(name);
       continue;
     }
-    const stripped = name.split('/').slice(2).join('/');
-    if (localBranchNames.has(stripped) || seenBranches.has(stripped)) continue;
-    seenBranches.add(stripped);
-    branchLines.push(stripped);
+    const remoteQualified = name.split('/').slice(1).join('/');
+    const nameWithoutRemote = name.split('/').slice(2).join('/');
+    if (localBranchNames.has(nameWithoutRemote) || seenBranches.has(remoteQualified)) continue;
+    seenBranches.add(remoteQualified);
+    branchLines.push(remoteQualified);
   }
 
   // Capture the main/master entry the filter below would otherwise discard,

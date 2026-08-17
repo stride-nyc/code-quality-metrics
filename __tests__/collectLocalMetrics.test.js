@@ -159,7 +159,12 @@ describe('collectLocalMetrics — remote branch listing', () => {
 
     const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
     const summary = JSON.parse(summaryCall[1]);
-    expect(summary.branches_analyzed).toEqual(['feature/x', 'feature-y']);
+    // A remote-only branch keeps its remote qualifier (origin/feature-y), not the
+    // bare stripped name: without a local branch of that name, "feature-y" alone
+    // is not a resolvable git ref (confirmed against flight-info-spike, where
+    // "pl/alerts-history" fails with "fatal: ambiguous argument" but
+    // "origin/pl/alerts-history" resolves).
+    expect(summary.branches_analyzed).toEqual(['feature/x', 'origin/feature-y']);
   });
 });
 
