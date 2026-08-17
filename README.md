@@ -27,6 +27,12 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 - **Requires:** Node.js >= 18
 - **Works with:** feature-branch workflows and trunk-based workflows. Repos with no feature branches fall back to analyzing the default branch directly instead of returning an empty report.
 
+### 4. Drift Report Generator (Node.js Script)
+- **File:** `generate-drift-report.js`
+- **Purpose:** Render a standalone HTML report from a completed local analysis run
+- **Output:** `local_drift_report.html`
+- **Requires:** `local_metrics_summary.json` and `local_commit_metrics.json` already present in the target directory (produced by `local-code-metrics.js`, see [Drift Report](#drift-report))
+
 ## Quick Start
 
 ### Option 1: GitHub Actions (Recommended)
@@ -141,6 +147,41 @@ branch contributes no commits beyond what is already on `main`. If your repo
 has stale, fully-merged branches lying around, delete them (or prune
 remote-tracking refs with `git remote prune origin`) before running the
 script for an accurate `workflow_type`.
+
+## Drift Report
+
+Once `node local-code-metrics.js` has written `local_metrics_summary.json` and
+`local_commit_metrics.json` into a directory, turn that run into a standalone
+HTML report:
+
+```bash
+npm run report                        # reads/writes in the current directory
+node generate-drift-report.js [dir]   # or target a specific directory directly
+```
+
+This writes `local_drift_report.html` into that directory. The generator does
+not run git or recompute any metric itself; it only reads the two JSON files
+a prior `local-code-metrics.js` run already produced, and exits with a clear
+error naming whichever file is missing if either one is absent.
+
+Every number and gauge in the report (large commits, sprawling commits, test
+coverage, message quality, net-new ratio, and the rest) is deterministic,
+computed from the same healthy/critical boundaries defined once in
+`lib/thresholds.js` and shared with the console report's classification
+logic. The one optional, LLM-assisted part of the report is the connecting
+prose in the Findings section: when `ANTHROPIC_API_KEY` is set, Claude is
+asked to write short paragraphs of positive findings, concerns, and
+recommended actions over the already-computed metrics and top commits, never
+to compute or alter a number. Without the key, or if the API call fails or
+returns something unusable, the Findings section falls back to plain
+templated bullets built from the metric catalog, degrading gracefully exactly
+like the rest of this tool already does without `ANTHROPIC_API_KEY`.
+
+The report embeds its own fonts (Big Shoulders Display, Public Sans, and IBM
+Plex Mono) as base64 data so the resulting HTML file is fully standalone and
+viewable offline. Those fonts are vendored under `assets/fonts/` and licensed
+under the SIL Open Font License, Version 1.1; see `assets/fonts/ATTRIBUTION.md`
+for the full attribution.
 
 ## Configuration
 
@@ -289,9 +330,11 @@ your-repo/
 │   ├── code-metrics.yml              # Weekly analysis
 │   └── pr-metrics.yml               # Real-time PR feedback
 ├── local-code-metrics.js            # Local analysis script
+├── generate-drift-report.js         # Drift report generator (reads the JSON below)
 ├── local_commit_metrics.json        # Generated: detailed data
 ├── local_metrics_summary.json       # Generated: summary stats
-└── local_claude_analysis.json       # Generated: Claude analysis (optional)
+├── local_claude_analysis.json       # Generated: Claude analysis (optional)
+└── local_drift_report.html          # Generated: standalone HTML drift report
 ```
 
 ## Integration Examples

@@ -629,6 +629,78 @@ Written only when `ANTHROPIC_API_KEY` is set:
 
 ---
 
+## Drift Report Generator
+
+`generate-drift-report.js` turns a completed local analysis run into a
+standalone HTML report, `local_drift_report.html`. It reads only
+`local_metrics_summary.json` and `local_commit_metrics.json` from the target
+directory; it does not shell out to git or recompute any metric from source.
+
+### Threshold Source of Truth
+
+`lib/thresholds.js` holds the healthy/warning/critical boundary for every
+metric in a single `THRESHOLDS` object, for example
+`LARGE_COMMITS_PCT: { healthy: 20, critical: 40 }`. Both `lib/metrics.js`
+(which classifies individual commits and drives the console report and DORA
+archetype logic) and `lib/report.js` (which builds the drift report's metric
+catalog and gauge bands) read their boundaries from this same object. Moving
+a number in `lib/thresholds.js` changes the console report, the report's
+gauges, and the archetype classification together; there is no second copy
+of a boundary to fall out of sync.
+
+### Relevance-Sort Formula
+
+Each metric in the report's catalog is scored for concern using:
+
+```
+concern = (value - healthyBoundary) / (criticalBoundary - healthyBoundary)
+```
+
+The catalog is sorted by this score, descending, so the report always leads
+with whichever metric has drifted furthest past healthy, regardless of which
+metric that happens to be.
+
+- A negative concern means the value sits on the healthy side of the healthy
+  boundary: not a problem right now.
+- A concern between 0 and 1 means the value has crossed the healthy boundary
+  but has not yet reached the critical boundary: a warning, proportional to
+  how far across it has moved.
+- A concern of 1 or greater means the value has reached or passed the
+  critical boundary.
+
+The same formula covers both directions without branching. For "higher is
+worse" metrics (large commits, sprawling commits) `criticalBoundary` is
+greater than `healthyBoundary`, so the denominator is positive. For "higher
+is better" metrics (message quality, test coverage) `criticalBoundary` is
+less than `healthyBoundary`, so the denominator is negative, which flips the
+sign automatically for a low (bad) value.
+
+A few catalog entries fall outside this formula because they are
+informational rather than threshold-driven: test isolation rate and velocity
+each carry a fixed negative concern value so they normally sort after every
+threshold-driven metric. Commit size trend and velocity trend behave the same
+way by default, but when the two combine into "growing commit size" plus
+"accelerating velocity" (the "volume without discipline" pattern), both are
+flagged `warning` with a concern of `0.5` instead, so that joint signal
+surfaces in the sorted list the same way a real threshold breach would.
+
+### Findings Narrative
+
+The Findings section's connecting prose is the only part of the report that
+can be LLM-generated, via `lib/narrative.js`, and even then only the prose:
+the system prompt instructs the model to echo every number it references
+exactly as given, to the same precision, and never to compute, estimate, or
+restate a number differently. The narrative layer never computes or alters a
+number; it only writes sentences over metric values and top commits that
+`lib/report.js` already computed before the model ever sees them. When no
+`ANTHROPIC_API_KEY` is set, or the API call fails, or the response doesn't
+parse into usable findings, the Findings section falls back to the same
+plain templated bullets (`fallbackFindings` in `lib/report-template.js`): the
+top three critical/warning catalog entries, rendered as
+`"<label>: <value> (<status>)"`.
+
+---
+
 ## Implementation Libraries
 
 ### `simple-statistics` (production dependency)
