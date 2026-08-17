@@ -59,13 +59,33 @@ async function collectLocalMetrics() {
     process.exit(1);
   }
 
-  const branchLines = branchesOutput.split('\n')
+  const rawBranchLines = branchesOutput.split('\n')
     .map(line => line.trim())
     // Drop the "remotes/origin/HEAD -> origin/main" pointer line: it names no
     // real branch and would otherwise survive as a phantom entry.
     .filter(line => line && !line.includes('->'))
     .map(line => line.replace(/^\*?\s*/, '').trim())
     .filter(Boolean);
+
+  const localBranchNames = new Set(
+    rawBranchLines.filter(name => !name.startsWith('remotes/'))
+  );
+
+  // Strip the "remotes/<remote>/" prefix from remote-only branches, and
+  // dedupe against local branches already tracked (a remote branch mirroring
+  // a local one is the same branch, not a second entry).
+  const seenBranches = new Set();
+  const branchLines = [];
+  for (const name of rawBranchLines) {
+    if (!name.startsWith('remotes/')) {
+      branchLines.push(name);
+      continue;
+    }
+    const stripped = name.split('/').slice(2).join('/');
+    if (localBranchNames.has(stripped) || seenBranches.has(stripped)) continue;
+    seenBranches.add(stripped);
+    branchLines.push(stripped);
+  }
 
   // Capture the main/master entry the filter below would otherwise discard,
   // so the trunk fallback can resolve the repo's actual default branch name

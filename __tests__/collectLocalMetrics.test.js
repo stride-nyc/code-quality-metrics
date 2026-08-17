@@ -104,6 +104,27 @@ describe('collectLocalMetrics — remote branch listing', () => {
     const summary = JSON.parse(summaryCall[1]);
     expect(summary.branches_analyzed).toEqual(['feature/x']);
   });
+
+  test('includes and normalizes a remote-only feature branch not present locally', async () => {
+    const SHA = 'd'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      // git branch -a: local main, a local/remote pair for feature/x (should
+      // dedupe to one entry), and a remote-only feature-y with no local branch
+      '* main\n  feature/x\n  remotes/origin/feature/x\n  remotes/origin/feature-y',
+      '', // git log feature/x — no commits
+      `${SHA}|2024-04-01T10:00:00Z|Dev|feat: remote-only work`, // git log feature-y
+      `1\t0\tsrc/remote.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.branches_analyzed).toEqual(['feature/x', 'feature-y']);
+  });
 });
 
 describe('collectLocalMetrics — early exits', () => {
