@@ -217,6 +217,7 @@ describe('renderReportHtml', () => {
       'body', '.metric-grid', '.metric-card', '.gauge',
       '.gauge-band', '.gauge-needle', '.gauge-hub',
       '.status-chip', '.metric-value', '.metric-label', '.metric-threshold',
+      '.metric-tile', '.metric-description-measures', '.metric-description-dora',
       '.flight-log', '.findings', 'footer'
     ]) {
       const pattern = new RegExp(selector.replace(/\./g, '\\.') + '\\s*(,[^{]*)?\\{[^}]+\\}');
@@ -248,5 +249,24 @@ describe('renderReportHtml', () => {
 
     expect(velocityCard).toBeDefined();
     expect(velocityCard).not.toMatch(/Healthy (above|below)/);
+  });
+
+  it('renders a description of what each metric measures and its DORA connection above the card', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    // Sourced from lib/metric-descriptions.js, which traces to
+    // metrics-specification.md's Metrics Reference / DORA Capability
+    // Coverage Map. large_commits_pct is always present in the catalog.
+    expect(html).toContain('proxy for wholesale AI code acceptance');
+    expect(html).toContain('Working in Small Batches');
+
+    const tiles = html.split('<div class="metric-tile">').slice(1);
+    expect(tiles).toHaveLength(13);
+    for (const tile of tiles) {
+      const descIndex = tile.indexOf('class="metric-description"');
+      const cardIndex = tile.indexOf('<article class="metric-card"');
+      expect(descIndex).toBeGreaterThanOrEqual(0);
+      expect(cardIndex).toBeGreaterThan(descIndex);
+    }
   });
 });
