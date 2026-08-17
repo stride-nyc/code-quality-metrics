@@ -216,11 +216,37 @@ describe('renderReportHtml', () => {
     for (const selector of [
       'body', '.metric-grid', '.metric-card', '.gauge',
       '.gauge-band', '.gauge-needle', '.gauge-hub',
-      '.status-chip', '.metric-value', '.metric-label',
+      '.status-chip', '.metric-value', '.metric-label', '.metric-threshold',
       '.flight-log', '.findings', 'footer'
     ]) {
       const pattern = new RegExp(selector.replace(/\./g, '\\.') + '\\s*(,[^{]*)?\\{[^}]+\\}');
       expect(styleBlock).toMatch(pattern);
     }
+  });
+
+  it('formats metric values by rounding to at most 2 decimal places, avoiding floating point overflow', () => {
+    const args = fixtureArgs({ net_additions_ratio_median: 0.676056338028169 });
+    const html = renderReportHtml(args);
+
+    expect(html).not.toContain('0.676056338028169');
+    expect(html).toContain('0.68');
+  });
+
+  it('renders a threshold description for each metric card describing its healthy and critical boundaries', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    // large_commits_pct: higher-is-worse, healthy 20, critical 40 (from lib/thresholds.js)
+    expect(html).toContain('Healthy below 20, critical above 40');
+    // test_coverage_rate: higher-is-better, healthy 50, critical (warning) 30
+    expect(html).toContain('Healthy above 50, critical below 30');
+  });
+
+  it('omits a threshold description for informational entries with no numeric boundary', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const velocityCard = cards.find(card => card.includes('>Velocity</p>'));
+
+    expect(velocityCard).toBeDefined();
+    expect(velocityCard).not.toMatch(/Healthy (above|below)/);
   });
 });
