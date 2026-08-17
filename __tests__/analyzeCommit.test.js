@@ -151,4 +151,28 @@ describe('analyzeCommit', () => {
     execSync.mockReturnValue(numstatLine(lines, 0, 'src/app.test.js'));
     expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).uncovered_prod_commit).toBe(false);
   });
+
+  // --- prod_file_paths (duplicate-detection input) ---
+  test('includes the list of production file paths touched, excluding test files', () => {
+    execSync.mockReturnValue([
+      numstatLine(10, 2, 'src/app.js'),
+      numstatLine(5, 1, 'src/app.test.js'),
+      numstatLine(3, 0, 'src/util.js')
+    ].join('\n'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.prod_file_paths).toEqual(['src/app.js', 'src/util.js']);
+  });
+
+  test('excludes binary files from prod_file_paths', () => {
+    execSync.mockReturnValue([
+      numstatLine(10, 2, 'src/app.js'),
+      '-\t-\timage.png'
+    ].join('\n'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.prod_file_paths).toEqual(['src/app.js']);
+  });
 });

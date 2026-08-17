@@ -23,11 +23,12 @@ const { CONFIG } = require('./lib/config');
 const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
-const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude } = require('./lib/claude');
+const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, analyzeDuplicatesWithClaude } = require('./lib/claude');
+const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -315,6 +316,21 @@ async function collectLocalMetrics(options = {}) {
     console.log('ℹ️  Claude analysis skipped (no ANTHROPIC_API_KEY set)');
   }
 
+  // Duplicate code detection: Layer 1 (jscpd, static) always runs over the
+  // production files touched by the analyzed commits; Layer 2 (Claude,
+  // semantic) runs over the same files widened to their module neighbors,
+  // only when ANTHROPIC_API_KEY is set. Reuses the anthropicClient already
+  // resolved above rather than creating a second client.
+  const prodFilePaths = [...new Set(metrics.flatMap(m => m.prod_file_paths || []))];
+  const staticDuplicates = runDuplicateCheck(prodFilePaths);
+  /** @type {any[]} */
+  let semanticFindings = [];
+  if (anthropicClient && prodFilePaths.length > 0) {
+    console.log(`🔁 Running semantic duplicate analysis on ${prodFilePaths.length} production file(s)...`);
+    const neighborFiles = resolveModuleNeighbors(prodFilePaths);
+    semanticFindings = await analyzeDuplicatesWithClaude(anthropicClient, neighborFiles, staticDuplicates);
+  }
+
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
   const large_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const sprawling_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
@@ -376,6 +392,20 @@ async function collectLocalMetrics(options = {}) {
     fs.writeFileSync(
       path.join(outputDir, 'local_claude_analysis.json'),
       JSON.stringify(claudeOutput, null, 2)
+    );
+  }
+
+  if (prodFilePaths.length > 0) {
+    const duplicateOutput = {
+      analyzed_at: new Date().toISOString(),
+      files_scanned: prodFilePaths.length,
+      static_duplicates: staticDuplicates,
+      semantic_findings: semanticFindings,
+      layers_run: { static: true, semantic: Boolean(anthropicClient) }
+    };
+    fs.writeFileSync(
+      path.join(outputDir, 'local_duplicate_analysis.json'),
+      JSON.stringify(duplicateOutput, null, 2)
     );
   }
 
