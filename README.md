@@ -144,9 +144,9 @@ not whether it has been fully merged. A repo using a merge-without-delete
 workflow, where a branch's PR merged into `main` long ago but the branch ref
 was never deleted, is still classified as `feature_branch`, even though that
 branch contributes no commits beyond what is already on `main`. If your repo
-has stale, fully-merged branches lying around, delete them (or prune
-remote-tracking refs with `git remote prune origin`) before running the
-script for an accurate `workflow_type`.
+has stale, fully-merged branches lying around, drop the local
+remote-tracking ref with `git branch -dr <remote>/<branch>` (reversible with
+`git fetch`) before running the script for an accurate `workflow_type`.
 
 ## Drift Report
 
