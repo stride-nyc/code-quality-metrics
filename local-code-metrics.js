@@ -99,7 +99,14 @@ async function collectLocalMetrics(options = {}) {
   // instead of assuming main. First match wins if a repo somehow has both.
   const defaultBranch = branchLines.find(branch => ['main', 'master'].includes(branch.toLowerCase())) ?? null;
 
-  const allBranches = branchLines.filter(branch => !['main', 'master'].includes(branch.toLowerCase()));
+  let allBranches = branchLines.filter(branch => !['main', 'master'].includes(branch.toLowerCase()));
+
+  // A branch with no commits unique to the default branch is a merged remnant: it
+  // contributes nothing beyond the default branch and must not stand in for it.
+  const mergedOutput = defaultBranch ? runGitCommand(`git branch -a --merged ${defaultBranch}`) : '';
+  if (mergedOutput) {
+    allBranches = [];
+  }
 
   // workflowType and branchesToAnalyze default to the feature-branch path; the
   // no-feature-branches fallback below overrides both for repos whose history

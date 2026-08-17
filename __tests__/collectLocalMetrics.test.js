@@ -33,7 +33,25 @@ afterEach(() => {
  */
 function mockExecSequence(...values) {
   let i = 0;
-  execSync.mockImplementation(() => {
+  execSync.mockImplementation(command => {
+    // Tests predating the merged-branch filter supply no value for the
+    // `git branch -a --merged` query. Answer it out of band so it never consumes
+    // a positional value, and return empty so nothing is filtered.
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
+/**
+ * Like mockExecSequence, but answers the `git branch -a --merged` query with
+ * mergedOutput instead of empty. Positional values cover every other command.
+ */
+function mockExecSequenceWithMerged(mergedOutput, ...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return mergedOutput;
     const val = values[i] ?? '';
     i++;
     return val;
@@ -529,5 +547,27 @@ describe('collectLocalMetrics — Claude API active', () => {
     expect(allLogs).toMatch(/CLAUDE AI ANALYSIS/);
     expect(allLogs).toMatch(/confidence=75%/);
     expect(allLogs).toMatch(/risk=80%/);
+  });
+});
+
+describe('collectLocalMetrics — merged branch exclusion', () => {
+  test('excludes a fully-merged remnant branch and falls back to trunk', async () => {
+    const SHA = 'e'.repeat(40);
+    mockExecSequenceWithMerged(
+      '* main\n  remotes/origin/pl/alerts-history',        // git branch -a --merged main
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  remotes/origin/pl/alerts-history',        // git branch -a
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,   // git log against resolved default branch
+      `10\t5\tsrc/app.js`                                  // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.workflow_type).toBe('trunk');
+    expect(summary.branches_analyzed).toEqual(['main']);
   });
 });
