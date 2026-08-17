@@ -25,6 +25,7 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 - **Purpose:** Immediate analysis of your local development patterns
 - **Output:** Console report and JSON files with detailed metrics
 - **Requires:** Node.js >= 18
+- **Works with:** feature-branch workflows and trunk-based workflows. Repos with no feature branches fall back to analyzing the default branch directly instead of returning an empty report.
 
 ## Quick Start
 
@@ -81,6 +82,19 @@ node local-code-metrics.js
 # Optional: set ANTHROPIC_API_KEY for Claude diff analysis
 ```
 
+Override the analysis window per run with `--days` or `--since` (no config edit needed):
+```bash
+node local-code-metrics.js --days 90          # look back 90 days instead of the CONFIG default (30)
+node local-code-metrics.js --since 2026-04-01 # use an explicit boundary date instead of a day count
+```
+
+Repos with no feature branches (trunk-based repos, or a merge-without-delete
+workflow where everything effectively lives on `main`) are analyzed
+automatically: the script resolves the default branch (`main` or `master`,
+falling back to `HEAD` if neither is found), analyzes it directly, and
+labels the run `workflow_type: 'trunk'` in `local_metrics_summary.json`
+instead of returning an empty report.
+
 ## Key Metrics Tracked
 
 | Metric | Target | Purpose |
@@ -104,6 +118,29 @@ node local-code-metrics.js
 - **46% large commits**
 - **9,053 lines average per commit**
 - Clear AI drift patterns hidden by merge squashing
+
+## Trunk vs. Feature-Branch Analysis
+
+The local script auto-detects which mode applies to your repo and records it
+as `workflow_type` in `local_metrics_summary.json`:
+
+| `workflow_type` | When it applies | `branches_analyzed` |
+|---|---|---|
+| `feature_branch` | At least one branch other than `main`/`master` exists, local or remote | The feature branches found |
+| `trunk` | No feature branches exist | The resolved default branch (`main`, `master`, or `HEAD` if neither is found) |
+
+Branch discovery uses `git branch -a`, so feature branches that exist only on
+the remote (never checked out locally) are included, deduplicated against
+local branches of the same name.
+
+**Known limitation:** branch discovery only checks whether a branch *exists*,
+not whether it has been fully merged. A repo using a merge-without-delete
+workflow, where a branch's PR merged into `main` long ago but the branch ref
+was never deleted, is still classified as `feature_branch`, even though that
+branch contributes no commits beyond what is already on `main`. If your repo
+has stale, fully-merged branches lying around, delete them (or prune
+remote-tracking refs with `git remote prune origin`) before running the
+script for an accurate `workflow_type`.
 
 ## Configuration
 
@@ -241,7 +278,7 @@ Average lines changed: 9,053
 
 ### For Local Script
 - Node.js >= 18
-- Git repository with local feature branches
+- A Git repository. Feature branches (local or remote) are analyzed if present; repos with none fall back to analyzing the default branch directly (see [Trunk vs. Feature-Branch Analysis](#trunk-vs-feature-branch-analysis))
 - Command line access
 - Optional: `ANTHROPIC_API_KEY` for Claude diff-level analysis
 
@@ -276,9 +313,9 @@ your-repo/
 ## Troubleshooting
 
 **No commits found?**
-- Ensure feature branches exist locally/remotely
-- Check that branches haven't been auto-deleted
-- Verify 30-day analysis period includes your activity
+- Verify the analysis window includes your activity; widen it with `--days <n>` or set an explicit boundary with `--since <date>` (see [Option 2: Local Analysis](#option-2-local-analysis))
+- If you expected feature-branch analysis, check that branches haven't been auto-deleted and that remote branches have been fetched (`git fetch`)
+- A repo with no feature branches still gets analyzed via the `trunk` fallback (see [Trunk vs. Feature-Branch Analysis](#trunk-vs-feature-branch-analysis)), so an empty report now means no commits at all in the window, not a missing-branch problem
 
 **Wrong test file counts?**
 - Adjust `TEST_FILE_PATTERNS` for your project conventions

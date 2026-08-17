@@ -40,6 +40,173 @@ function mockExecSequence(...values) {
   });
 }
 
+describe('collectLocalMetrics — trunk fallback', () => {
+  test('falls back to trunk analysis when no feature branches exist', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',                                              // git branch — only main, no feature branches
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,   // git log against the resolved default branch
+      `10\t5\tsrc/app.js`                                   // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).toHaveBeenCalled();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.workflow_type).toBe('trunk');
+    expect(summary.branches_analyzed).toEqual(['main']);
+
+    const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+    const metrics = JSON.parse(metricsCall[1]);
+    expect(metrics[0].commit_type).toBe('trunk');
+  });
+
+  // GUARD, not a called-shot RED: nothing in the trunk fallback path suppresses
+  // or nulls any rate. Written after the real implementation as an explicit
+  // regression guard against parseFloat(undefined) -> NaN silently forcing
+  // every trunk-mode repo to classify as mixed-signals (see plan critique #4).
+  test('trunk fallback still reports all five metric rates as measured', async () => {
+    const SHA = 'f'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-20T10:00:00Z|Dev|feat: trunk commit`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.workflow_type).toBe('trunk');
+    for (const field of [
+      'test_coverage_rate',
+      'test_isolation_rate',
+      'uncovered_prod_rate',
+      'large_commits_pct',
+      'sprawling_commits_pct',
+      'message_quality_pct'
+    ]) {
+      expect(typeof summary[field]).toBe('string');
+      expect(Number.isNaN(parseFloat(summary[field]))).toBe(false);
+    }
+    expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
+      .toContain(summary.dora_archetype);
+  });
+
+  test('resolves default branch to master when the repo has no main', async () => {
+    const SHA = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'master',                                             // git branch — only master, no main, no feature branches
+      `${SHA}|2024-02-01T10:00:00Z|Dev|feat: add other thing`,
+      `4\t2\tsrc/other.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.branches_analyzed).toEqual(['master']);
+    expect(summary.total_commits).toBe(1);
+  });
+});
+
+describe('collectLocalMetrics — remote branch listing', () => {
+  test('excludes the remotes/origin/HEAD pointer line from branch counts', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  remotes/origin/HEAD -> origin/main\n  feature/x', // git branch -a
+      `${SHA}|2024-03-01T10:00:00Z|Dev|feat: real branch commit`,
+      `2\t1\tsrc/real.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.branches_analyzed).toEqual(['feature/x']);
+  });
+
+  test('includes and normalizes a remote-only feature branch not present locally', async () => {
+    const SHA = 'd'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      // git branch -a: local main, a local/remote pair for feature/x (should
+      // dedupe to one entry), and a remote-only feature-y with no local branch
+      '* main\n  feature/x\n  remotes/origin/feature/x\n  remotes/origin/feature-y',
+      '', // git log feature/x — no commits
+      `${SHA}|2024-04-01T10:00:00Z|Dev|feat: remote-only work`, // git log feature-y
+      `1\t0\tsrc/remote.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    // A remote-only branch keeps its remote qualifier (origin/feature-y), not the
+    // bare stripped name: without a local branch of that name, "feature-y" alone
+    // is not a resolvable git ref (confirmed against flight-info-spike, where
+    // "pl/alerts-history" fails with "fatal: ambiguous argument" but
+    // "origin/pl/alerts-history" resolves).
+    expect(summary.branches_analyzed).toEqual(['feature/x', 'origin/feature-y']);
+  });
+});
+
+describe('collectLocalMetrics — CLI window override', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('applies a --days override to widen the analysis window', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-06-15T00:00:00Z'));
+    const SHA = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x', // git branch -a
+      `${SHA}|2026-03-20T10:00:00Z|Dev|feat: old commit outside the default 30-day window`,
+      `3\t0\tsrc/old.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ days: 90 });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.analysis_period_days).toBe(90);
+  });
+
+  test('applies a --since override directly as the git log boundary date', async () => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x', // git branch -a
+      ''             // git log — no commits, short-circuits before deeper processing
+    );
+
+    await collectLocalMetrics({ since: '2026-04-01' });
+
+    const sawExplicitSince = execSync.mock.calls.some(call => String(call[0]).includes('2026-04-01'));
+    expect(sawExplicitSince).toBe(true);
+  });
+});
+
 describe('collectLocalMetrics — early exits', () => {
   test('exits with code 1 when not in a git repository', async () => {
     mockExecSequence(''); // git rev-parse returns empty

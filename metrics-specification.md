@@ -540,7 +540,7 @@ Array of `CommitMetric` objects, one per analyzed commit:
   sprawling_commit: boolean,
   change_ratio: string,         // "X.XX" or "inf"
   outlier: boolean,             // true if > mean + 2σ for this analysis window
-  commit_type: "feature_branch",
+  commit_type: "feature_branch" | "trunk",  // "trunk" when the repo has no feature branches (see workflow_type below)
 
   // Message quality (new)
   message_quality: boolean,     // true if message meets quality threshold
@@ -565,7 +565,8 @@ Single summary object for the analysis run:
   analysis_period_days: number,
   total_commits: number,
   filtered_from: number,            // unique commits before MAX_COMMITS cap
-  branches_analyzed: string[],
+  workflow_type: "feature_branch" | "trunk",  // "trunk" when no feature branches exist; the default branch was analyzed directly
+  branches_analyzed: string[],      // feature branches found, or [resolved default branch] when workflow_type is "trunk"
   branch_commit_counts: Record<string, number>,
 
   // Core metrics

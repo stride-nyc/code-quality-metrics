@@ -33,8 +33,12 @@ const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWi
 
 /**
  * Main analysis function
+ * @param {{ days?: number, since?: string }} [options] CLI window override: since (an explicit
+ *   YYYY-MM-DD boundary) takes precedence over days (a count replacing CONFIG.ANALYSIS_DAYS).
  */
-async function collectLocalMetrics() {
+async function collectLocalMetrics(options = {}) {
+  const analysisDays = options.days ?? CONFIG.ANALYSIS_DAYS;
+
   console.log('=== AI Code Drift Local Analysis ===');
   console.log('');
 
@@ -49,34 +53,82 @@ async function collectLocalMetrics() {
 
   console.log(`📁 Repository: ${remoteUrl}`);
   console.log(`📍 Local path: ${repoRoot}`);
-  console.log(`📅 Analysis period: Last ${CONFIG.ANALYSIS_DAYS} days`);
+  console.log(`📅 Analysis period: Last ${analysisDays} days`);
   console.log('');
 
-  // Get all local branches except main/master
-  const branchesOutput = runGitCommand('git branch');
+  // Get all local and remote branches except main/master
+  const branchesOutput = runGitCommand('git branch -a');
   if (!branchesOutput) {
     console.error('❌ Unable to list Git branches');
     process.exit(1);
   }
 
-  const allBranches = branchesOutput.split('\n')
+  const rawBranchLines = branchesOutput.split('\n')
+    .map(line => line.trim())
+    // Drop the "remotes/origin/HEAD -> origin/main" pointer line: it names no
+    // real branch and would otherwise survive as a phantom entry.
+    .filter(line => line && !line.includes('->'))
     .map(line => line.replace(/^\*?\s*/, '').trim())
-    .filter(branch => branch && !['main', 'master'].includes(branch.toLowerCase()));
+    .filter(Boolean);
 
-  if (allBranches.length === 0) {
-    console.log('⚠️ No feature branches found. Analysis works best with feature branch workflows.');
-    console.log('Consider preserving feature branches after merging for better AI drift detection.');
-    return;
+  const localBranchNames = new Set(
+    rawBranchLines.filter(name => !name.startsWith('remotes/'))
+  );
+
+  // Strip only the "remotes/" segment from remote-only branches, keeping the
+  // remote qualifier (e.g. "origin/pl/alerts-history"): a bare branch name
+  // with no local counterpart is not a resolvable git ref, only
+  // "<remote>/<name>" is. Dedupe against local branches already tracked (a
+  // remote branch mirroring a local one is the same branch, not a second entry).
+  const seenBranches = new Set();
+  const branchLines = [];
+  for (const name of rawBranchLines) {
+    if (!name.startsWith('remotes/')) {
+      branchLines.push(name);
+      continue;
+    }
+    const remoteQualified = name.split('/').slice(1).join('/');
+    const nameWithoutRemote = name.split('/').slice(2).join('/');
+    if (localBranchNames.has(nameWithoutRemote) || seenBranches.has(remoteQualified)) continue;
+    seenBranches.add(remoteQualified);
+    branchLines.push(remoteQualified);
   }
 
-  console.log(`🌿 Found ${allBranches.length} feature branches:`);
-  allBranches.forEach(branch => console.log(`   • ${branch}`));
-  console.log('');
+  // Capture the main/master entry the filter below would otherwise discard,
+  // so the trunk fallback can resolve the repo's actual default branch name
+  // instead of assuming main. First match wins if a repo somehow has both.
+  const defaultBranch = branchLines.find(branch => ['main', 'master'].includes(branch.toLowerCase())) ?? null;
 
-  // Calculate date range
-  const since = new Date();
-  since.setDate(since.getDate() - CONFIG.ANALYSIS_DAYS);
-  const sinceStr = since.toISOString().split('T')[0];
+  const allBranches = branchLines.filter(branch => !['main', 'master'].includes(branch.toLowerCase()));
+
+  // workflowType and branchesToAnalyze default to the feature-branch path; the
+  // no-feature-branches fallback below overrides both for repos whose history
+  // lives on main (trunk workflow), instead of returning early.
+  let workflowType = 'feature_branch';
+  let branchesToAnalyze = allBranches;
+
+  if (allBranches.length === 0) {
+    const fallbackRef = defaultBranch ?? 'HEAD';
+    workflowType = 'trunk';
+    branchesToAnalyze = [fallbackRef];
+    console.log(`⚠️ No feature branches found. Falling back to trunk analysis on '${fallbackRef}'.`);
+    console.log('');
+  } else {
+    console.log(`🌿 Found ${allBranches.length} feature branches:`);
+    allBranches.forEach(branch => console.log(`   • ${branch}`));
+    console.log('');
+  }
+
+  // Calculate date range. An explicit --since date takes precedence over the
+  // day-count window; otherwise derive the boundary from analysisDays.
+  let sinceStr;
+  if (options.since) {
+    sinceStr = options.since;
+  } else {
+    const since = new Date();
+    since.setDate(since.getDate() - analysisDays);
+    sinceStr = since.toISOString().split('T')[0];
+  }
 
   console.log(`🔍 Looking for commits since: ${sinceStr}`);
   console.log('');
@@ -87,7 +139,7 @@ async function collectLocalMetrics() {
   /** @type {Record<string, number>} */
   const branchCommitCounts = {};
 
-  for (const branch of allBranches) {
+  for (const branch of branchesToAnalyze) {
     process.stdout.write(`📊 Analyzing branch: ${branch}... `);
 
     try {
@@ -154,7 +206,7 @@ async function collectLocalMetrics() {
       metrics.push(/** @type {CommitMetric} */ ({
         ...commit,
         ...analysis,
-        commit_type: 'feature_branch'
+        commit_type: workflowType
       }));
     }
   }
@@ -231,10 +283,11 @@ async function collectLocalMetrics() {
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
-    analysis_period_days: CONFIG.ANALYSIS_DAYS,
+    analysis_period_days: analysisDays,
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
-    branches_analyzed: allBranches,
+    workflow_type: workflowType,
+    branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,
     sprawling_commits_pct,
@@ -377,10 +430,33 @@ module.exports = {
   CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude
 };
 
-// Script execution — placed after all definitions and module.exports so all
+/**
+ * Parse --since <date> / --days <n> CLI flags into a collectLocalMetrics options object.
+ * Not unit tested directly (same category as the require.main block below); the
+ * behavior it feeds (options.since, options.days) is covered by the CLI window
+ * override tests in __tests__/collectLocalMetrics.test.js.
+ * @param {string[]} argv process.argv.slice(2)
+ * @returns {{ days?: number, since?: string }}
+ */
+function parseCliArgs(argv) {
+  /** @type {{ days?: number, since?: string }} */
+  const options = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--since' && argv[i + 1]) {
+      options.since = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--days' && argv[i + 1]) {
+      options.days = Number(argv[i + 1]);
+      i++;
+    }
+  }
+  return options;
+}
+
+// Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  collectLocalMetrics().catch(error => {
+  collectLocalMetrics(parseCliArgs(process.argv.slice(2))).catch(error => {
     console.error('❌ Analysis failed:', error.message);
     process.exit(1);
   });
