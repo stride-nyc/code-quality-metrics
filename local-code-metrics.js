@@ -175,12 +175,35 @@ async function collectLocalMetrics(options = {}) {
   console.log('📊 Commits per branch:', branchCommitCounts);
   console.log('');
 
+  if (uniqueCommits.length === 0 && workflowType !== 'trunk') {
+    // Feature branches found but none have commits in the analysis window.
+    // This is the squash-merge-delete pattern: branches are deleted after merge,
+    // leaving only an occasional surviving remote branch with stale commits.
+    // Fall back to trunk analysis the same way as the "no feature branches" path.
+    const fallbackRef = defaultBranch ?? 'HEAD';
+    console.log(`⚠️ No commits found in feature branches. Falling back to trunk analysis on '${fallbackRef}'.`);
+    console.log('');
+    workflowType = 'trunk';
+    branchesToAnalyze = [fallbackRef];
+
+    process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
+    const trunkLog = runGitCommand(
+      `git log --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${fallbackRef}`
+    );
+    const trunkCommits = parseGitLog(trunkLog);
+    trunkCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });
+    branchCommitCounts[fallbackRef] = trunkCommits.length;
+    console.log(`${trunkCommits.length} commits`);
+    console.log('');
+
+    uniqueCommits.push(...trunkCommits);
+  }
+
   if (uniqueCommits.length === 0) {
-    console.log('⚠️ No commits found in feature branches in the last 30 days.');
+    console.log('⚠️ No commits found in the analysis period.');
     console.log('This could mean:');
-    console.log('  • All recent work was done directly on main branch');
-    console.log('  • Feature branches were deleted after merging');
     console.log('  • No development activity in the analysis period');
+    console.log(`  • Try a wider window: node local-code-metrics.js --days 90`);
     return;
   }
 

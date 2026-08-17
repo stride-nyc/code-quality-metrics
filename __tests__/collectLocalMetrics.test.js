@@ -66,6 +66,27 @@ describe('collectLocalMetrics — trunk fallback', () => {
     expect(metrics[0].commit_type).toBe('trunk');
   });
 
+  test('falls back to trunk when feature branches exist but yield no commits in analysis period', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  remotes/origin/pl/alerts-history', // feature branch present, but...
+      '',                                            // git log alerts-history → no commits in period
+      `${SHA}|2026-05-01T10:00:00Z|Dev|squash: feature work`, // git log main → has commits
+      `10\t5\tsrc/app.js`                            // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).toHaveBeenCalled();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.workflow_type).toBe('trunk');
+  });
+
   // GUARD, not a called-shot RED: nothing in the trunk fallback path suppresses
   // or nulls any rate. Written after the real implementation as an explicit
   // regression guard against parseFloat(undefined) -> NaN silently forcing

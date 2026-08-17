@@ -11,6 +11,7 @@
     "test:coverage": "jest --coverage",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "report": "node generate-drift-report.js",
     "prepare": "git config core.hooksPath .githooks"
   },
   "devDependencies": {
