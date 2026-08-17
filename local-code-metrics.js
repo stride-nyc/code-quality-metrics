@@ -52,14 +52,18 @@ async function collectLocalMetrics() {
   console.log(`📅 Analysis period: Last ${CONFIG.ANALYSIS_DAYS} days`);
   console.log('');
 
-  // Get all local branches except main/master
-  const branchesOutput = runGitCommand('git branch');
+  // Get all local and remote branches except main/master
+  const branchesOutput = runGitCommand('git branch -a');
   if (!branchesOutput) {
     console.error('❌ Unable to list Git branches');
     process.exit(1);
   }
 
   const branchLines = branchesOutput.split('\n')
+    .map(line => line.trim())
+    // Drop the "remotes/origin/HEAD -> origin/main" pointer line: it names no
+    // real branch and would otherwise survive as a phantom entry.
+    .filter(line => line && !line.includes('->'))
     .map(line => line.replace(/^\*?\s*/, '').trim())
     .filter(Boolean);
 

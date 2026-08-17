@@ -86,6 +86,26 @@ describe('collectLocalMetrics — trunk fallback', () => {
   });
 });
 
+describe('collectLocalMetrics — remote branch listing', () => {
+  test('excludes the remotes/origin/HEAD pointer line from branch counts', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  remotes/origin/HEAD -> origin/main\n  feature/x', // git branch -a
+      `${SHA}|2024-03-01T10:00:00Z|Dev|feat: real branch commit`,
+      `2\t1\tsrc/real.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.branches_analyzed).toEqual(['feature/x']);
+  });
+});
+
 describe('collectLocalMetrics — early exits', () => {
   test('exits with code 1 when not in a git repository', async () => {
     mockExecSequence(''); // git rev-parse returns empty
