@@ -703,4 +703,25 @@ describe('collectLocalMetrics — duplicate detection', () => {
     ]);
     expect(output.layers_run).toEqual({ static: true, semantic: true });
   });
+
+  // Locks in the guard in local-code-metrics.js (`if (prodFilePaths.length > 0)`):
+  // when every analyzed commit is test-only, there is nothing for jscpd to scan,
+  // so local_duplicate_analysis.json is omitted entirely rather than written
+  // with empty arrays. This mirrors generate-drift-report.js's graceful handling
+  // of a missing file, so a test-only analysis run still renders a clean report.
+  test('does not write local_duplicate_analysis.json when the analyzed commits touch no production files', async () => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      '3\t1\tsrc/app.test.js' // test-only commit: no production files touched
+    );
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    expect(dupCall).toBeUndefined();
+  });
 });
