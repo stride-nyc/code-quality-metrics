@@ -70,6 +70,38 @@ function parseBranchList(output) {
 }
 
 /**
+ * Parse --since <date> / --days <n> CLI flags into a collectLocalMetrics options object.
+ * @param {string[]} argv process.argv.slice(2)
+ * @returns {{ days?: number, since?: string }}
+ */
+function parseCliArgs(argv) {
+  /** @type {{ days?: number, since?: string }} */
+  const options = {};
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === '--since') {
+      if (!argv[i + 1]) throw new Error('--since requires a YYYY-MM-DD date');
+      const since = argv[i + 1];
+      // git log treats an unparseable --since as matching nothing rather than
+      // erroring, so a typo would silently read as "no activity in the window".
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) {
+        throw new Error(`--since must be a YYYY-MM-DD date, got '${since}'`);
+      }
+      options.since = since;
+      i++;
+    } else if (argv[i] === '--days') {
+      if (!argv[i + 1]) throw new Error('--days requires a positive integer');
+      const days = Number(argv[i + 1]);
+      if (!Number.isInteger(days) || days <= 0) {
+        throw new Error(`--days must be a positive integer, got '${argv[i + 1]}'`);
+      }
+      options.days = days;
+      i++;
+    }
+  }
+  return options;
+}
+
+/**
  * Main analysis function
  * @param {{ days?: number, since?: string }} [options] CLI window override: since (an explicit
  *   YYYY-MM-DD boundary) takes precedence over days (a count replacing CONFIG.ANALYSIS_DAYS).
@@ -461,6 +493,7 @@ async function collectLocalMetrics(options = {}) {
 
 module.exports = {
   collectLocalMetrics,
+  parseCliArgs,
   CONFIG,
   // git
   runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff,
@@ -472,33 +505,23 @@ module.exports = {
   CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude
 };
 
-/**
- * Parse --since <date> / --days <n> CLI flags into a collectLocalMetrics options object.
- * Not unit tested directly (same category as the require.main block below); the
- * behavior it feeds (options.since, options.days) is covered by the CLI window
- * override tests in __tests__/collectLocalMetrics.test.js.
- * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string }}
- */
-function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string }} */
-  const options = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === '--since' && argv[i + 1]) {
-      options.since = argv[i + 1];
-      i++;
-    } else if (argv[i] === '--days' && argv[i + 1]) {
-      options.days = Number(argv[i + 1]);
-      i++;
-    }
-  }
-  return options;
-}
 
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  collectLocalMetrics(parseCliArgs(process.argv.slice(2))).catch(error => {
+  /** @type {{ days?: number, since?: string }} */
+  let cliOptions;
+  try {
+    cliOptions = parseCliArgs(process.argv.slice(2));
+  } catch (error) {
+    // Argument errors are the user's typo, not an analysis failure, so report
+    // them as such and show the accepted forms rather than a stack trace.
+    console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>]');
+    process.exit(1);
+  }
+
+  collectLocalMetrics(cliOptions).catch(error => {
     console.error('❌ Analysis failed:', error.message);
     process.exit(1);
   });
