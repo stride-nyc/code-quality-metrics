@@ -24,3 +24,10 @@ node_modules/
 
 # macOS
 .DS_Store
+
+# Claude Code local state
+# settings.local.json is per-developer; worktrees/ holds ephemeral agent
+# checkouts of this same repo. A shared .claude/settings.json or .claude/agents/
+# is still committable, so this is deliberately not a blanket .claude/ ignore.
+.claude/settings.local.json
+.claude/worktrees/
