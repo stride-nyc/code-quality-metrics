@@ -570,4 +570,66 @@ describe('collectLocalMetrics — merged branch exclusion', () => {
     expect(summary.workflow_type).toBe('trunk');
     expect(summary.branches_analyzed).toEqual(['main']);
   });
+
+  test('retains a branch that is not fully merged', async () => {
+    const SHA = 'f'.repeat(40);
+    mockExecSequenceWithMerged(
+      '* main',                                             // git branch -a --merged main: feature/x absent
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  feature/x',                                // git branch -a
+      `${SHA}|2024-02-10T10:00:00Z|Dev|feat: unmerged work`, // git log feature/x
+      `4\t1\tsrc/thing.js`                                   // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.workflow_type).toBe('feature_branch');
+    expect(summary.branches_analyzed).toEqual(['feature/x']);
+  });
+
+  test('analyzes only the unmerged branch when both merged and unmerged exist', async () => {
+    const SHA_UNMERGED = 'b'.repeat(40);
+    mockExecSequenceWithMerged(
+      '* main\n  feature/merged-remnant',                    // git branch -a --merged main
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  feature/merged-remnant\n  feature/unmerged', // git branch -a
+      `${SHA_UNMERGED}|2024-03-05T10:00:00Z|Dev|feat: still open work`, // git log feature/unmerged
+      `2\t0\tsrc/open.js`                                     // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.branches_analyzed).toEqual(['feature/unmerged']);
+  });
+
+  // GUARD, not a called-shot RED: the current code already returns early with
+  // `allBranches` unfiltered when mergedOutput is empty (the `if (mergedOutput)`
+  // guard never runs). Written to lock in that degradation path explicitly.
+  test('filters nothing when the merged branch listing is unavailable', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequenceWithMerged(
+      '',                                                    // git branch -a --merged main unavailable
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '* main\n  feature/x',                                 // git branch -a
+      `${SHA}|2024-04-12T10:00:00Z|Dev|feat: normal work`,   // git log feature/x
+      `3\t2\tsrc/normal.js`                                   // git show numstat
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.workflow_type).toBe('feature_branch');
+    expect(summary.branches_analyzed).toEqual(['feature/x']);
+  });
 });
