@@ -70,28 +70,33 @@ describe('generateInsights', () => {
   });
 
   // --- warning thresholds ---
-  test('emits warning (not critical) for large_commits_pct between 20 and 40', () => {
-    const { warnings } = generateInsights(makeSummary({ large_commits_pct: '30.00' }), []);
+  test('emits warning (not critical) for large_commits_pct between 23 and 30', () => {
+    const { warnings } = generateInsights(makeSummary({ large_commits_pct: '25.00' }), []);
     expect(warnings.some(w => w.includes('High large commit rate'))).toBe(true);
     expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  test('emits critical warning for large_commits_pct above 40', () => {
-    const { warnings, recommendations } = generateInsights(makeSummary({ large_commits_pct: '45.00' }), []);
+  test('emits critical warning for large_commits_pct above 30', () => {
+    const { warnings, recommendations } = generateInsights(makeSummary({ large_commits_pct: '35.00' }), []);
     expect(warnings.some(w => w.includes('Very high large commit rate'))).toBe(true);
     expect(recommendations.length).toBeGreaterThan(0);
   });
 
-  test('emits warning (not critical) for sprawling_commits_pct between 10 and 25', () => {
-    const { warnings } = generateInsights(makeSummary({ sprawling_commits_pct: '15.00' }), []);
+  test('emits warning for sprawling_commits_pct above 19', () => {
+    const { warnings } = generateInsights(makeSummary({ sprawling_commits_pct: '25.00' }), []);
     expect(warnings.some(w => w.includes('High sprawling commit rate'))).toBe(true);
-    expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  test('emits critical warning for sprawling_commits_pct above 25', () => {
-    const { warnings, recommendations } = generateInsights(makeSummary({ sprawling_commits_pct: '30.00' }), []);
-    expect(warnings.some(w => w.includes('Very high sprawling commit rate'))).toBe(true);
-    expect(recommendations.length).toBeGreaterThan(0);
+  // sprawling_commits_pct is two-band (calibration/derive-bands.js: the
+  // extreme rests on a single reference repo, nodejs/node) -- THRESHOLDS
+  // reports critical: null for it, so no value, however extreme, should ever
+  // read as "Very high ... critical". A null-coercion bug previously made
+  // any positive value read as critical (n > null coerces to n > 0).
+  test('never emits a critical ("Very high") sprawling commit warning, however extreme the rate (two-band: no critical bound)', () => {
+    const { warnings, recommendations } = generateInsights(makeSummary({ sprawling_commits_pct: '90.00' }), []);
+    expect(warnings.some(w => w.includes('Very high sprawling commit rate'))).toBe(false);
+    expect(warnings.some(w => w.includes('High sprawling commit rate'))).toBe(true);
+    expect(recommendations).toEqual([]);
   });
 
   test('emits warning for test_coverage_rate below 30', () => {
@@ -106,13 +111,13 @@ describe('generateInsights', () => {
     expect(recommendations.length).toBeGreaterThan(0);
   });
 
-  test('emits warning (not critical) for uncovered_prod_rate between 10 and 20', () => {
-    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '15.00' }), []);
+  test('emits warning (not critical) for uncovered_prod_rate between 16 and 20', () => {
+    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '18.00' }), []);
     expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(true);
     expect(warnings.some(w => w.includes('🚨'))).toBe(false);
   });
 
-  test('emits no uncovered_prod warning when rate is below 10', () => {
+  test('emits no uncovered_prod warning when rate is below 16', () => {
     const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '5.00' }), []);
     expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(false);
   });
@@ -128,14 +133,19 @@ describe('generateInsights', () => {
     expect(insights.some(i => i.includes('test-only commits'))).toBe(false);
   });
 
-  test('emits warning for avg_lines_changed above 500', () => {
-    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '600.00' }), []);
+  test('emits warning for avg_lines_changed above 150', () => {
+    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '200.00' }), []);
     expect(warnings.some(w => w.includes('High average lines per commit'))).toBe(true);
   });
 
-  test('emits critical warning for avg_lines_changed above 1000', () => {
-    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '1200.00' }), []);
-    expect(warnings.some(w => w.includes('Very high average lines per commit'))).toBe(true);
+  // avg_lines_changed is two-band (calibration/derive-bands.js: the extreme
+  // rests on a single reference repo, nodejs/node) -- THRESHOLDS reports
+  // critical: null, so no value should ever read as "Very high ... critical",
+  // however large. Same null-coercion bug class as sprawling_commits_pct.
+  test('never emits a critical ("Very high") avg_lines_changed warning, however large the average (two-band: no critical bound)', () => {
+    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '5000.00' }), []);
+    expect(warnings.some(w => w.includes('Very high average lines per commit'))).toBe(false);
+    expect(warnings.some(w => w.includes('High average lines per commit'))).toBe(true);
   });
 
   // --- AI pattern detection ---

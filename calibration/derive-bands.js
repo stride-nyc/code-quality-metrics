@@ -22,16 +22,24 @@ const OBSERVATIONS = path.join(__dirname, 'observations.json');
 /**
  * How a band is derived from the reference distribution.
  *
- * healthy: the worst value any reference repository produced. A project doing
- *   no worse than the references is healthy by construction, which is the whole
- *   claim being made and the only one the data supports.
- * critical: healthy times CRITICAL_MULTIPLE. This multiple is a stated
- *   convention, not a measurement. No reference repository approached it, so
- *   the data cannot locate this boundary; it marks "clearly outside the range
- *   disciplined projects occupy" and is labelled as convention wherever it is
- *   reported.
+ * healthy: the p75 of observed values for a higher-is-worse metric (p25 for a
+ *   higher-is-better metric). Both bounds come from the data, unlike the prior
+ *   rule which took the single worst observation as "healthy".
+ * critical: the max observed value for a higher-is-worse metric (min for a
+ *   higher-is-better one) -- but only when at least two distinct reference
+ *   repositories produced an observation at or near that extreme (see
+ *   NEAR_EXTREME_FRACTION below). When the extreme rests on a single
+ *   repository/window, critical is reported as null rather than asserting a
+ *   red boundary the data cannot support; see the tier field.
  */
-const CRITICAL_MULTIPLE = 2;
+
+/**
+ * How close (as a fraction of the extreme's magnitude) an observation must be
+ * to the max (or min) to count as supporting it, for tiering purposes. 0.15
+ * means within 15% of the extreme value. This is a judgment call, not a
+ * measurement, and is stated here explicitly so it can be revisited.
+ */
+const NEAR_EXTREME_FRACTION = 0.15;
 
 /** Metrics where a higher value is worse. */
 const HIGHER_IS_WORSE = [
@@ -41,13 +49,35 @@ const HIGHER_IS_WORSE = [
 ];
 
 /** Metrics where a higher value is better. */
-const HIGHER_IS_BETTER = ['test_coverage_rate', 'message_quality_pct', 'test_isolation_rate'];
+const HIGHER_IS_BETTER = ['test_coverage_rate', 'message_quality_pct'];
+
+/**
+ * Metrics with no bad direction at all -- a positive signal only. These never
+ * get a healthy/critical band; there is nothing to be "critical" about.
+ */
+const INFORMATIONAL = ['test_isolation_rate'];
 
 function round(n) {
   if (n >= 100) return Math.round(n / 10) * 10;
   if (n >= 10) return Math.round(n);
   if (n >= 1) return Math.round(n * 2) / 2;
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Linear-interpolation percentile (the same method lib/statistics.js uses for
+ * p50/p90/p95), so calibration bands are computed the same way the tool's own
+ * runtime statistics are.
+ * @param {number[]} sortedValues
+ * @param {number} p - 0..1
+ * @returns {number}
+ */
+function percentile(sortedValues, p) {
+  if (sortedValues.length === 1) return sortedValues[0];
+  const idx = p * (sortedValues.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  return sortedValues[lo] + (sortedValues[hi] - sortedValues[lo]) * (idx - lo);
 }
 
 /**
@@ -65,17 +95,63 @@ function describe(values) {
   };
 }
 
-function deriveBand(metric, values) {
+/**
+ * Whether an observed value counts as "at or near" an extreme (max or min),
+ * within NEAR_EXTREME_FRACTION of its magnitude.
+ * @param {number} value
+ * @param {number} extreme
+ * @returns {boolean}
+ */
+function isNearExtreme(value, extreme) {
+  if (extreme === 0) return value === 0;
+  return Math.abs(extreme - value) / Math.abs(extreme) <= NEAR_EXTREME_FRACTION;
+}
+
+/**
+ * @param {string} metric
+ * @param {Array<{repo: string, value: number}>} observations
+ * @returns {object}
+ */
+function deriveBand(metric, observations) {
+  const values = observations.map(o => o.value);
   const stats = describe(values);
+  const sorted = [...values].sort((a, b) => a - b);
+
+  if (INFORMATIONAL.includes(metric)) {
+    return { ...stats, direction: 'informational', healthy: null, critical: null, tier: 'informational', supportingRepos: [] };
+  }
+
   if (HIGHER_IS_WORSE.includes(metric)) {
-    const healthy = round(stats.max);
-    return { ...stats, direction: 'higher-is-worse', healthy, critical: round(healthy * CRITICAL_MULTIPLE) };
+    const healthy = round(percentile(sorted, 0.75));
+    const extreme = stats.max;
+    const supportingRepos = [...new Set(observations.filter(o => isNearExtreme(o.value, extreme)).map(o => o.repo))];
+    const tier = supportingRepos.length >= 2 ? 'three-band' : 'two-band';
+    return {
+      ...stats,
+      direction: 'higher-is-worse',
+      healthy,
+      critical: tier === 'three-band' ? round(extreme) : null,
+      tier,
+      supportingRepos
+    };
   }
+
   if (HIGHER_IS_BETTER.includes(metric)) {
-    const healthy = round(stats.min);
-    return { ...stats, direction: 'higher-is-better', healthy, critical: round(healthy / CRITICAL_MULTIPLE) };
+    const healthy = round(percentile(sorted, 0.25));
+    const extreme = stats.min;
+    const supportingRepos = [...new Set(observations.filter(o => isNearExtreme(o.value, extreme)).map(o => o.repo))];
+    const tier = supportingRepos.length >= 2 ? 'three-band' : 'two-band';
+    return {
+      ...stats,
+      direction: 'higher-is-better',
+      healthy,
+      critical: tier === 'three-band' ? round(extreme) : null,
+      tier,
+      supportingRepos
+    };
   }
-  return { ...stats, direction: 'informational', healthy: null, critical: null };
+
+  return { ...stats, direction: 'informational', healthy: null, critical: null, tier: 'informational', supportingRepos: [] };
 }
 
 function main() {
@@ -87,16 +163,17 @@ function main() {
   const usable = data.observations.filter(o => o.include_in_derivation);
   const excluded = data.observations.filter(o => !o.include_in_derivation);
 
+  /** @type {Record<string, Array<{repo: string, value: number}>>} */
   const byMetric = {};
-  for (const obs of usable) {
-    for (const [metric, value] of Object.entries(obs.metrics)) {
+  for (const observation of usable) {
+    for (const [metric, value] of Object.entries(observation.metrics)) {
       if (typeof value !== 'number' || Number.isNaN(value)) continue;
-      (byMetric[metric] ||= []).push(value);
+      (byMetric[metric] ||= []).push({ repo: observation.repo, value });
     }
   }
 
   const bands = {};
-  for (const [metric, values] of Object.entries(byMetric)) bands[metric] = deriveBand(metric, values);
+  for (const [metric, observations] of Object.entries(byMetric)) bands[metric] = deriveBand(metric, observations);
 
   if (process.argv.includes('--json')) {
     console.log(JSON.stringify({ derived_at_tool_commit: data.tool_commit, bands }, null, 2));
@@ -105,14 +182,22 @@ function main() {
 
   console.log(`Reference observations: ${usable.length} used, ${excluded.length} excluded`);
   console.log(`Repositories: ${[...new Set(usable.map(o => o.repo))].join(', ')}`);
-  console.log(`Rule: healthy = worst reference value; critical = healthy x ${CRITICAL_MULTIPLE} (stated convention, not measured)\n`);
-  console.log('metric'.padEnd(28) + 'n'.padStart(3) + 'min'.padStart(10) + 'median'.padStart(10) + 'max'.padStart(10) + '  ->  healthy / critical');
+  console.log('Rule: healthy = p75 of observations (p25 for higher-is-better); critical = max observed (min for');
+  console.log(`higher-is-better) -- but only when >=2 distinct repos produced a value within ${Math.round(NEAR_EXTREME_FRACTION * 100)}% of that extreme.\n`);
+  console.log(
+    'metric'.padEnd(28) + 'n'.padStart(3) + 'min'.padStart(10) + 'median'.padStart(10) + 'max'.padStart(10) +
+    '  ->  healthy / critical'.padEnd(26) + 'tier'.padEnd(14) + 'supporting repos'
+  );
   for (const [metric, b] of Object.entries(bands)) {
-    if (b.healthy === null) continue;
+    if (b.tier === 'informational') {
+      console.log(`${metric.padEnd(28)}${String(b.n).padStart(3)}${b.min.toFixed(2).padStart(10)}${b.median.toFixed(2).padStart(10)}${b.max.toFixed(2).padStart(10)}  ->  informational (no bad direction)`);
+      continue;
+    }
+    const criticalDisplay = b.critical === null ? 'null' : String(b.critical);
     console.log(
       metric.padEnd(28) + String(b.n).padStart(3) +
       b.min.toFixed(2).padStart(10) + b.median.toFixed(2).padStart(10) + b.max.toFixed(2).padStart(10) +
-      '  ->  ' + b.healthy + ' / ' + b.critical
+      '  ->  ' + `${b.healthy} / ${criticalDisplay}`.padEnd(26) + b.tier.padEnd(14) + b.supportingRepos.join(', ')
     );
   }
   if (excluded.length) {
@@ -133,4 +218,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { deriveBand, describe, CRITICAL_MULTIPLE, HIGHER_IS_WORSE, HIGHER_IS_BETTER };
+module.exports = { deriveBand, describe, percentile, isNearExtreme, NEAR_EXTREME_FRACTION, HIGHER_IS_WORSE, HIGHER_IS_BETTER, INFORMATIONAL };
