@@ -361,6 +361,22 @@ describe('collectLocalMetrics — successful run', () => {
     });
   });
 
+  test('does not write an outlier field on commit metrics (withdrawn — code-quality-metrics-496)', async () => {
+    // No window-relative cutoff (mean+stddev, raw p95, or a log-scale Tukey fence at several
+    // multipliers) can satisfy monotonicity on this toolkit's heavy-tailed commit-size data:
+    // every one measured either un-flags a previously-flagged commit when a larger one joins
+    // the window, or goes inert (never fires) once the window's own body spans orders of
+    // magnitude -- exactly the case this flag was meant to catch. The field is withdrawn
+    // rather than re-tuned, matching how this project handled message_quality_pct and
+    // net_additions_ratio_median. This assertion is deliberately construct-agnostic: it fails
+    // on any implementation that keeps the field, whether monotonic, inverted, or inert.
+    await collectLocalMetrics();
+
+    const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+    const written = JSON.parse(metricsCall[1]);
+    expect(written[0]).not.toHaveProperty('outlier');
+  });
+
   test('writes local_metrics_summary.json with expected shape', async () => {
     await collectLocalMetrics();
 

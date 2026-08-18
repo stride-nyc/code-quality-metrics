@@ -31,7 +31,7 @@ const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicat
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -330,9 +330,22 @@ async function collectLocalMetrics(options = {}) {
   const lineStats = computeStatistics(lineSizes, timestamps);
   const fileStats = computeStatistics(fileCounts, timestamps);
 
-  // Mark outlier commits in-place
+  // The per-commit outlier flag is withdrawn (code-quality-metrics-496). Every window-relative
+  // cutoff measured -- mean + 2*stddev, a bare p95, and a log-scale Tukey fence at several
+  // multipliers -- either un-flags a commit that was already flagged when a larger commit joins
+  // the window (violating monotonicity 45-70% of the time across 3000 randomized heavy-tailed
+  // windows), or goes inert once the window's own body spans orders of magnitude, exactly the
+  // case this flag exists to catch: on the bug's own measured window, the log-Tukey fence
+  // required upward of ~28,600 lines to fire at all. No absolute alternative was adopted either
+  // (see metrics-specification.md's Per-Commit Outlier Flag section for why). p50/p90/p95 remain
+  // in `local_metrics_summary.json` as the statistics that can support a claim on this
+  // distribution; `large_commit` remains as the absolute, non-window-relative size flag.
+  //
+  // lib/git.js's analyzeCommit still stamps a placeholder `outlier: false` on every commit
+  // (out of scope for this fix -- see code-quality-metrics-496's report). Delete it here so a
+  // withdrawn construct doesn't survive into the written JSON as a permanent, silent false.
   metrics.forEach(m => {
-    m.outlier = lineStats.isOutlier(m.total_additions + m.total_deletions);
+    Reflect.deleteProperty(m, 'outlier');
   });
 
   // Velocity
