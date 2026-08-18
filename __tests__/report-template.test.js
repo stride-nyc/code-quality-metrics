@@ -3,6 +3,7 @@
 const { renderReportHtml } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { buildMetricCatalog } = require('../lib/report');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 function fixtureSummary(overrides) {
   return Object.assign({
@@ -150,7 +151,11 @@ describe('renderReportHtml', () => {
   });
 
   it('renders a status chip for plain stat cards with hasGauge false', () => {
-    const args = fixtureArgs({ net_additions_ratio_median: 0.45 });
+    // Derive a value inside the warning band rather than hardcoding one. The literal 0.45
+    // was warning under the old 0.33/0.50 band and became good at 0.51/0.79, so it broke on
+    // recalibration for a reason unrelated to what this test checks.
+    const band = THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN;
+    const args = fixtureArgs({ net_additions_ratio_median: (band.healthy + band.critical) / 2 });
     const html = renderReportHtml(args);
     const entry = args.catalog.find(e => e.key === 'net_additions_ratio_median');
 

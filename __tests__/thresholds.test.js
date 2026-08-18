@@ -22,7 +22,7 @@ describe('THRESHOLDS', () => {
       AI_BATCH_SHARE: { additionsRatio: 3, share: 0.3 },
       P90_LINES_CHANGED: { healthy: 260, critical: null },
       P90_FILES_CHANGED: { healthy: 9.5, critical: 13 },
-      NET_ADDITIONS_RATIO_MEDIAN: { healthy: 0.33, critical: 0.50 },
+      NET_ADDITIONS_RATIO_MEDIAN: { healthy: 0.51, critical: 0.79 },
       DUPLICATION_PCT: { healthy: 3, critical: 10 },
       DORA_ARCHETYPE: {
         HARMONIOUS: { large: 20, sprawling: 10, testCoverage: 50, uncoveredProd: 10, messageQuality: 60 },

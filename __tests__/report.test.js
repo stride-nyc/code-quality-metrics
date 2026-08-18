@@ -1,5 +1,6 @@
 'use strict';
 
+const { THRESHOLDS } = require('../lib/thresholds');
 const { buildMetricCatalog, buildGaugeSvgParts } = require('../lib/report');
 
 function fullSummary(overrides) {
@@ -153,9 +154,13 @@ describe('buildMetricCatalog', () => {
     expect(p90Files.healthyBoundary).toBe(9.5);
     expect(p90Files.criticalBoundary).toBe(13);
 
+    // Read from THRESHOLDS rather than restating the numbers. thresholds.test.js already
+    // locks the values; what matters here is that the catalog carries the configured
+    // boundary through. Hardcoding it made every recalibration break this test for no
+    // reason, which is what happened when this band was adopted.
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
-    expect(netAdditions.healthyBoundary).toBe(0.33);
-    expect(netAdditions.criticalBoundary).toBe(0.50);
+    expect(netAdditions.healthyBoundary).toBe(THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy);
+    expect(netAdditions.criticalBoundary).toBe(THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.critical);
   });
 });
 
