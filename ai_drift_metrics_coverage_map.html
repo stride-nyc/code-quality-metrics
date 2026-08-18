@@ -88,6 +88,36 @@
     .badge-green { background: #085041; color: #5DCAA5; }
     .badge-amber { background: #633806; color: #EF9F27; }
   }
+
+  .prov { margin-top: 10px; }
+  .prov-step { display: grid; grid-template-columns: 74px 1fr; gap: 10px; padding: 7px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .prov-step:last-child { border-bottom: none; }
+  .prov-k { font-size: 10px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; color: var(--color-text-tertiary); padding-top: 1px; }
+  .prov-v { font-size: 11.5px; line-height: 1.55; color: var(--color-text-secondary); }
+  .prov-v code { font-family: var(--font-mono); font-size: 10.5px; }
+  .quote { border-left: 2px solid var(--color-border-tertiary); padding-left: 8px; margin: 4px 0; font-style: italic; }
+  .cite { font-size: 10px; color: var(--color-text-tertiary); }
+
+  .vbadge { display: inline-block; font-size: 9.5px; font-weight: 500; padding: 1.5px 6px; border-radius: 4px; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; }
+  .v-sourced   { background: #E1F5EE; color: #0F6E56; }
+  .v-principle { background: #FAEEDA; color: #854F0B; }
+  .v-measured  { background: #FAEEDA; color: #854F0B; }
+  .v-unstated  { background: #FAECE7; color: #993C1D; }
+  .v-pending   { background: #F1EFE8; color: #5F5E5A; }
+  @media (prefers-color-scheme: dark) {
+    .v-sourced   { background: #085041; color: #5DCAA5; }
+    .v-principle { background: #633806; color: #EF9F27; }
+    .v-measured  { background: #633806; color: #EF9F27; }
+    .v-unstated  { background: #4A1B0C; color: #F0997B; }
+    .v-pending   { background: #2C2C2A; color: #B4B2A9; }
+  }
+
+  .calib-row { display: grid; grid-template-columns: 190px 96px 1fr; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .calib-row:last-child { border-bottom: none; }
+  .calib-name { font-size: 11.5px; font-family: var(--font-mono); color: var(--color-text-primary); }
+  .calib-note { font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; }
+  .repro { font-size: 11px; color: var(--color-text-secondary); line-height: 1.6; background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: 8px; padding: 10px 12px; }
+  .repro code { font-family: var(--font-mono); font-size: 10.5px; }
 </style>
 
 <div class="coverage-root">
@@ -97,6 +127,14 @@
     <div class="legend-item"><div class="dot dot-partial"></div>Partial / proxy only</div>
     <div class="legend-item"><div class="dot dot-gap"></div>Gap — needs external tool</div>
     <div class="legend-item"><div class="dot dot-oos"></div>Out of scope (organizational)</div>
+  </div>
+
+  <div class="legend" style="margin-top:-0.5rem">
+    <div class="legend-item"><span class="vbadge v-sourced">sourced</span>&nbsp;source supplies the number</div>
+    <div class="legend-item"><span class="vbadge v-principle">principle</span>&nbsp;inferred from a qualitative principle</div>
+    <div class="legend-item"><span class="vbadge v-measured">measured</span>&nbsp;derived from measurement, n stated</div>
+    <div class="legend-item"><span class="vbadge v-unstated">unstated</span>&nbsp;no recorded basis</div>
+    <div class="legend-item"><span class="vbadge v-pending">pending</span>&nbsp;source verification in flight</div>
   </div>
 
   <div class="section-label">DORA AI Capabilities (7 total)</div>
@@ -110,6 +148,12 @@
   <div class="section-label">Git-Based Signals — fully measured</div>
   <div class="grid grid-3" id="git-grid"></div>
   <div id="git-detail" class="detail-panel"></div>
+
+  <div class="section-label">Thresholds needing calibration</div>
+  <div id="calib-list"></div>
+
+  <div class="section-label">Reproducing these figures</div>
+  <div class="repro" id="repro"></div>
 
   <hr class="divider">
 

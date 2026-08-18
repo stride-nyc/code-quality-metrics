@@ -53,7 +53,11 @@ large_commit_pct = (commits where additions + deletions > LARGE_COMMIT_THRESHOLD
 
 **Per-commit flag**: `large_commit: boolean`
 
-**Data source**: `git show --numstat {sha}` (additions and deletions per file, summed across all files)
+**Data source**: `git show --numstat {sha}` (additions and deletions per file, summed across **production files only**; files matching `TEST_FILE_PATTERNS` are excluded from the total)
+
+**Why production lines only**: counting test lines meant that adding tests could push a change over the threshold. A 90 line production change shipped with 30 lines of tests scored 120 and was flagged large, while the same change with no tests was not, so the metric penalised the practice this toolkit identifies as the strongest protection against drift. `uncovered_prod_rate` already covers the untested case as a separate signal.
+
+**Note**: `total_additions` and `total_deletions` in the output remain whole-diff, including test lines, because the size distributions describe how much a reviewer actually reads. `prod_additions` and `prod_deletions` carry the production-only totals that drive this flag.
 
 **CONFIG key**: `LARGE_COMMIT_THRESHOLD` (default: 100 lines)
 
