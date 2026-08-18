@@ -36,6 +36,37 @@ cp -rf source dest          # NOT: cp -r source dest
 - `apt-get` - use `-y` flag
 - `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
 
+## Working Inside an Isolated Worktree
+
+An agent given its own git worktree runs from `.claude/worktrees/agent-<id>/`. The harness
+will refuse any shell command it cannot verify stays inside that worktree:
+
+> This agent is isolated in the worktree ..., but this command is too complex to verify that
+> it stays inside the worktree; break it into plain, separate commands.
+
+The error names the redirect specifically. In practice the guard rejects commands that could
+write or read outside the worktree, which includes output redirection (`>`, `>>`), heredocs
+that write files (`cat > f <<'EOF'`), pipes into files, `cd` to another path, and command
+substitution whose result the harness cannot resolve.
+
+**Work with it rather than around it:**
+
+- One plain command per call. Do not chain a redirect onto a `&&` sequence.
+- Use the Write and Edit tools for file content instead of `cat > file <<'EOF'`. This is the
+  single biggest source of the error.
+- Never `cd`. You already start in your worktree, and paths are relative to it.
+- Let a command print its output and read it from the tool result. Do not redirect it to a
+  file to read it back.
+- To filter long output, prefer the command's own flags (`git log --oneline -5`) over piping
+  into `head` or `tee` and then reading a file.
+- `git` operations target your own worktree automatically. Do not pass absolute paths to
+  another checkout, and do not try to move a branch that is checked out elsewhere: create
+  your own branch and report its name so the parent can integrate it.
+
+**Whoever briefs the agent owns this.** A brief that shows examples using heredocs or
+redirects will produce an agent that hits the guard repeatedly and burns turns recovering.
+Write brief examples in the form the guard accepts.
+
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 
