@@ -139,3 +139,54 @@ describe('pr-metrics.yml workflow script -- minimum-sample guard (code-quality-m
     expect(body).not.toMatch(/commit convention for a rate verdict/);
   });
 });
+
+// Builds `count` commits that each touch one production file and one test file, so every
+// commit co-occurs test and production changes in the same commit (100% co-change rate).
+function buildCochangeCommits(count) {
+  const shas = Array.from({ length: count }, (_, i) => `d${i + 1}`);
+  const commits = shas.map(sha => ({
+    sha,
+    commit: {
+      message: 'feat: add a change with its test',
+      author: { name: 'Dev', date: '2026-08-01T00:00:00.000Z' }
+    }
+  }));
+  const commitFiles = [
+    { filename: 'src/app.js', additions: 10, deletions: 2 },
+    { filename: 'src/app.test.js', additions: 5, deletions: 1 }
+  ];
+  const commitDetailsBySha = {};
+  for (const sha of shas) {
+    commitDetailsBySha[sha] = { stats: { additions: 15, deletions: 3 }, files: commitFiles };
+  }
+  return { commits, commitDetailsBySha, files: commitFiles };
+}
+
+describe('pr-metrics.yml workflow script -- test/prod co-change field (code-quality-metrics-36d)', () => {
+  let script;
+
+  beforeAll(() => {
+    script = loadStepScript('pr-metrics.yml', 'Enhanced PR Analysis');
+  });
+
+  test('flags co-occurring commits with the renamed field and labels the PR comment as co-change, not test-first', async () => {
+    const { commits, commitDetailsBySha, files } = buildCochangeCommits(5);
+    const { githubMock, createCommentCalls } = makeGithubMock({ files, commits, commitDetailsBySha });
+    const context = {
+      payload: { pull_request: { additions: 75, deletions: 15, changed_files: 2 } },
+      repo: { owner: 'acme', repo: 'widgets' },
+      issue: { number: 44 }
+    };
+
+    await runPrAnalysis(script, githubMock, context);
+
+    expect(createCommentCalls).toHaveLength(1);
+    const body = createCommentCalls[0].body;
+    // Every one of the 5 commits touches both a prod and a test file, so the co-change rate
+    // is 100% -- proves the renamed field actually drives the computed rate, not just that
+    // the label text changed.
+    expect(body).toMatch(/5\/5 \(100%\)/);
+    expect(body).toMatch(/co-change/i);
+    expect(body).not.toMatch(/test-first/i);
+  });
+});
