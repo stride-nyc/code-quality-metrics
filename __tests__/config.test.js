@@ -36,3 +36,17 @@ describe('CONFIG duplicate detection defaults', () => {
     expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).not.toContain('**/designs/**');
   });
 });
+
+// code-quality-metrics-3yd: the direct fix for code-quality-metrics-y8j. Nothing today lets a
+// path count as neither test nor production; ANALYSIS_IGNORE_PATTERNS is the mechanism.
+// DEFAULT MUST BE EMPTY: seeding it with the vendored/generated patterns already in
+// DUPLICATE_IGNORE_PATTERNS would change every existing measurement, including the 34
+// calibration observations __tests__/thresholdProvenance.test.js gates against CONFIG. An
+// empty default keeps every current number identical -- this test is what makes that
+// provable rather than assumed.
+describe('CONFIG analysis-exclusion defaults', () => {
+  test('CONFIG.ANALYSIS_IGNORE_PATTERNS defaults to an empty array', () => {
+    expect(Array.isArray(CONFIG.ANALYSIS_IGNORE_PATTERNS)).toBe(true);
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toHaveLength(0);
+  });
+});
