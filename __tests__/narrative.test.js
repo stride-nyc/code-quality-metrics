@@ -2,7 +2,7 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative, buildNarrativePayload } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload, validateNarrative } = require('../lib/narrative');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 
 function fixtureSummary(overrides) {
@@ -178,5 +178,83 @@ describe('buildNarrativePayload', () => {
     expect(messageQuality.direction).toBe('informational');
     expect(messageQuality.verdict).toBe('none');
     expect(sprawling.verdict).toBeUndefined();
+  });
+});
+
+describe('validateNarrative', () => {
+  // This is the measured defect from code-quality-metrics-ll1: the report generated against
+  // flight-info-spike claimed "well below the healthy boundary of 6%" when the catalog's real
+  // healthyBoundary for duplication_density_pct was 2 -- 6 appeared nowhere in the data. This
+  // fixture reproduces that exact shape (real healthyBoundary 2, prose claiming 6) rather than
+  // an arbitrary mismatch.
+  test('rejects a bullet citing a healthy boundary the payload does not hold', () => {
+    const payload = [{
+      key: 'duplication_density_pct',
+      label: 'Duplication density',
+      value: '0.41',
+      direction: 'higher-is-worse',
+      status: 'good',
+      healthyBoundary: '2',
+      criticalBoundary: '2.5'
+    }];
+    const bullets = ['Positive: Duplication density is 0.41%, well below the healthy boundary of 6%.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/6/);
+  });
+
+  // GUARD, not a called-shot RED: validateNarrative already exists from the cycle above; this
+  // pins a second measured defect (the concern sentinel, -11.178307313064913, quoted as if it
+  // were a reader-facing score) rather than exercising new production code. concern is no
+  // longer in the payload at all (buildNarrativePayload strips it), so any concern-shaped
+  // number the model still cites necessarily fails the same "not in payload" check as test g.
+  // Mutation-proven: reverting validateNarrative's number check to `return { valid: true,
+  // reason: null }` (as in the prior cycle's manual check) makes this fail the same way.
+  test('rejects a bullet citing a concern score, an internal sentinel absent from the payload', () => {
+    const payload = [{
+      key: 'duplication_density_pct',
+      label: 'Duplication density',
+      value: '0.41',
+      direction: 'higher-is-worse',
+      status: 'good',
+      healthyBoundary: '2',
+      criticalBoundary: '2.5'
+    }];
+    const bullets = ['Positive: Duplication density is 0.41%, with a concern score of -11.178307313064913.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/-11\.178307313064913/);
+  });
+
+  // GUARD, not a called-shot RED: pins the third measured defect (message_quality_pct, an
+  // informational entry, restored to a verdict under "Concern"). The bullet below cites only
+  // the number 20, which IS present in the payload (value: '20') -- deliberately, so this
+  // fails (if it fails) only via the informational-as-Concern check, never via the number
+  // check test g/h already cover. An earlier draft of this test used "1 in 5 commits" phrasing
+  // and passed even with the informational check fully disabled, caught instead by the number
+  // check on the stray "1" and "5" -- exactly the vacuous-green trap the ticket warns about.
+  // Verified by mutation: with the informationalLabels block removed, this fails with
+  // "Expected: false, Received: true" while the number-check tests above still pass.
+  test('rejects a Concern bullet naming a metric the payload marked verdict: none', () => {
+    const payload = [{
+      key: 'message_quality_pct',
+      label: 'Message quality',
+      value: '20',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Message quality stands at 20%, which this tool does not score.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/message quality/i);
   });
 });
