@@ -85,14 +85,36 @@ describe('classifyDoraArchetype', () => {
     })).toBe('foundational-challenges');
   });
 
-  it('returns "foundational-challenges" when uncovered_prod_rate exceeds 20%', () => {
+  it('returns "foundational-challenges" once large clears the calibrated critical band, not the stale duplicated one', () => {
+    const { LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT } = THRESHOLDS;
+    const { FOUNDATIONAL_CHALLENGES } = THRESHOLDS.DORA_ARCHETYPE;
+    // Above the calibrated LARGE_COMMITS_PCT.critical band but below the stale,
+    // duplicated FOUNDATIONAL_CHALLENGES.large value it used to be compared against.
+    expect(FOUNDATIONAL_CHALLENGES.large).toBeGreaterThan(LARGE_COMMITS_PCT.critical);
+    const largeValue = (FOUNDATIONAL_CHALLENGES.large + LARGE_COMMITS_PCT.critical) / 2;
     expect(classifyDoraArchetype({
-      large_commits_pct: '25.00',
-      sprawling_commits_pct: '8.00',
+      large_commits_pct: String(largeValue),
+      // Kept below SPRAWLING_COMMITS_PCT.critical so legacy-bottleneck (checked first) does
+      // not also match.
+      sprawling_commits_pct: String(SPRAWLING_COMMITS_PCT.critical - 5),
       test_coverage_rate: '40.00',
-      uncovered_prod_rate: '25.00',
-      message_quality_pct: '50.00'
+      uncovered_prod_rate: '5.00'
     })).toBe('foundational-challenges');
+  });
+
+  // Guard, not a new red: UNCOVERED_PROD_RATE is two-band (no .critical -- see
+  // lib/thresholds.js), so there is no calibrated bound left for FOUNDATIONAL_CHALLENGES to
+  // reference for uncovered_prod_rate. The condition is dropped rather than left reading a
+  // stale, un-derivable copy; a high uncovered_prod_rate alone no longer classifies as
+  // foundational-challenges. This already passes after the large-bound fix above.
+  it('does not return "foundational-challenges" for a high uncovered_prod_rate alone (no critical band exists for it)', () => {
+    const { LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT } = THRESHOLDS;
+    expect(classifyDoraArchetype({
+      large_commits_pct: String(LARGE_COMMITS_PCT.critical - 5),
+      sprawling_commits_pct: String(SPRAWLING_COMMITS_PCT.critical - 12),
+      test_coverage_rate: '40.00',
+      uncovered_prod_rate: '25.00'
+    })).not.toBe('foundational-challenges');
   });
 
   it('returns "mixed-signals" when no archetype threshold is clearly breached', () => {
