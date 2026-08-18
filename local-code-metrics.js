@@ -341,13 +341,6 @@ async function collectLocalMetrics(options = {}) {
   // in `local_metrics_summary.json` as the statistics that can support a claim on this
   // distribution; `large_commit` remains as the absolute, non-window-relative size flag.
   //
-  // lib/git.js's analyzeCommit still stamps a placeholder `outlier: false` on every commit
-  // (out of scope for this fix -- see code-quality-metrics-496's report). Delete it here so a
-  // withdrawn construct doesn't survive into the written JSON as a permanent, silent false.
-  metrics.forEach(m => {
-    Reflect.deleteProperty(m, 'outlier');
-  });
-
   // Velocity
   const dates = metrics.map(m => m.date);
   const velocity = computeVelocity(dates);
