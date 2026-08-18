@@ -125,6 +125,13 @@ describe('renderReportHtml', () => {
     expect(neutral).toContain('class="verdict" data-status="neutral"');
   });
 
+  it('suppresses the archetype verdict and explains why when history_granularity is squashed', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed', dora_archetype: undefined }));
+    expect(html).toContain('class="verdict" data-status="neutral"');
+    expect(html).toMatch(/pull request/);
+    expect(html).not.toContain('No archetype could be determined from the current signals.');
+  });
+
   it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
