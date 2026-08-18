@@ -50,17 +50,34 @@ const NEAR_EXTREME_FRACTION = 0.15;
 const HIGHER_IS_WORSE = [
   'large_commits_pct', 'sprawling_commits_pct', 'uncovered_prod_rate',
   'avg_lines_changed', 'p90_lines_changed', 'p90_files_changed',
-  'net_additions_ratio_median', 'duplication_pct'
+  'duplication_pct'
 ];
 
 /** Metrics where a higher value is better. */
-const HIGHER_IS_BETTER = ['test_coverage_rate', 'message_quality_pct'];
+const HIGHER_IS_BETTER = ['test_coverage_rate'];
 
 /**
- * Metrics with no bad direction at all -- a positive signal only. These never
- * get a healthy/critical band; there is nothing to be "critical" about.
+ * Metrics with no bad direction at all -- a positive signal only, or (for
+ * net_additions_ratio_median and message_quality_pct) a metric the
+ * literature review found no defensible boundary for at all. These never get
+ * a healthy/critical band; there is nothing to be "critical" about.
+ *
+ * net_additions_ratio_median (code-quality-metrics-a9z): Nagappan and Ball
+ * tested this exact additions-over-churn form as their M7, found it tied
+ * weakest of eight relative-churn measures (rho .288), and stepwise
+ * regression dropped it; Shin et al. found the additions-only form met their
+ * prediction criterion in 0 of 80 runs against 76 of 80 for total churn.
+ * Scoring against a boundary on a measure the literature specifically
+ * discarded is not defensible, so the ratio is reported without one.
+ *
+ * message_quality_pct (code-quality-metrics-6ti): Li and Ahmed's 185,026-
+ * commit comparison found semantic What/Why quality beats word count at
+ * every window size, and the metric is bimodal on Conventional Commits
+ * adoption in a way that makes a band meaningless -- the number mostly
+ * answers whether the project uses the format, not whether messages are
+ * good.
  */
-const INFORMATIONAL = ['test_isolation_rate'];
+const INFORMATIONAL = ['test_isolation_rate', 'net_additions_ratio_median', 'message_quality_pct'];
 
 function round(n) {
   if (n >= 100) return Math.round(n / 10) * 10;

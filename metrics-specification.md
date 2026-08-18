@@ -495,13 +495,32 @@ net_additions_ratio_p90     : float (90th percentile ratio; bounded [-1, +1])
 
 **Data source**: `total_additions` and `total_deletions` already collected per commit; no new git calls required
 
-**Thresholds** (`NET_ADDITIONS_RATIO_MEDIAN` in `lib/thresholds.js`; three-band, corroborated at
-the critical extreme by git/git and django/django):
-| Range (median) | Signal |
-|----------------|--------|
-| ≤ 0.63 | Healthy: at or below the 75th percentile of the benchmark |
-| 0.63–0.79 | Warning |
-| > 0.79 | Critical: at or above the worst value two reference repositories both produced |
+**No band (`code-quality-metrics-a9z`)**: `net_additions_ratio_median` and
+`net_additions_ratio_p90` are reported descriptively, with no healthy/critical boundary and no
+gauge. The era:current calibration data would still support a three-band pair (p75 0.63, max
+0.79, corroborated by git/git and django/django), but this exact formula -- additions minus
+deletions, over total churn -- is the one relative-churn measure the literature has actually
+tested and found weak. Nagappan and Ball (ICSE 2005) tested it as their M7 (churned LOC over
+deleted LOC, the same additions-vs-deletions shape); it tied weakest of eight relative-churn
+measures at rho .288, and stepwise regression dropped it from their defect model entirely. Shin
+et al. (TSE 2011) found the additions-only form (`LinesNew`) satisfied their prediction
+criterion in 0 of 80 runs, against 76 of 80 for total churn (`LinesChanged`), and carried a 58%
+false-alarm rate in Firefox versus 25% for total churn. Scoring a repository against a boundary
+on a measure the literature specifically discarded is not defensible; the ratio itself is still
+useful context, so it is shown without a verdict (`lib/report.js`'s catalog entry, `concern`
+fixed at `-Infinity` so it never competes with a scored metric in the relevance sort).
+
+**Deletion is not the antidote to net-new growth**: this formula puts `total_deletions` in the
+numerator with a minus sign, which treats deleting code as healthy in direct proportion to how
+much of it there is. No cited source supports that. Nagappan and Ball's own strongest predictor
+in the same study is M2, deleted lines over total lines, at rho .798 -- the *first* variable
+their stepwise regression enters, meaning heavy deletion is one of their most defect-associated
+signals, not a corrective one. Munson and Elbaum (ICSM 1998) make the same point directly: "From
+the standpoint of fault insertion, removing a lot of code is probably as catastrophic as adding a
+bunch." A future measure in this family should not repeat the assumption that more deletion is
+automatically better; see the RQ4 research note (`code-quality-metrics-e30`) for the LA/LT
+alternative (additions over the prior size of touched files) that Kamei et al. (TSE 2013) support
+instead, which this toolkit does not yet collect the data to compute.
 
 **Relationship to existing heuristic**: The existing `generateInsights()` function counts commits where `large_commit AND additions > deletions × 3` as "possible AI commits." This metric expresses the same pattern at the aggregate level with a distribution, so outlier commits don't distort the reading.
 
@@ -543,28 +562,38 @@ message_quality_pct  : float (percentage of quality commits)
 
 **CONFIG key**: `MESSAGE_QUALITY_MIN_WORDS` (default: 10)
 
-**Thresholds** (`MESSAGE_QUALITY_PCT` in `lib/thresholds.js`; two-band -- the extreme rests on a
-single reference repository, emberjs/ember.js, with no second repository corroborating within
-15%, so no critical bound is reported):
-| Range | Signal |
-|-------|--------|
-| ≥ 66% | Healthy: at or above the 25th percentile of the benchmark |
-| < 66% | Warning |
+**No band (`code-quality-metrics-6ti`)**: `message_quality_pct` is reported descriptively, with
+no healthy/critical boundary and no gauge. The era:current calibration data would still support a
+two-band healthy bound (p25 66%, emberjs/ember.js the only repository near the low extreme), but
+the scoring rule underneath it is exactly the comparison the literature has already run and lost.
+Li and Ahmed (ICSE 2023, 185,026 Apache commits) regressed defect-introducing commits on semantic
+What/Why quality versus commit message word count and found What/Why won at every window size,
+with GLM coefficients differing by roughly two orders of magnitude (word-count volume ~0.0037;
+What 0.117-0.483; Why 0.088-0.833). Barnett et al. (MSR 2016, 342 systems) found word count
+significant in only 43% of systems with a median 4% of explanatory power, against 80% of systems
+and up to 72% for their content metric. Separately, the `MESSAGE_QUALITY_MIN_WORDS` bar of 10 sits
+above the population median in the largest published corpus available (CommitBench, 23,284,371
+commits: median 11 T5 subword tokens, p25 = 6; T5 tokens run higher than words for the same text).
+The metric is also bimodal in a way no band could represent: without Conventional Commits the
+word branch fails most ordinary, well-explained commits and the score collapses; with it the
+format branch passes nearly everything regardless of content. The number this metric reports
+mostly answers whether the project has adopted Conventional Commits, not whether its messages are
+good, so it is shown without a verdict (`lib/report.js`'s catalog entry, `concern` fixed at
+`-Infinity` so it never competes with a scored metric in the relevance sort).
 
-**What the literature says about word count as a signal, recorded here without changing the
-scoring rule**: Li and Ahmed (ICSE 2023, 185,026 Apache commits) ran the comparison this metric's
-word-count branch depends on -- semantic What/Why quality versus commit message word count -- and
-found What/Why won at every window size with large effect sizes; their GLM coefficients differ by
-roughly two orders of magnitude (word-count volume ~0.0037; What 0.117-0.483; Why 0.088-0.833).
-Barnett et al. (MSR 2016, 342 systems) found word count significant in only 43% of systems with a
-median 4% of explanatory power, against 80% of systems and up to 72% for their content metric.
-Separately, the `MESSAGE_QUALITY_MIN_WORDS` bar of 10 sits above the population median in the
-largest published corpus available (CommitBench, 23,284,371 commits: median 11 T5 subword tokens,
-p25 = 6; T5 tokens run higher than words for the same text), so on a project that has not adopted
-Conventional Commits, the word-count branch fails for a large share of ordinary, well-explained
-commits. Neither finding changes what `message_quality_pct` computes in this release; a semantic
-scoring rule is a larger change than a threshold edit and needs its own decision
-(`code-quality-metrics-6ti`).
+**Conventional Commits has no research basis, and AI drift may invert this metric**: Conventional
+Commits (the `conventional` branch of the formula above) is a community specification that cites
+no research, and no study available to this project validates it against any maintenance or
+defect outcome -- its presence in this formula is a convention, not an evidence-backed criterion.
+This matters specifically for a drift detector because of one further finding: Rabbi et al. (2026,
+preprint, narrow corpus) measured AI-agent commit messages at 70.4% What-and-Why quality against
+roughly 56% for the human baseline in the same corpus, while that quality score itself predicted
+nothing about review outcomes. If coding agents reliably emit well-formatted, verbose commit
+messages regardless of what the underlying change actually does, `message_quality_pct` could read
+*higher* under heavier AI use even as other drift signals worsen -- an inverse drift indicator
+rather than a confirming one. Neither finding changes what `message_quality_pct` computes in this
+release; a semantic scoring rule is a larger change than a threshold edit and needs its own
+decision (`code-quality-metrics-6ti`).
 
 **Design decision: why not NLP**: Conventional commit classification requires a 3-line regex. Word count requires one line. Adding a 200KB+ NLP library (`compromise`, `wink-nlp`) for these two signals is unjustified. The regex approach is zero-dependency, faster, more maintainable, and easier to test.
 
