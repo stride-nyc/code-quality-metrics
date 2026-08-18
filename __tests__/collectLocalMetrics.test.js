@@ -729,6 +729,30 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(output.layers_run).toEqual({ static: true, semantic: true });
   });
 
+  // The real analyzeDuplicatesWithClaude tags its returned array with a hidden,
+  // non-enumerable status marker so a truncated/errored call can be told apart
+  // from a genuine empty result without changing the array shape callers and
+  // existing tests already depend on (see lib/claude.js). This simulates that.
+  function taggedUnmeasuredFindings() {
+    const findings = [];
+    Object.defineProperty(findings, '__semanticStatus', { value: 'unmeasured', enumerable: false });
+    return findings;
+  }
+
+  test('writes layers_run.semantic as "unmeasured" when the Claude semantic call fails or truncates, never a confident true', async () => {
+    claude.getAnthropicClient.mockResolvedValue({});
+    claude.selectClaudeCommits.mockReturnValue([]);
+    duplicate.resolveModuleNeighbors.mockReturnValue(['src/app.js']);
+    claude.analyzeDuplicatesWithClaude.mockResolvedValue(taggedUnmeasuredFindings());
+
+    await collectLocalMetrics();
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.semantic_findings).toEqual([]);
+    expect(output.layers_run).toEqual({ static: true, semantic: 'unmeasured' });
+  });
+
   // Locks in the guard in local-code-metrics.js (`if (prodFilePaths.length > 0)`):
   // when every analyzed commit is test-only, there is nothing for jscpd to scan,
   // so local_duplicate_analysis.json is omitted entirely rather than written

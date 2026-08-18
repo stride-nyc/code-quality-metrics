@@ -28,7 +28,7 @@ const {
   analyzeWithClaude,
   CONFIG,
 } = require('../local-code-metrics');
-const { analyzeDuplicatesWithClaude } = require('../lib/claude');
+const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis } = require('../lib/claude');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -268,5 +268,81 @@ describe('analyzeDuplicatesWithClaude', () => {
     fs.readFileSync.mockReturnValue('function parse(line) {}');
     const result = await analyzeDuplicatesWithClaude(client, ['src/lib/git.js'], []);
     expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runSemanticDuplicateAnalysis
+// ---------------------------------------------------------------------------
+
+describe('runSemanticDuplicateAnalysis', () => {
+  function makeClient(response) {
+    const mockCreate = jest.fn().mockResolvedValue(response);
+    return { messages: { create: mockCreate } };
+  }
+
+  beforeEach(() => {
+    fs.readFileSync.mockReturnValue('function parse(line) {}');
+  });
+
+  // Reproduced against a real repo: 74911 input tokens, 1024 output tokens
+  // (equal to max_tokens), stop_reason max_tokens, body begins with valid
+  // findings JSON before being cut off. See code-quality-metrics-all.
+  test('returns status "unmeasured" when the response is truncated at max_tokens', async () => {
+    const client = makeClient({
+      stop_reason: 'max_tokens',
+      usage: { input_tokens: 74911, output_tokens: 1024 },
+      content: [{ type: 'text', text: '[{"file1": "src/context/useSidebarCollapsed.ts", "file2": "src/context/useUpcomingShipments.ts", "similarity": "identical custom hook factories' }]
+    });
+
+    const result = await runSemanticDuplicateAnalysis(client, ['src/lib/git.js'], []);
+
+    expect(result.status).toBe('unmeasured');
+    expect(result.findings).toEqual([]);
+    expect(result.error).toBeDefined();
+  });
+
+  // The following four lock in behavior already implemented alongside the
+  // truncation branch above (written together as one function body rather
+  // than driven test-by-test) -- guards confirming existing behavior, not
+  // fresh RED/GREEN cycles. Documented honestly per process discipline.
+
+  test('returns status "skipped" and empty findings when client is null', async () => {
+    const result = await runSemanticDuplicateAnalysis(null, ['src/lib/git.js'], []);
+    expect(result).toEqual({ status: 'skipped', findings: [] });
+  });
+
+  test('returns status "unmeasured" with the error message when the API call throws', async () => {
+    const client = { messages: { create: jest.fn().mockRejectedValue(new Error('rate limited')) } };
+    const result = await runSemanticDuplicateAnalysis(client, ['src/lib/git.js'], []);
+    expect(result.status).toBe('unmeasured');
+    expect(result.findings).toEqual([]);
+    expect(result.error).toMatch(/rate limited/);
+  });
+
+  test('returns status "unmeasured" when the response is not valid JSON (no truncation)', async () => {
+    const client = makeClient({ content: [{ type: 'text', text: 'not valid json at all {{{' }] });
+    const result = await runSemanticDuplicateAnalysis(client, ['src/lib/git.js'], []);
+    expect(result.status).toBe('unmeasured');
+    expect(result.findings).toEqual([]);
+    expect(result.error).toBeDefined();
+  });
+
+  test('returns status "ok" with parsed findings on a successful response', async () => {
+    const finding = { file1: 'a.js', file2: 'b.js', similarity: 'same shape', concern: 'copy-paste', confidence: 'high' };
+    const client = makeClient({ content: [{ type: 'text', text: JSON.stringify([finding]) }] });
+    const result = await runSemanticDuplicateAnalysis(client, ['src/lib/git.js'], []);
+    expect(result.status).toBe('ok');
+    expect(result.findings).toEqual([finding]);
+    expect(result.error).toBeUndefined();
+  });
+
+  test('bounds the file set sent to Claude to CONFIG.AI_DUPLICATE_MAX_FILES', async () => {
+    const client = makeClient({ content: [{ type: 'text', text: '[]' }] });
+    const manyFiles = Array.from({ length: CONFIG.AI_DUPLICATE_MAX_FILES + 5 }, (_, i) => `src/file${i}.js`);
+
+    await runSemanticDuplicateAnalysis(client, manyFiles, []);
+
+    expect(fs.readFileSync).toHaveBeenCalledTimes(CONFIG.AI_DUPLICATE_MAX_FILES);
   });
 });

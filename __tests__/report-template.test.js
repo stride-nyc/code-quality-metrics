@@ -335,6 +335,21 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('Layer 2 (semantic) ran');
   });
 
+  it('shows the semantic layer as not measured, not a confident zero, when layers_run.semantic is "unmeasured"', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 5,
+      static_duplicates: [],
+      semantic_findings: [],
+      layers_run: { static: true, semantic: 'unmeasured' }
+    };
+    const html = renderReportHtml(args);
+
+    expect(html).toContain('Duplicate Code');
+    expect(html).not.toContain('No semantic findings');
+    expect(html.toLowerCase()).toContain('not measured');
+  });
+
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
     const html = renderReportHtml(fixtureArgs());
     expect(html).not.toContain('Duplicate Code');

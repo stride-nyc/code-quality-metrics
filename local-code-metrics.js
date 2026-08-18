@@ -362,10 +362,19 @@ async function collectLocalMetrics(options = {}) {
   const { findings: staticDuplicates, statistics: duplicateStatistics } = runDuplicateAnalysis(prodFilePaths);
   /** @type {any[]} */
   let semanticFindings = [];
+  // false: layer did not run (no client). true: ran and produced a usable result
+  // (possibly genuinely zero findings). 'unmeasured': attempted but the call
+  // failed or its response was truncated — must not be confused with a real 0.
+  /** @type {boolean|'unmeasured'} */
+  let semanticLayerStatus = false;
   if (anthropicClient && prodFilePaths.length > 0) {
     console.log(`🔁 Running semantic duplicate analysis on ${prodFilePaths.length} production file(s)...`);
     const neighborFiles = resolveModuleNeighbors(prodFilePaths);
     semanticFindings = await analyzeDuplicatesWithClaude(anthropicClient, neighborFiles, staticDuplicates);
+    // __semanticStatus is a hidden, non-enumerable marker (see lib/claude.js) carrying the
+    // real outcome of the call; read via an `any` cast since it is deliberately untyped.
+    const semanticStatusMarker = /** @type {any} */ (semanticFindings).__semanticStatus;
+    semanticLayerStatus = semanticStatusMarker === 'unmeasured' ? 'unmeasured' : true;
   }
 
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
@@ -439,7 +448,7 @@ async function collectLocalMetrics(options = {}) {
       static_duplicates: staticDuplicates,
       semantic_findings: semanticFindings,
       statistics: duplicateStatistics,
-      layers_run: { static: true, semantic: Boolean(anthropicClient) }
+      layers_run: { static: true, semantic: semanticLayerStatus }
     };
     fs.writeFileSync(
       path.join(outputDir, 'local_duplicate_analysis.json'),
