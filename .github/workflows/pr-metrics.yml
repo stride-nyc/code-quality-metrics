@@ -23,9 +23,25 @@ jobs:
 
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
+            const { THRESHOLDS } = require('./lib/thresholds');
             const { scoreMessageQuality, classifyDoraArchetype, isTestFile } = require('./lib/metrics');
             const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
             const { getAnthropicClient, analyzeDuplicatesWithClaude } = require('./lib/claude');
+
+            // Renders a metric's calibrated band as "<healthy%, critical >critical%".
+            // Some bands are two-band (critical: null in lib/thresholds.js -- the
+            // extreme rests on a single reference repo, not two corroborating
+            // repos; see lib/thresholds.js's header comment). Formatting `critical`
+            // without this check would print "critical > null%" for those metrics.
+            function formatBand(direction, healthy, critical, unit = '%') {
+              const healthyCmp = direction === 'above' ? '>' : '<';
+              const target = `${healthyCmp}${healthy}${unit}`;
+              if (critical === null || critical === undefined) {
+                return `${target} (no critical band established)`;
+              }
+              const criticalCmp = direction === 'above' ? '<' : '>';
+              return `${target}, critical ${criticalCmp}${critical}${unit}`;
+            }
 
             // ---------------------------------------------------------------
             // Fetch PR data
@@ -204,8 +220,8 @@ jobs:
               concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than 5 files`);
             }
 
-            if (medianAdditionsRatio > 0.50) {
-              concerns.push(`Median net additions ratio ${medianAdditionsRatio.toFixed(2)} exceeds 0.50 - possible batch-acceptance pattern`);
+            if (medianAdditionsRatio > THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy) {
+              concerns.push(`Median net additions ratio ${medianAdditionsRatio.toFixed(2)} exceeds ${THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy} - possible batch-acceptance pattern`);
             }
 
             if (msgQualityPct < 40) {
@@ -228,7 +244,7 @@ jobs:
               strengths.push(`${testOnlyCommits} test-only commits`);
             }
 
-            if (msgQualityPct >= 60) {
+            if (msgQualityPct >= THRESHOLDS.MESSAGE_QUALITY_PCT.healthy) {
               strengths.push(`Message quality ${msgQualityPct.toFixed(0)}% meets discipline threshold`);
             }
 
@@ -309,11 +325,11 @@ jobs:
               '',
               '| Capability | Metric | Value | Target |',
               '|------------|--------|-------|--------|',
-              `| Small Batches | Large commit % | ${largePct.toFixed(0)}% | <20% |`,
-              `| Small Batches | Sprawling commit % | ${sprawlingPct.toFixed(0)}% | <10% |`,
-              `| Version Control | Test-first discipline | ${testFirstPct.toFixed(0)}% | >50% |`,
-              `| Version Control | Message quality | ${msgQualityPct.toFixed(0)}% | >60% |`,
-              `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | <0.50 |`
+              `| Small Batches | Large commit % | ${largePct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.LARGE_COMMITS_PCT.healthy, THRESHOLDS.LARGE_COMMITS_PCT.critical)} |`,
+              `| Small Batches | Sprawling commit % | ${sprawlingPct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy, THRESHOLDS.SPRAWLING_COMMITS_PCT.critical)} |`,
+              `| Version Control | Test-first discipline | ${testFirstPct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} |`,
+              `| Version Control | Message quality | ${msgQualityPct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.MESSAGE_QUALITY_PCT.healthy, THRESHOLDS.MESSAGE_QUALITY_PCT.critical)} |`,
+              `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | ${formatBand('below', THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy, THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.critical, '')} |`
             ].join('\n') : '';
 
             const layerIndicator = anthropicClient
