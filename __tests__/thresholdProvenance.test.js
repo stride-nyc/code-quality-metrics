@@ -9,6 +9,7 @@
 // eight workflow references to threshold keys another change had removed. None
 // was visible to a test that only checks code against code.
 const { THRESHOLDS } = require('../lib/thresholds');
+const { CONFIG } = require('../lib/config');
 const {
   deriveBand, selectByEra, selectByPopulation, INFORMATIONAL
 } = require('../calibration/derive-bands');
@@ -74,5 +75,32 @@ describe('threshold provenance', () => {
     }
 
     expect(held).toEqual(expected);
+  });
+});
+
+// Settings that change a measured metric's value, so an observation taken at a
+// different setting is not comparable to one taken at the current setting and
+// must not feed a band. TEST_FILE_PATTERNS is deliberately absent: it is an
+// array of RegExp, which JSON.stringify flattens to [{},{},...], so the
+// recorded provenance for it carries no information to check.
+const METRIC_AFFECTING_CONFIG_KEYS = [
+  'MAX_COMMITS',
+  'LARGE_COMMIT_THRESHOLD',
+  'SPRAWLING_COMMIT_THRESHOLD',
+  'MESSAGE_QUALITY_MIN_WORDS',
+  'DUPLICATE_MIN_LINES',
+  'DUPLICATE_MIN_TOKENS',
+  'DUPLICATE_IGNORE_PATTERNS'
+];
+
+describe('observation provenance', () => {
+  test('every observation used in derivation records the detector settings its metrics were measured at', () => {
+    const drifted = observationData.observations
+      .filter(o => o.include_in_derivation)
+      .flatMap(o => METRIC_AFFECTING_CONFIG_KEYS
+        .filter(key => JSON.stringify(o.config?.[key]) !== JSON.stringify(CONFIG[key]))
+        .map(key => `${o.repo} ${o.window?.since ?? o.window} ${key}: recorded ${JSON.stringify(o.config?.[key])}, current ${JSON.stringify(CONFIG[key])}`));
+
+    expect(drifted).toEqual([]);
   });
 });
