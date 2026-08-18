@@ -194,3 +194,34 @@ describe('coverage map provenance', () => {
     expect(presented).toEqual(expected);
   });
 });
+
+describe('workflow provenance', () => {
+  // [guard] This passes today. It is here because the class of defect it catches once
+  // shipped silently: eight references to MESSAGE_QUALITY_PCT and
+  // NET_ADDITIONS_RATIO_MEDIAN survived in the workflow YAML after another change
+  // removed both keys, producing "Cannot read properties of undefined" on every
+  // scheduled run, while this suite stayed green at 305 tests. Nothing in jest reaches
+  // a workflow's inline script, so the only reference to a threshold key that no test
+  // could see was the one that broke in production.
+  test('[guard] every THRESHOLDS path referenced in a workflow resolves to a defined value', () => {
+    const workflows = ['code-metrics.yml', 'pr-metrics.yml'];
+    const unresolved = [];
+    let referenceCount = 0;
+
+    for (const file of workflows) {
+      const src = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', file), 'utf8');
+      for (const match of src.matchAll(/THRESHOLDS\.([A-Z_0-9]+)\.([A-Za-z_0-9]+)/g)) {
+        referenceCount += 1;
+        const [, key, subKey] = match;
+        if (THRESHOLDS[key]?.[subKey] === undefined) {
+          unresolved.push(`${file}: THRESHOLDS.${key}.${subKey}`);
+        }
+      }
+    }
+
+    // Guards against the regex silently matching nothing, which would make this test
+    // pass by measuring an empty set rather than by the references being sound.
+    expect(referenceCount).toBeGreaterThan(0);
+    expect([...new Set(unresolved)]).toEqual([]);
+  });
+});
