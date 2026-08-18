@@ -6,6 +6,7 @@ jest.mock('fs');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const { runDuplicateCheck, runDuplicateAnalysis, resolveModuleNeighbors } = require('../lib/duplicate');
+const { CONFIG } = require('../lib/config');
 
 const FIXTURE_DUPLICATE = {
   firstFile:  { name: 'src/lib/git.js',     start: 10, end: 25 },
@@ -153,4 +154,24 @@ describe('resolveModuleNeighbors', () => {
     expect(result.some(p => p.includes('lodash'))).toBe(false);
     expect(result.some(p => p.includes('node_modules'))).toBe(false);
   });
+
+  test('passes ignore patterns as file globs, not code-level regexes', () => {
+    // jscpd's -i/--ignore takes file globs; --ignore-pattern takes code-level regexes
+    // for skipping tokens. Asserting the command because the shell invocation is the
+    // contract with jscpd, and there is no local observable for "the right files were
+    // excluded". Verified live: on flight-info-spike, --ignore-pattern left duplication
+    // at 16.50 percent, identical to passing nothing, while --ignore gave 1.23 percent.
+    const original = CONFIG.DUPLICATE_IGNORE_PATTERNS;
+    CONFIG.DUPLICATE_IGNORE_PATTERNS = ['**/designs/**'];
+    try {
+      fs.existsSync.mockReturnValue(false);
+      runDuplicateCheck(['src/app.js']);
+      const command = execSync.mock.calls[0][0];
+      expect(command).toMatch(/--ignore\s+"/);
+      expect(command).toContain('**/designs/**');
+    } finally {
+      CONFIG.DUPLICATE_IGNORE_PATTERNS = original;
+    }
+  });
+
 });
