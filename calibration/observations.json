@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "purpose": "Reference-repository measurements from which lib/thresholds.js bands are derived. Append-only: superseded observations are marked include_in_derivation false with a reason, never deleted.",
+  "tool_commit": null,
+  "observations": []
+}
