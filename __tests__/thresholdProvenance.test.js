@@ -224,4 +224,33 @@ describe('workflow provenance', () => {
     expect(referenceCount).toBeGreaterThan(0);
     expect([...new Set(unresolved)]).toEqual([]);
   });
+
+  // [guard] Extends the THRESHOLDS guard above to CONFIG. code-quality-metrics-vom's fix wired
+  // CONFIG.LARGE_COMMIT_THRESHOLD/SPRAWLING_COMMIT_THRESHOLD into workflow labels and messages
+  // that used to be literal text ("(>100 prod lines)", "(>5 files)"), and nothing checked those
+  // resolve. A CONFIG.MISSPELLED_KEY would render "undefined" in a published PR comment or
+  // scheduled issue with every test in this suite green, the same shape of defect the THRESHOLDS
+  // guard above exists to catch. CONFIG entries are flat scalars/arrays (unlike THRESHOLDS,
+  // there is no `.subKey` to resolve), so this matches `CONFIG.KEY` rather than `CONFIG.KEY.sub`.
+  test('[guard] every CONFIG path referenced in a workflow resolves to a defined value', () => {
+    const workflows = ['code-metrics.yml', 'pr-metrics.yml'];
+    const unresolved = [];
+    let referenceCount = 0;
+
+    for (const file of workflows) {
+      const src = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', file), 'utf8');
+      for (const match of src.matchAll(/CONFIG\.([A-Z_0-9]+)/g)) {
+        referenceCount += 1;
+        const [, key] = match;
+        if (CONFIG[key] === undefined) {
+          unresolved.push(`${file}: CONFIG.${key}`);
+        }
+      }
+    }
+
+    // Guards against the regex silently matching nothing, which would make this test
+    // pass by measuring an empty set rather than by the references being sound.
+    expect(referenceCount).toBeGreaterThan(0);
+    expect([...new Set(unresolved)]).toEqual([]);
+  });
 });
