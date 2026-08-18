@@ -163,11 +163,17 @@ trusting a manual screening: it agreed with the "already screened as squashing" 
 list for apache/kafka, microsoft/playwright (substituted for microsoft/TypeScript -- see
 observations.json), facebook/react and TanStack/query at high confidence, and agreed with
 python/cpython too but only at *low* confidence, which traced to a real detector gap:
-`PR_REFERENCE_PATTERN` (`/\(#\d+\)$/`) does not match GitHub's alternate `(GH-N)`
+`PR_REFERENCE_PATTERN` (`/\(#\d+\)$/`) did not match GitHub's alternate `(GH-N)`
 backport-reference suffix, which about half of cpython's sampled commits use instead of
-`(#N)`. This undercounts `pr_reference_share` and should be fixed in `lib/git.js` in its own
-change; it did not flip cpython's verdict here, but a repository that used *only* the GH-N
-form and nothing else plausibly could.
+`(#N)`. This undercounted `pr_reference_share`; it did not flip cpython's verdict here, but a
+repository that used *only* the GH-N form and nothing else plausibly could -- see
+code-quality-metrics-wgc. **Fixed**: `PR_REFERENCE_PATTERN` is now `/\((?:#|GH-)\d+\)$/` and
+matches both suffixes. The cpython `merge_style_evidence` notes in `observations.json` describing
+the low-confidence result are left as recorded -- they are accurate history of what the tool
+measured before this fix, not a live reading -- but re-running `detectHistoryGranularity` against
+either cpython window today would combine both suffixes into a single high-confidence
+`pr_reference_share` (the 21/50 + 25/50 = 92% figure quoted above), matching what the manual
+recount already found by hand.
 
 ## Choosing a reference repository
 
@@ -272,3 +278,24 @@ field on each observation preserves the superseded 5/50 value, the ratio between
 tool commit the re-measurement was taken at, so the earlier number is recoverable rather than
 lost. See the measurement task's report for the full old-value/new-value table and whether the
 threefold difference Wagner et al. found held here.
+
+A fifth defect (code-quality-metrics-pke) was found and fixed but, unlike the four above,
+required **no** re-measurement. `analyzeCommit` (`lib/git.js`) computed per-commit stats with
+`git show --numstat`, which diffs a two-parent merge commit against its first parent; for a
+conflict-free merge (GitHub's "Merge pull request" button on a single-commit PR) that reproduces
+one of the merged children's diff exactly, double-counting that change. This is a real defect in
+`analyzeCommit` itself, and ember/git are both true merge-commit workflows, so it looked like it
+should have contaminated this dataset. It did not, because `local-code-metrics.js`'s own commit
+collection already passes `--no-merges` to every `git log` call that builds the list
+`analyzeCommit` is invoked over (commit `fa14708`), and that fix predates the `tool_commit` every
+included observation in this file was measured at. Checked directly rather than assumed: merge
+commits are present in the pinned window for emberjs/ember.js (both included windows) and git/git
+(all four included windows, current + pre-ai) -- 24 to 78 raw merge commits per window -- and
+nodejs/node, postgres/postgres, django/django and curl/curl have zero merge commits in any of
+their eight included windows. For every one of the six windows with merges present, re-running
+the current tool against that window's pinned `repo_head` reproduced the stored observation's
+metrics bit-for-bit, confirming zero merge commits ever entered the analyzed set, before or after
+the `lib/git.js`-level fix. The fix itself moved the guard into `analyzeCommit` so it holds for any
+caller, not only the one `--no-merges` flag -- calling `analyzeCommit` directly on a merge sha,
+bypassing that flag, is exactly how this defect was originally found -- but no observation's
+`metrics` needed updating and no band moved.

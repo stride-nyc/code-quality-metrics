@@ -195,6 +195,47 @@ describe('coverage map provenance', () => {
   });
 });
 
+describe('tool_commit provenance', () => {
+  // The observation-provenance gate above checks that every observation records the
+  // detector CONFIG a band is derived from, but nothing checked the tool_commit an
+  // observation was measured at -- the exact gap a re-measurement (code-quality-metrics-pke,
+  // code-quality-metrics-8ad) could fall into: fix a defect, re-measure some observations
+  // and not others, and the dataset silently pools two tool versions with nothing failing.
+  //
+  // Grouped by population (granular vs squash-merge), pooling every era, rather than by
+  // (era, population): derive-bands.js's default pools every era within a population unless
+  // --era restricts it, so a population-level check is the strictest one that still covers
+  // every era-restricted derivation the CLI can actually produce -- if the whole population is
+  // one tool_commit, every era-restricted subset of it necessarily is too.
+  //
+  // Deliberately internal-consistency only, not a comparison against the current git HEAD.
+  // Comparing to HEAD would fail on every unrelated commit to this repository (a version bump,
+  // an unrelated lib/ change, a docs fix), which is exactly the shape of gate people learn to
+  // ignore rather than act on. What must never happen is a derivation silently pooling two tool
+  // versions; it is fine for the whole dataset to sit behind the current tool_commit, as every
+  // observation here already does between re-measurements.
+  test('[guard] every population pools observations measured at a single tool_commit', () => {
+    const usable = observationData.observations.filter(o => o.include_in_derivation);
+
+    /** @type {Record<string, Set<string>>} */
+    const toolCommitsByPopulation = {};
+    for (const o of usable) {
+      const population = o.population ?? 'granular';
+      (toolCommitsByPopulation[population] ||= new Set()).add(o.tool_commit);
+    }
+
+    // Guards against the filter/grouping silently matching nothing, which would make this
+    // test pass by measuring an empty set rather than by the tool commits being consistent.
+    expect(Object.keys(toolCommitsByPopulation).length).toBeGreaterThan(0);
+
+    const mixed = Object.entries(toolCommitsByPopulation)
+      .filter(([, commits]) => commits.size > 1)
+      .map(([population, commits]) => `${population}: ${[...commits].sort().join(', ')}`);
+
+    expect(mixed).toEqual([]);
+  });
+});
+
 describe('workflow provenance', () => {
   // [guard] This passes today. It is here because the class of defect it catches once
   // shipped silently: eight references to MESSAGE_QUALITY_PCT and
