@@ -25,7 +25,7 @@ function makeMetric(overrides = {}) {
     files_changed: 2,
     test_files_count: 1,
     prod_files_count: 1,
-    test_first_indicator: true,
+    test_prod_cochange_commit: true,
     sprawling_commit: false,
     source_branch: 'feature/x',
     binary_files: 0,

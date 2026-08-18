@@ -123,7 +123,12 @@ jobs:
                   total_changes: detail.data.stats.additions + detail.data.stats.deletions,
                   large_commit: prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
                   sprawling_commit: (detail.data.files?.length || 0) > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
-                  test_first_indicator: commitTestFiles.length > 0 && commitProdFiles.length > 0,
+                  // Same-commit co-occurrence, not an ordering claim -- see
+                  // code-quality-metrics-36d and lib/git.js's analyzeCommit for the
+                  // citations (Sun et al. TOSEM 2023, Borle et al. EMSE 2018,
+                  // Marsavina et al. SCAM 2014) behind renaming this away from
+                  // test_first_indicator.
+                  test_prod_cochange_commit: commitTestFiles.length > 0 && commitProdFiles.length > 0,
                   test_only_commit: commitTestFiles.length > 0 && commitProdFiles.length === 0,
                   uncovered_prod_commit: commitTestFiles.length === 0 && commitProdFiles.length > 0 && prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
                   test_only: commitTestFiles.length > 0 && commitProdFiles.length === 0,
@@ -170,7 +175,7 @@ jobs:
 
             const largeCommits = commitMetrics.filter(c => c.large_commit).length;
             const sprawlingCommits = commitMetrics.filter(c => c.sprawling_commit).length;
-            const testFirstCommits = commitMetrics.filter(c => c.test_first_indicator).length;
+            const cochangeCommits = commitMetrics.filter(c => c.test_prod_cochange_commit).length;
             const testOnlyCommits = commitMetrics.filter(c => c.test_only).length;
             const prodOnlyCommits = commitMetrics.filter(c => c.prod_only).length;
             const qualityCommits = commitMetrics.filter(c => c.message_quality).length;
@@ -185,8 +190,8 @@ jobs:
 
             const largePct = commitMetrics.length > 0 ? (largeCommits / commitMetrics.length * 100) : 0;
             const sprawlingPct = commitMetrics.length > 0 ? (sprawlingCommits / commitMetrics.length * 100) : 0;
-            const testFirstPct = commitMetrics.length > 0 ? (testFirstCommits / commitMetrics.length * 100) : 0;
-            const testCoveragePct = testFirstPct;
+            const cochangePct = commitMetrics.length > 0 ? (cochangeCommits / commitMetrics.length * 100) : 0;
+            const testCoveragePct = cochangePct;
             const uncoveredProdPct = commitMetrics.length > 0 ? (commitMetrics.filter(c => c.uncovered_prod_commit).length / commitMetrics.length * 100) : 0;
             const msgQualityPct = commitMetrics.length > 0 ? (qualityCommits / commitMetrics.length * 100) : 0;
 
@@ -221,7 +226,7 @@ jobs:
             const MIN_COMMITS_FOR_RATE_VERDICT = 5;
             const hasEnoughCommitsForRateVerdict = commitMetrics.length >= MIN_COMMITS_FOR_RATE_VERDICT;
             const smallSampleNote = (commitMetrics.length > 0 && !hasEnoughCommitsForRateVerdict)
-              ? `_Sample size (${commitMetrics.length} commit${commitMetrics.length === 1 ? '' : 's'}) is below the ${MIN_COMMITS_FOR_RATE_VERDICT}-commit convention for a rate verdict (code-quality-metrics-w9f): large-commit %, sprawling-commit % and test-first discipline are reported below without a pass/fail judgement._`
+              ? `_Sample size (${commitMetrics.length} commit${commitMetrics.length === 1 ? '' : 's'}) is below the ${MIN_COMMITS_FOR_RATE_VERDICT}-commit convention for a rate verdict (code-quality-metrics-w9f): large-commit %, sprawling-commit % and test/prod co-change rate are reported below without a pass/fail judgement._`
               : '';
 
             // ---------------------------------------------------------------
@@ -239,14 +244,15 @@ jobs:
             // reported below in the Commit Analysis table, so no information is lost by dropping
             // the pattern claim.
 
-            // hasTestDiscipline now gates on THRESHOLDS.TEST_COVERAGE_RATE.healthy instead of an
-            // uncalibrated 50% cutoff (code-quality-metrics-4hu): testFirstPct is the same
-            // construct test_coverage_rate bands (test+prod co-occurrence rate), just measured
-            // over this PR's commits instead of a repo-window sample. Also gated on
+            // hasHighCochangeRate now gates on THRESHOLDS.TEST_COVERAGE_RATE.healthy instead of an
+            // uncalibrated 50% cutoff (code-quality-metrics-4hu): cochangePct is the same
+            // construct test_coverage_rate bands (same-commit test+prod co-occurrence rate, not
+            // an ordering claim -- code-quality-metrics-36d), just measured over this PR's
+            // commits instead of a repo-window sample. Also gated on
             // hasEnoughCommitsForRateVerdict (code-quality-metrics-w9f): below that sample size
             // the rate is not compared to the band at all.
-            const hasTestDiscipline = hasEnoughCommitsForRateVerdict &&
-              testFirstPct > THRESHOLDS.TEST_COVERAGE_RATE.healthy;
+            const hasHighCochangeRate = hasEnoughCommitsForRateVerdict &&
+              cochangePct > THRESHOLDS.TEST_COVERAGE_RATE.healthy;
 
             // ---------------------------------------------------------------
             // Size classification
@@ -302,8 +308,8 @@ jobs:
             // 40 was never derived from anything). The value is still reported, without a
             // verdict, in the DORA table and the Commit Analysis table below.
 
-            if (hasTestDiscipline) {
-              strengths.push('Strong test-first discipline across commits');
+            if (hasHighCochangeRate) {
+              strengths.push('High test/prod co-change rate across commits');
             }
 
             if (hasRefactoringPattern) {
@@ -379,7 +385,7 @@ jobs:
               const flags = [
                 c.large_commit ? 'large' : '',
                 c.sprawling_commit ? 'sprawling' : '',
-                c.test_first_indicator ? 'test+prod' : '',
+                c.test_prod_cochange_commit ? 'test+prod' : '',
                 !c.message_quality ? 'vague-msg' : ''
               ].filter(Boolean).join(', ');
               return `**${c.sha}** ${c.author} (${c.date})\n\`${c.message}\`\n${c.prod_changes} prod lines, ${c.files_changed} files${flags ? ` [${flags}]` : ''}`;
@@ -395,7 +401,7 @@ jobs:
               '|------------|--------|-------|--------|',
               `| Small Batches | Large commit % | ${largePct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.LARGE_COMMITS_PCT.healthy, THRESHOLDS.LARGE_COMMITS_PCT.critical)} |`,
               `| Small Batches | Sprawling commit % | ${sprawlingPct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy, THRESHOLDS.SPRAWLING_COMMITS_PCT.critical)} |`,
-              `| Version Control | Test-first discipline | ${testFirstPct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} |`,
+              `| Version Control | Test/prod co-change rate | ${cochangePct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} |`,
               `| Version Control | Message quality | ${msgQualityPct.toFixed(0)}% | no band, see spec |`,
               `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | no band, see spec |`
             ].join('\n') : '';
@@ -454,7 +460,7 @@ jobs:
               '|--------|-------|',
               `| Large commits (>${CONFIG.LARGE_COMMIT_THRESHOLD} prod lines) | ${largeCommits}/${commitMetrics.length} (${largePct.toFixed(0)}%) |`,
               `| Sprawling commits (>${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files) | ${sprawlingCommits}/${commitMetrics.length} (${sprawlingPct.toFixed(0)}%) |`,
-              `| Test-first discipline | ${testFirstCommits}/${commitMetrics.length} (${testFirstPct.toFixed(0)}%) |`,
+              `| Test/prod co-change rate | ${cochangeCommits}/${commitMetrics.length} (${cochangePct.toFixed(0)}%) |`,
               `| Message quality | ${qualityCommits}/${commitMetrics.length} (${msgQualityPct.toFixed(0)}%) |`,
               `| Median net additions ratio | ${medianAdditionsRatio.toFixed(2)} |`,
               `| Test-only commits | ${testOnlyCommits} |`,

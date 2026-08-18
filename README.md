@@ -322,7 +322,7 @@ workflow required `lib/thresholds.js` at all and printed separate hardcoded perc
 |--------|-------|--------|---------|
 | Large Commits | 28% | <20% | Warning |
 | Sprawling Commits | 12% | <10% | Warning |
-| Test-First Discipline | 64% | >50% | OK |
+| Test/Prod Co-Change Rate | 64% | >23% | OK |
 
 ### Interpretation
 **Large commits above 20% threshold** - Consider breaking down AI-generated code
@@ -353,7 +353,7 @@ workflow required `lib/thresholds.js` at all and printed separate hardcoded perc
 Total commits analyzed: 50
 Large commits (>100 lines): 46.00%
 Sprawling commits (>5 files): 20.00%
-Test-first discipline: 58.00%
+Test coverage (test+prod): 58.00%
 Average files changed: 6.42
 Average lines changed: 9,053
 

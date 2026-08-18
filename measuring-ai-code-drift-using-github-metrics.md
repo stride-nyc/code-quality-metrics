@@ -57,7 +57,7 @@ DORA describes seven team archetypes based on the intersection of performance, s
 
 **Harmonious high-achievers**: Strong foundational practices + AI tools = compounding gains. In commit history: small batches, consistent test discipline, stable and measured velocity, high commit message specificity.
 
-**Foundational challenges**: Weak practices + AI tools = compounding debt. In commit history: large commits, low test-first discipline, erratic or accelerating velocity, vague commit messages.
+**Foundational challenges**: Weak practices + AI tools = compounding debt. In commit history: large commits, low test/prod co-change rate, erratic or accelerating velocity, vague commit messages.
 
 Identifying which archetype describes your team helps calibrate which signals to prioritize first.
 

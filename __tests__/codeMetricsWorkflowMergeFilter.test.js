@@ -153,3 +153,46 @@ describe('code-metrics.yml workflow script -- merge commit filter (code-quality-
     expect(summary.filtered_from).toBe(1);
   });
 });
+
+describe('code-metrics.yml workflow script -- test/prod co-change field (code-quality-metrics-36d)', () => {
+  let script;
+
+  beforeAll(() => {
+    script = loadStepScript('code-metrics.yml', 'Collect Commit Metrics');
+  });
+
+  test('computes test_coverage_rate from the renamed co-change field for a commit touching both test and prod files', async () => {
+    const commit = {
+      sha: 'child1',
+      parents: [{ sha: 'parentbase' }],
+      commit: {
+        message: 'feat: add feature with test',
+        author: { name: 'Dev' },
+        committer: { date: '2026-08-01T00:00:00.000Z' }
+      }
+    };
+
+    const githubMock = makeGithubMock({
+      branches: [{ name: 'main' }, { name: 'feature-x' }],
+      commitsByBranch: { 'feature-x': [commit] },
+      commitDetailsBySha: {
+        child1: {
+          stats: { additions: 15, deletions: 6 },
+          files: [
+            { filename: 'src/app.js', additions: 10, deletions: 5 },
+            { filename: 'src/app.test.js', additions: 5, deletions: 1 }
+          ]
+        }
+      }
+    });
+
+    const writes = await runCollectMetrics(script, githubMock);
+
+    const commitMetrics = JSON.parse(writes['commit_metrics.json']);
+    expect(commitMetrics[0].test_prod_cochange_commit).toBe(true);
+    expect(commitMetrics[0].test_first_indicator).toBeUndefined();
+
+    const summary = JSON.parse(writes['metrics_summary.json']);
+    expect(summary.test_coverage_rate).toBe('100.00');
+  });
+});

@@ -463,7 +463,11 @@ describe('collectLocalMetrics — successful run', () => {
 
     const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
     const summary = JSON.parse(summaryCall[1]);
-    expect(typeof summary.test_coverage_rate).toBe('string');
+    // The fixture's one commit touches both src/app.js (prod) and src/app.test.js
+    // (test) in the same commit, so test_coverage_rate must read 100.00 -- a value
+    // check, not just a type check, so a dangling reference to the old field name
+    // (which would silently compute 0.00 instead of throwing) cannot pass this test.
+    expect(summary.test_coverage_rate).toBe('100.00');
     expect(typeof summary.test_isolation_rate).toBe('string');
     expect(typeof summary.uncovered_prod_rate).toBe('string');
     expect(summary.test_first_pct).toBeUndefined();

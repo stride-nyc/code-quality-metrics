@@ -46,7 +46,7 @@ const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -451,7 +451,7 @@ async function collectLocalMetrics(options = {}) {
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
   const large_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const sprawling_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
-  const test_coverage_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const test_coverage_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_prod_cochange_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const test_isolation_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_only_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const uncovered_prod_rate = metrics.length > 0 ? ((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
 
@@ -592,7 +592,7 @@ async function collectLocalMetrics(options = {}) {
       const flags = [];
       if (commit.large_commit) flags.push('LARGE');
       if (commit.sprawling_commit) flags.push('SPRAWLING');
-      if (commit.test_first_indicator) flags.push('TEST+PROD');
+      if (commit.test_prod_cochange_commit) flags.push('TEST+PROD');
 
       const flagStr = flags.length > 0 ? ` [${flags.join(', ')}]` : '';
       console.log(`${commit.sha}: ${commit.message.substring(0, 60)}... (${lines} lines, ${commit.files_changed} files)${flagStr} [${commit.source_branch}]`);
