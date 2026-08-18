@@ -27,6 +27,27 @@ describe('detectHistoryGranularity', () => {
     });
   });
 
+  test("recognizes GitHub's (GH-N) backport-merge suffix the same as (#N)", () => {
+    // cpython-style: half the sample uses the (#N) squash suffix, half uses the
+    // (GH-N) backport suffix GitHub also writes for backported commits. Counting
+    // only (#N) gives a share (2/5 = 0.4) just under the 0.5 confidence cutoff, so
+    // the correct 'squashed' verdict was reached at 'low' confidence for no reason
+    // -- the pattern simply could not see the other half of the evidence.
+    const commits = [
+      { message: 'feat: add widget (#101)' },
+      { message: 'fix: correct bug (#102)' },
+      { message: 'chore: backport fix (GH-201)' },
+      { message: 'chore: backport fix (GH-202)' },
+      { message: 'chore: backport fix (GH-203)' }
+    ];
+    const result = detectHistoryGranularity({ commits, committerNames: [], mergeCommitCount: 0 });
+    expect(result).toEqual({
+      value: 'squashed',
+      confidence: 'high',
+      signals: { pr_reference_share: 1, squash_committer_share: 0, merge_commit_count: 0 }
+    });
+  });
+
   // Guards below: the branching implementation added for the test above already
   // handles these cases correctly. Each is verified by replaying it against the
   // parent commit (before that implementation existed), where it fails.

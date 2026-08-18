@@ -163,11 +163,17 @@ trusting a manual screening: it agreed with the "already screened as squashing" 
 list for apache/kafka, microsoft/playwright (substituted for microsoft/TypeScript -- see
 observations.json), facebook/react and TanStack/query at high confidence, and agreed with
 python/cpython too but only at *low* confidence, which traced to a real detector gap:
-`PR_REFERENCE_PATTERN` (`/\(#\d+\)$/`) does not match GitHub's alternate `(GH-N)`
+`PR_REFERENCE_PATTERN` (`/\(#\d+\)$/`) did not match GitHub's alternate `(GH-N)`
 backport-reference suffix, which about half of cpython's sampled commits use instead of
-`(#N)`. This undercounts `pr_reference_share` and should be fixed in `lib/git.js` in its own
-change; it did not flip cpython's verdict here, but a repository that used *only* the GH-N
-form and nothing else plausibly could.
+`(#N)`. This undercounted `pr_reference_share`; it did not flip cpython's verdict here, but a
+repository that used *only* the GH-N form and nothing else plausibly could -- see
+code-quality-metrics-wgc. **Fixed**: `PR_REFERENCE_PATTERN` is now `/\((?:#|GH-)\d+\)$/` and
+matches both suffixes. The cpython `merge_style_evidence` notes in `observations.json` describing
+the low-confidence result are left as recorded -- they are accurate history of what the tool
+measured before this fix, not a live reading -- but re-running `detectHistoryGranularity` against
+either cpython window today would combine both suffixes into a single high-confidence
+`pr_reference_share` (the 21/50 + 25/50 = 92% figure quoted above), matching what the manual
+recount already found by hand.
 
 ## Choosing a reference repository
 
