@@ -4,6 +4,12 @@
 const fs = require('fs');
 const path = require('path');
 
+// Load .env file if present — allows ANTHROPIC_API_KEY to be set without exporting to the
+// shell. Resolved relative to this script's own directory (not process.cwd()), since this
+// tool is routinely invoked against another repository's working directory. See
+// lib/env.js for the full precedence order.
+require('./lib/env').loadEnv(__dirname);
+
 const { buildMetricCatalog, topCommits } = require('./lib/report');
 const { renderReportHtml } = require('./lib/report-template');
 const { getAnthropicClient } = require('./lib/claude');
