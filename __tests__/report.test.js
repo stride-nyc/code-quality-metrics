@@ -434,6 +434,42 @@ describe('buildMetricCatalog with duplicates', () => {
   });
 });
 
+describe('buildMetricCatalog with a class B config override (code-quality-metrics-wcj)', () => {
+  it('withholds the duplication_density_pct verdict when summary.config_sources.class_b_overridden is true', () => {
+    const summary = fullSummary({
+      config_sources: { files: ['/repo/.codemetrics.json'], overrides: { DUPLICATE_MIN_LINES: 5 }, class_b_overridden: true }
+    });
+    const entries = buildMetricCatalog(summary, fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(false);
+    expect(density.status).toBe('neutral');
+    expect(density.concern).toBe(-Infinity);
+    expect(density.healthyBoundary).toBeNull();
+    expect(density.criticalBoundary).toBeNull();
+    expect(density.descriptiveNote).toMatch(/DUPLICATE_MIN_LINES|DUPLICATE_MIN_TOKENS/);
+  });
+
+  it('[guard] leaves the duplication_density_pct verdict intact when class_b_overridden is false', () => {
+    const summary = fullSummary({
+      config_sources: { files: [], overrides: {}, class_b_overridden: false }
+    });
+    const entries = buildMetricCatalog(summary, fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(true);
+    expect(density.descriptiveNote).toBeUndefined();
+  });
+
+  it('[guard] leaves the duplication_density_pct verdict intact when config_sources is absent entirely', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(true);
+    expect(density.descriptiveNote).toBeUndefined();
+  });
+});
+
 describe('buildGaugeSvgParts', () => {
   const oracleArgs = {
     value: 51.11,
