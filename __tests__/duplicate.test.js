@@ -141,6 +141,17 @@ describe('runDuplicateCheck', () => {
     expect(command).toContain('**/pnpm-lock.yaml');
     expect(command).toContain('**/*.lock');
   });
+
+  test('composes --min-lines and --min-tokens flags at Sonar-equivalent minimums by default', () => {
+    // Sonar's 3% gate is measured at 100 tokens over 10 lines; this pins the shipped
+    // defaults literally, so it fails if the defaults ever drift, unlike a test that
+    // reads CONFIG.DUPLICATE_MIN_LINES back and would pass at any value.
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('--min-lines 10');
+    expect(command).toContain('--min-tokens 100');
+  });
 });
 
 describe('runDuplicateAnalysis', () => {
