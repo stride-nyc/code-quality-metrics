@@ -185,74 +185,129 @@ const DELIVERY = [
 
 const GIT_METRICS = [
   {
-    title:'Large commit %', sub:'Lines > 100 threshold',
-    type:'full',
-    thresholds:[{r:'< 20%',l:'Healthy',cls:'t-ok'},{r:'20–40%',l:'Warning',cls:'t-warn'},{r:'> 40%',l:'Critical',cls:'t-crit'}],
-    detail:'Proxy for wholesale AI code acceptance. Threshold calibrated to DORA "small batches" capability boundary.'
+    title:'Large commit %', sub:'Prod lines > 100', type:'full',
+    thresholds:[{r:'< 20%',l:'Healthy',cls:'t-ok'},{r:'20-40%',l:'Warning',cls:'t-warn'},{r:'> 40%',l:'Critical',cls:'t-crit'}],
+    source:'Capability #5, "Working in small batches", one of seven capabilities DORA found amplify the benefits of AI adoption. DORA scores it from three self-reported survey items, including "the <em>approximate</em> number of lines of code committed in the most recent change", on an ordinal scale from extremely low to extremely high.',
+    cite:'DORA 2025, pp. 50, 57-58',
+    measured:'Share of analysed commits where additions plus deletions across <strong>production files only</strong> exceeds <code>LARGE_COMMIT_THRESHOLD</code> (100). Test files matching <code>TEST_FILE_PATTERNS</code> are excluded from the total.',
+    connect:'Inference by this toolkit. DORA never reads commit history; it asks developers to estimate their batch size. We substitute an objective count for that self-report, which is arguably better evidence, but it is not the same measurement and DORA has not validated it.',
+    basis:'No source supplies either number. DORA publishes no line-count boundary anywhere, and its ordinal buckets do not convert to one. Both the 100 line unit and the 20/40 bands are the author\'s judgement.',
+    v:'unstated'
   },
   {
-    title:'Sprawling commit %', sub:'Files > 5 threshold',
-    type:'full',
-    thresholds:[{r:'< 10%',l:'Healthy',cls:'t-ok'},{r:'10–25%',l:'Warning',cls:'t-warn'},{r:'> 25%',l:'Critical',cls:'t-crit'}],
-    detail:'Proxy for "shotgun surgery" — AI-suggested fixes rippling through unrelated components. DORA documents 154% PR size increase with high AI adoption.'
+    title:'Sprawling commit %', sub:'Files > 5', type:'full',
+    thresholds:[{r:'< 10%',l:'Healthy',cls:'t-ok'},{r:'10-25%',l:'Warning',cls:'t-warn'},{r:'> 25%',l:'Critical',cls:'t-crit'}],
+    source:'DORA measured a 7.2% increase in delivery instability for every 25% increase in AI adoption, and the 2025 report confirms instability persists even as throughput has turned positive: AI adoption "now improves software delivery throughput... However, it still increases delivery instability".',
+    cite:'DORA 2024 p. 37; DORA 2025 p. 4',
+    measured:'Share of analysed commits touching more than <code>SPRAWLING_COMMIT_THRESHOLD</code> (5) files, counting every changed file including tests and binaries.',
+    connect:'Inference. Scattering a change across many files is one mechanism that could raise instability, but DORA does not measure files per commit and publishes no pull request size figure. An earlier version of this toolkit cited a "154% increase in pull request size" to DORA; that figure appears in no DORA report and has been withdrawn.',
+    basis:'Neither the 5 file unit nor the 10/25 bands appears in any source.',
+    v:'unstated'
   },
   {
-    title:'Test-first discipline', sub:'Test + prod co-occurrence',
-    type:'full',
-    thresholds:[{r:'> 50%',l:'Healthy',cls:'t-ok'},{r:'30–50%',l:'Warning',cls:'t-warn'},{r:'< 30%',l:'Critical',cls:'t-crit'}],
-    detail:'DORA identifies automated testing as the single strongest predictor of whether AI tools help or hurt. Cannot distinguish test-first from test-after — measures co-occurrence only.'
+    title:'Test discipline', sub:'Three-way classification', type:'full',
+    thresholds:[{r:'coverage > 50%',l:'Healthy',cls:'t-ok'},{r:'coverage 30-50%',l:'Warning',cls:'t-warn'},{r:'uncovered prod > 20%',l:'Critical',cls:'t-crit'}],
+    source:'None. Automated testing is <strong>not among the seven capabilities</strong> in DORA\'s AI Capabilities Model. The model names clear AI stance, healthy data ecosystems, AI-accessible internal data, strong version control practices, working in small batches, user-centric focus, and quality internal platforms.',
+    cite:'DORA 2025, p. 50',
+    measured:'Each commit is classified by whether it touches test files, production files, or both. <code>test_coverage_rate</code> counts commits touching both, <code>test_isolation_rate</code> commits touching only tests, <code>uncovered_prod_rate</code> large production-only commits.',
+    connect:'This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this toolkit called testing DORA\'s "single strongest predictor" of whether AI helps or hurts a team; that claim is not supported by the report and has been withdrawn. Note also that co-occurrence in one commit cannot distinguish test-first from test-after.',
+    basis:'No source supplies any of these boundaries.',
+    v:'unstated'
   },
   {
-    title:'Commit size distribution', sub:'p50 / p90 / p95 lines',
-    type:'full',
-    thresholds:[{r:'p90 < 200',l:'Healthy',cls:'t-ok'},{r:'p90 200–500',l:'Monitor',cls:'t-warn'},{r:'p90 > 500',l:'Investigate',cls:'t-crit'}],
-    detail:'Distributions reveal what averages hide. p90 of 500 with p50 of 30 = "mostly disciplined with occasional explosions" — not visible in an average of 65.'
+    title:'Commit size distribution', sub:'p50 / p90 / p95 lines', type:'full',
+    thresholds:[{r:'p90 < 200',l:'Healthy',cls:'t-ok'},{r:'p90 200-500',l:'Monitor',cls:'t-warn'},{r:'p90 > 500',l:'Investigate',cls:'t-crit'}],
+    source:'Capability #5, "Working in small batches", as above.',
+    cite:'DORA 2025, p. 50',
+    measured:'Percentiles of total lines changed per commit, whole diff including tests, computed with <code>simple-statistics</code>. Unlike the large-commit flag, these describe how much a reviewer reads, so test lines are counted.',
+    connect:'Using a distribution rather than an average is this project\'s own methodological choice, and a sound one: a p90 of 500 against a p50 of 30 reveals occasional explosions that an average of 65 conceals. DORA publishes no percentile guidance.',
+    basis:'The 200/500 boundaries are the author\'s judgement.',
+    v:'unstated'
   },
   {
-    title:'File scope distribution', sub:'p50 / p90 files/commit',
-    type:'full',
-    thresholds:[{r:'p90 < 8',l:'Healthy',cls:'t-ok'},{r:'p90 8–15',l:'Monitor',cls:'t-warn'},{r:'p90 > 15',l:'Investigate',cls:'t-crit'}],
-    detail:'Architectural scatter metric. Complements large commit % by showing the shape of the distribution, not just the percentage above threshold.'
+    title:'File scope distribution', sub:'p50 / p90 files', type:'full',
+    thresholds:[{r:'p90 < 8',l:'Healthy',cls:'t-ok'},{r:'p90 8-15',l:'Monitor',cls:'t-warn'},{r:'p90 > 15',l:'Investigate',cls:'t-crit'}],
+    source:'Capability #5, indirectly. DORA discusses batch size in terms of change size, never files touched.',
+    cite:'DORA 2025, pp. 50, 57-58',
+    measured:'Percentiles of files changed per commit.',
+    connect:'Inference, one step further from the source than commit size, since DORA never treats file count as a construct at all.',
+    basis:'The 8/15 boundaries are the author\'s judgement.',
+    v:'unstated'
   },
   {
-    title:'Commit velocity trend', sub:'Acceleration / deceleration',
-    type:'full',
-    thresholds:[{r:'Stable',l:'Neutral',cls:'t-ok'},{r:'Growing + accelerating',l:'"Volume without discipline"',cls:'t-crit'},{r:'Shrinking',l:'Positive signal',cls:'t-ok'}],
-    detail:'Velocity alone is neutral. "Growing" commit size trend combined with "accelerating" velocity is DORA\'s joint indicator for risk.'
+    title:'Velocity and size trends', sub:'Direction over the window', type:'full',
+    thresholds:[{r:'Stable',l:'Neutral',cls:'t-ok'},{r:'Growing + accelerating',l:'Drift hypothesis',cls:'t-crit'},{r:'Shrinking',l:'Positive',cls:'t-ok'}],
+    source:'No DORA finding. DORA does not track commit velocity or commit size over time.',
+    cite:'searched: DORA 2024, 2025, 2026 ROI',
+    measured:'Linear regression of commit size against commit order, plus first-half against second-half commit rate.',
+    connect:'That growing commit size combined with accelerating velocity indicates drift is <strong>this toolkit\'s own hypothesis</strong>. It was previously presented as a DORA pattern called "volume without discipline"; that phrase appears in no DORA publication and has been withdrawn. The hypothesis may still be sound, but it is untested.',
+    basis:'No numeric threshold; the signal is directional. The hypothesis itself is unvalidated.',
+    v:'unstated'
   },
   {
-    title:'Additions ratio', sub:'Adds ÷ deletions (p90)',
-    type:'full',
-    thresholds:[{r:'ratio near 1',l:'Balanced (editing)',cls:'t-ok'},{r:'ratio > 3',l:'Accumulating',cls:'t-warn'},{r:'+ large commit',l:'AI signature',cls:'t-crit'}],
-    detail:'AI-generated code tends to add without removing. Additions > deletions × 3 combined with large_commit is the specific pre-filter used before Claude API analysis.'
+    title:'Net additions ratio', sub:'Median share net-new', type:'full',
+    thresholds:[{r:'< 0.33',l:'Balanced',cls:'t-ok'},{r:'0.33-0.50',l:'Accumulating',cls:'t-warn'},{r:'> 0.50',l:'Growth only',cls:'t-crit'}],
+    source:'GitClear reports that 2024 was the first year copy-pasted lines exceeded moved lines, and projects code churn doubling against its 2021 pre-AI baseline.',
+    cite:'GitClear 2025, pp. 5, 8',
+    measured:'Median of (additions - deletions) / (additions + deletions) per commit, bounded to plus or minus one.',
+    connect:'Directionally consistent with GitClear\'s finding that refactoring is being displaced by accumulation. GitClear measures line categories across 211 million changed lines; this measures one ratio per commit.',
+    basis:'The spec states plainly that 0.50 was chosen to map to the toolkit\'s prior additions > deletions x 3 heuristic. Self-derived, and honest about it.',
+    v:'principle'
   },
   {
-    title:'Commit message quality', sub:'Word count / conventional',
-    type:'full',
-    thresholds:[{r:'> 10 words or conventional',l:'Specific',cls:'t-ok'},{r:'Below threshold',l:'Vague',cls:'t-warn'}],
-    detail:'Proxy for developer understanding of changes made. Vague messages ("fix stuff", "wip") correlate with passive AI code acceptance. Uses conventional commit format detection.'
+    title:'Commit message quality', sub:'Conventional or 10+ words', type:'partial',
+    thresholds:[{r:'> 60%',l:'Healthy',cls:'t-ok'},{r:'40-60%',l:'Warning',cls:'t-warn'},{r:'< 40%',l:'Critical',cls:'t-crit'}],
+    source:'Capability #4, "Strong version control practices", is a named DORA capability, but DORA describes it in terms of commit frequency, rollback capability and branching, never message wording.',
+    cite:'DORA 2025, p. 50',
+    measured:'Share of messages matching conventional commit format, or containing at least <code>MESSAGE_QUALITY_MIN_WORDS</code> (10) words.',
+    connect:'The weakest chain in the toolkit. No cited source discusses commit message specificity as a measured signal at all, so both the construct and its operationalisation are original.',
+    basis:'The 10 word rule and the 60/40 bands are the author\'s judgement, with no qualitative principle to anchor them.',
+    v:'unstated'
   },
   {
-    title:'DORA archetype', sub:'Derived classification',
-    type:'full',
-    thresholds:[{r:'Harmonious high-achiever',l:'Strong foundations + AI',cls:'t-ok'},{r:'Foundational challenges',l:'Weak foundations + AI',cls:'t-crit'},{r:'Mixed signals',l:'Inconsistent',cls:'t-warn'}],
-    detail:'Composite classification derived from all git metrics. The archetype determines which intervention to prioritize — a "foundational challenges" team needs practice discipline before scaling AI use.'
+    title:'Practice archetype', sub:'Four buckets from git data', type:'partial',
+    thresholds:[{r:'harmonious-high-achiever',l:'All four in range',cls:'t-ok'},{r:'legacy-bottleneck',l:'Sprawl + large',cls:'t-warn'},{r:'foundational-challenges',l:'Large > 40%',cls:'t-crit'}],
+    source:'DORA identifies <strong>seven</strong> team archetypes from cluster analysis of survey responses from nearly 5,000 professionals. The clustering inputs are eight self-reported constructs: team performance, individual effectiveness, product performance, delivery throughput, delivery instability, valuable work, friction and burnout. Foundational challenges is characterised by "high reported levels of burnout and significant friction".',
+    cite:'DORA 2025, pp. 3, 14-17',
+    measured:'Four buckets assigned from thresholds on large-commit %, sprawling-commit %, test coverage and message quality.',
+    connect:'The <strong>names are borrowed, the method is not</strong>. DORA derives archetypes from how people report their working conditions; this derives them from commit shape. No git measure appears anywhere in DORA\'s clustering. Three of the four names are real DORA archetypes, mixed-signals is invented, and the four buckets collapse seven DORA clusters. DORA\'s legacy bottleneck describes teams "in a constant state of reaction, where unstable systems dictate their work", which is not what a high sprawl plus large commit signature means here.',
+    basis:'All five boundary values are invented. This field should not be read as a DORA classification.',
+    v:'unstated'
   },
   {
-    title:'Claude API risk score', sub:'Optional — needs API key',
-    type:'partial',
-    thresholds:[{r:'0–40',l:'Low risk',cls:'t-ok'},{r:'41–70',l:'Review recommended',cls:'t-warn'},{r:'71–100',l:'High risk',cls:'t-crit'}],
-    detail:'Semantic analysis of commit diffs. Detects: generic variable names, boilerplate without error handling, architectural boundary violations. Pre-filtered to high-ratio commits only — typically 3–5 per run.'
+    title:'Duplication density', sub:'jscpd, share of lines', type:'full',
+    thresholds:[{r:'< 3%',l:'Healthy',cls:'t-ok'},{r:'3-10%',l:'Warning',cls:'t-warn'},{r:'> 10%',l:'Critical',cls:'t-crit'}],
+    source:'GitClear analysed 211 million changed lines from 2020 to 2024 and recorded an eight-fold increase in the frequency of code blocks with five or more duplicated lines during 2024. Their duplicate-block prevalence rose from 0.70% of commits in 2020 to 6.66% in 2024.',
+    cite:'GitClear 2025, pp. 1, 5, 12',
+    measured:'jscpd <code>statistics.total.percentage</code>: duplicated lines as a share of lines scanned across production files from the analysed commits.',
+    connect:'Different denominators. GitClear reports the share of <strong>commits containing</strong> a duplicate block; this reports the share of <strong>lines that are</strong> duplicated. 6.66% and 3% are not comparable quantities, and no source publishes a share-of-lines figure. One real alignment: GitClear defines a duplicate as five or more contiguous lines, matching <code>DUPLICATE_MIN_LINES</code>.',
+    basis:'Derived by measuring two repositories, both belonging to this project\'s author: production code ranged 0.5 to 3.1%, test code reached 9.7%, generated design documents 39.4%. n=2, self-referential, and the weakest threshold here.',
+    v:'measured'
   },
   {
-    title:'Copy-paste / code cloning', sub:'AST-level analysis',
-    type:'gap',
-    detail:'Git heuristics cannot detect this. Requires AST diff analysis — GitClear\'s core capability. Their 2025 research shows copy-paste now exceeds code moves in high-AI repos.'
+    title:'Semantic duplication', sub:'Claude, optional', type:'partial',
+    thresholds:[{r:'Findings listed',l:'Ran',cls:'t-ok'},{r:'Not measured',l:'Call failed or absent key',cls:'t-warn'}],
+    source:'GitClear names AST-level detection of restructured duplication as the capability static line matching cannot provide.',
+    cite:'GitClear 2025, p. 12',
+    measured:'Claude reads up to <code>AI_DUPLICATE_MAX_FILES</code> (40) production files and returns pairs that implement the same logic differently, each with a confidence.',
+    connect:'Fills a real gap: line matching cannot see logic rebuilt with different names or structure. The output is a model judgement, so the count varies between runs on identical input and should be read as a signal, not a metric.',
+    basis:'No threshold. Reported as a count, or as not measured when the call fails or truncates, never as a confident zero.',
+    v:'sourced'
   },
   {
-    title:'Code review quality', sub:'Reviewer depth / count',
-    type:'gap',
-    detail:'Requires GitHub API data beyond commit history: reviewer count, comment depth, review-to-merge time. DX or LinearB cover this.'
+    title:'Copy-paste at AST level', sub:'Structural clone detection', type:'gap',
+    source:'GitClear\'s core commercial capability.', cite:'GitClear 2025',
+    measured:'Not measured. jscpd matches tokens, not structure.',
+    connect:'The semantic layer above is a partial substitute using a language model rather than AST analysis.',
+    basis:'Not applicable.', v:'pending'
+  },
+  {
+    title:'Code review quality', sub:'Reviewer depth and count', type:'gap',
+    source:'DORA measures review speed, a 3.1% increase per 25% increase in AI adoption, but not review depth.',
+    cite:'DORA 2024, p. 37',
+    measured:'Not measured. Requires GitHub API data beyond commit history.',
+    connect:'Worth noting that DORA found reviews getting <em>faster</em> with AI adoption. An earlier version of this toolkit claimed a 91% increase in review time, citing DORA; no such figure exists in any DORA report.',
+    basis:'Not applicable.', v:'pending'
   },
 ];
 
@@ -267,6 +322,8 @@ const TOOLS = [
   { name:'DX', desc:'Full DORA delivery metrics (deployment frequency, lead time, MTTR, change failure rate). Best for engineering leaders needing complete lifecycle visibility.' },
   { name:'LinearB', desc:'PR cycle time, review bottleneck detection, indirect AI drift correlation. Good for teams wanting comprehensive metrics without custom instrumentation.' },
 ];
+
+const VLABEL = { sourced:'sourced', principle:'self-derived', measured:'measured n=2', unstated:'no basis', pending:'n/a' };
 
 function typeClass(t) {
   return { full:'card-full', partial:'card-partial', gap:'card-gap', oos:'card-oos' }[t];
@@ -285,7 +342,19 @@ function renderGrid(id, items, detailId, hasThresholds) {
       const isOpen = detail.classList.contains('open') && detail.dataset.idx == i;
       detail.classList.remove('open');
       if (!isOpen) {
-        let html = `<strong style="font-size:13px;color:var(--color-text-primary)">${item.title}</strong><br><span>${item.detail}</span>`;
+        let html = `<strong style="font-size:13px;color:var(--color-text-primary)">${item.title}</strong>`;
+        if (item.source) {
+          html += '<div class="prov">' +
+            `<div class="prov-step"><div class="prov-k">Source</div><div class="prov-v">${item.source}` +
+              (item.cite ? `<div class="cite">${item.cite}</div>` : '') + '</div></div>' +
+            `<div class="prov-step"><div class="prov-k">We measure</div><div class="prov-v">${item.measured}</div></div>` +
+            `<div class="prov-step"><div class="prov-k">The link</div><div class="prov-v">${item.connect}</div></div>` +
+            `<div class="prov-step"><div class="prov-k">Threshold</div><div class="prov-v">` +
+              `<span class="vbadge v-${item.v}">${VLABEL[item.v]}</span> ${item.basis}</div></div>` +
+            '</div>';
+        } else {
+          html += `<br><span>${item.detail}</span>`;
+        }
         if (item.thresholds) {
           html += '<div style="margin-top:10px">' + item.thresholds.map(t =>
             `<div class="threshold-row"><span class="t-range ${t.cls}">${t.r}</span><span class="t-label">${t.l}</span></div>`
@@ -312,6 +381,30 @@ LAYERS.forEach(l => {
     <p class="layer-desc">${l.desc}</p>
   </div>`;
 });
+
+const calibEl = document.getElementById('calib-list');
+GIT_METRICS.filter(m => m.v === 'unstated' || m.v === 'measured').forEach(m => {
+  calibEl.innerHTML += `<div class="calib-row">
+    <span class="calib-name">${m.title}</span>
+    <span><span class="vbadge v-${m.v}">${VLABEL[m.v]}</span></span>
+    <span class="calib-note">${m.basis}</span>
+  </div>`;
+});
+
+document.getElementById('repro').innerHTML =
+  '<p style="margin:0 0 8px">Every claim above was checked against the reports themselves, not summaries of them. ' +
+  'The PDFs were text-extracted and searched directly: DORA <em>State of AI-Assisted Software Development 2025</em>, ' +
+  '<em>Accelerate State of DevOps 2024</em> and its AI addendum, the 2026 ROI report, and <em>GitClear AI Copilot Code Quality 2025</em>. ' +
+  'Verified 18 August 2026.</p>' +
+  '<p style="margin:0 0 8px"><strong>Four figures previously attributed to DORA appear in none of its reports</strong> and have been withdrawn: ' +
+  'a 154% increase in pull request size, a 91% increase in code review time, a 9% increase in bug rates, and the phrase ' +
+  '"volume without discipline". DORA\'s own review figure points the other way, a 3.1% increase in review <em>speed</em>. ' +
+  'A fifth, the 1.5% throughput reduction, is real but superseded: the 2025 report finds throughput now improves while instability persists.</p>' +
+  '<p style="margin:0"><strong>No cited source publishes a boundary number for any git-derived metric.</strong> ' +
+  'DORA scores batch size from self-reported ordinal survey responses and never converts them to a line count; ' +
+  'GitClear reports trends and prevalence, never a healthy-versus-unhealthy line. Every band marked ' +
+  '<span class="vbadge v-unstated">no basis</span> above is therefore a judgement call awaiting empirical calibration, ' +
+  'and should be read as one.</p>';
 
 const toolsEl = document.getElementById('tools-list');
 TOOLS.forEach(t => {
