@@ -184,11 +184,19 @@ jobs:
               /refactor|cleanup|reorganize|extract|rename/i.test(c.message)
             );
 
-            const hasIncrementalPattern = commitMetrics.length > 1 &&
-              commitMetrics.every(c => c.prod_changes < 200);
+            // hasIncrementalPattern withdrawn (code-quality-metrics-4hu): every commit under a
+            // hardcoded 200 production-line cutoff had no calibration basis at all, and no
+            // repo-window statistic in lib/thresholds.js measures the same thing (a single
+            // commit's raw line count, not a distribution percentile). avgCommitSize is already
+            // reported below in the Commit Analysis table, so no information is lost by dropping
+            // the pattern claim.
 
+            // hasTestDiscipline now gates on THRESHOLDS.TEST_COVERAGE_RATE.healthy instead of an
+            // uncalibrated 50% cutoff (code-quality-metrics-4hu): testFirstPct is the same
+            // construct test_coverage_rate bands (test+prod co-occurrence rate), just measured
+            // over this PR's commits instead of a repo-window sample.
             const hasTestDiscipline = commitMetrics.length > 0 &&
-              (testFirstCommits / commitMetrics.length) > 0.5;
+              testFirstPct > THRESHOLDS.TEST_COVERAGE_RATE.healthy;
 
             // ---------------------------------------------------------------
             // Size classification
@@ -198,36 +206,46 @@ jobs:
             const concerns = [];
             const strengths = [];
 
-            if (prodChanges > 500) {
-              sizeLabel = 'extra-large';
-              concerns.push('Very large production changes - consider breaking into smaller PRs');
-            } else if (prodChanges > 200) {
+            // The >500 and >200 tiers this used to carry (extra-large / large, each with its own
+            // concern) are withdrawn (code-quality-metrics-4hu): neither had a calibration basis,
+            // and 500 is the same magic number already withdrawn from code-metrics.yml's p90
+            // bullet under code-quality-metrics-251. Only the >100 tier remains, referencing
+            // CONFIG.LARGE_COMMIT_THRESHOLD instead of a separate hardcoded literal, since that
+            // setting already has a home (it is the same detector setting large_commit applies
+            // per-commit above). prodChanges is already reported above in the Production Code
+            // breakdown, so no information is lost by dropping the finer-grained tiers.
+            if (prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD) {
               sizeLabel = 'large';
-              concerns.push('Large production changes - review carefully');
-            } else if (prodChanges > 100) {
-              sizeLabel = 'medium';
             }
 
-            if (prodFilesCount > 10) {
-              concerns.push('Many production files changed - possible scope creep');
+            // prodFilesCount > 10 concern withdrawn (code-quality-metrics-4hu): no calibration
+            // basis, and P90_FILES_CHANGED (healthy 8) measures a different statistic -- a p90
+            // across many commits in a time window, not a single PR's raw file count -- so
+            // forcing that band onto this literal would be the wrong-unit mistake this project
+            // has already made once with squashed history. prodFilesCount is already reported
+            // above in the Production Code breakdown.
+
+            // largeCommits/sprawlingCommits concerns now gate on the calibrated critical bounds
+            // the DORA table below already displays for the identical construct (percentage of
+            // commits flagged large/sprawling within this PR's commit sample), rather than the
+            // previously uncalibrated 50%/30% cutoffs (code-quality-metrics-4hu). The message
+            // text also now interpolates CONFIG.LARGE_COMMIT_THRESHOLD/SPRAWLING_COMMIT_THRESHOLD
+            // instead of restating 100/5 as separate literals (code-quality-metrics-vom).
+            if (largeCommits > commitMetrics.length * (THRESHOLDS.LARGE_COMMITS_PCT.critical / 100)) {
+              concerns.push(`${largeCommits}/${commitMetrics.length} commits exceed ${CONFIG.LARGE_COMMIT_THRESHOLD} production lines`);
             }
 
-            if (largeCommits > commitMetrics.length * 0.5) {
-              concerns.push(`${largeCommits}/${commitMetrics.length} commits exceed 100 production lines`);
+            if (sprawlingCommits > commitMetrics.length * (THRESHOLDS.SPRAWLING_COMMITS_PCT.critical / 100)) {
+              concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than ${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files`);
             }
 
-            if (sprawlingCommits > commitMetrics.length * 0.3) {
-              concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than 5 files`);
-            }
-
-
-            if (msgQualityPct < 40) {
-              concerns.push(`Message quality ${msgQualityPct.toFixed(0)}% is below 40% - consider more descriptive commit messages`);
-            }
-
-            if (hasIncrementalPattern) {
-              strengths.push('Incremental development pattern detected');
-            }
+            // Message quality verdict withdrawn (code-quality-metrics-4hu): this used to push a
+            // concern against a hardcoded 40% cutoff while the DORA table two sections below
+            // states "no band, see spec" for the same value -- a contradiction inside one PR
+            // comment. MESSAGE_QUALITY_PCT carries no key in lib/thresholds.js (the metric was
+            // found to measure Conventional Commits adoption rather than informativeness, and
+            // 40 was never derived from anything). The value is still reported, without a
+            // verdict, in the DORA table and the Commit Analysis table below.
 
             if (hasTestDiscipline) {
               strengths.push('Strong test-first discipline across commits');
@@ -277,8 +295,11 @@ jobs:
             // DORA archetype
             // ---------------------------------------------------------------
 
+            // message_quality_pct is not passed here: classifyDoraArchetype (lib/metrics.js)
+            // reads only large-commit, sprawling, test-coverage and uncovered-prod from
+            // THRESHOLDS, so message quality has no part in the archetype (code-quality-metrics-4hu).
             const archetype = commitMetrics.length > 0
-              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2), message_quality_pct: msgQualityPct.toFixed(2) })
+              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2) })
               : 'mixed-signals';
 
             const archetypeDescriptions = {
@@ -376,8 +397,8 @@ jobs:
               '',
               '| Metric | Value |',
               '|--------|-------|',
-              `| Large commits (>100 prod lines) | ${largeCommits}/${commitMetrics.length} (${largePct.toFixed(0)}%) |`,
-              `| Sprawling commits (>5 files) | ${sprawlingCommits}/${commitMetrics.length} (${sprawlingPct.toFixed(0)}%) |`,
+              `| Large commits (>${CONFIG.LARGE_COMMIT_THRESHOLD} prod lines) | ${largeCommits}/${commitMetrics.length} (${largePct.toFixed(0)}%) |`,
+              `| Sprawling commits (>${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files) | ${sprawlingCommits}/${commitMetrics.length} (${sprawlingPct.toFixed(0)}%) |`,
               `| Test-first discipline | ${testFirstCommits}/${commitMetrics.length} (${testFirstPct.toFixed(0)}%) |`,
               `| Message quality | ${qualityCommits}/${commitMetrics.length} (${msgQualityPct.toFixed(0)}%) |`,
               `| Median net additions ratio | ${medianAdditionsRatio.toFixed(2)} |`,
