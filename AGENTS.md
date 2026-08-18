@@ -192,6 +192,37 @@ npm run lint      # lint must be clean before moving to next step
 
 When introducing new tooling (new lint rules, type checking, config changes), run the gate immediately after setup — before writing any tests or code — to catch configuration gaps early.
 
+### Provenance Gates
+
+`__tests__/thresholdProvenance.test.js` ties `lib/thresholds.js` back to the data, settings and
+documents that describe it. Every defect it catches shares one shape: **a derived value outliving
+the thing it was derived from.** That shape produced a duplication band scored roughly three times
+too permissively for weeks, eight workflow references to keys another change had removed, and stale
+band tables in four documents. None of it was visible to a test that only checks code against code.
+
+Four gates plus one guard:
+
+| Gate | Fails when |
+|---|---|
+| band derivation | `lib/thresholds.js` disagrees with what `calibration/derive-bands.js` derives from `observations.json` |
+| observation provenance | an observation feeding a band records different detector settings than `CONFIG` holds |
+| CLAUDE.md table | the Key Metrics table states a band the code does not hold |
+| coverage map | a tile shows a Critical row with no critical bound behind it, or any band for an informational metric |
+| workflow references | a `THRESHOLDS.KEY.subKey` path in either workflow does not resolve |
+
+**If you change a detector setting in `lib/config.js`, expect the provenance gate to fail.** That is
+the gate working: the observations were measured at the old setting, so the band derived from them
+no longer describes what the tool now measures. Re-measure, do not adjust the gate. Raising
+`DUPLICATE_MIN_LINES`/`DUPLICATE_MIN_TOKENS` from 5/50 to 10/100 moved measured duplication by about
+3x at the median across 24 windows, so the gap is not cosmetic.
+
+**If you withdraw or add a band, expect the table and coverage-map gates to fail.** Update the
+documents, never the expectation. A withdrawn band left on display is a verdict the tool no longer
+issues.
+
+Do not weaken a gate to land a change. If one blocks you and you believe it is wrong, say so and
+leave it failing rather than editing the assertion.
+
 **When modifying `.github/workflows/` or `lib/`**, run a workflow smoke test:
 
 ```bash
