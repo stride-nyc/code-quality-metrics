@@ -83,12 +83,19 @@ describe('buildMetricCatalog', () => {
   // duplication_semantic_findings's own history, code-quality-metrics-82k, where a fixed
   // finite sentinel got outranked by a formula-computed concern once a band narrowed) so
   // neither entry ever competes with a real scored metric in the relevance sort.
-  it('builds net_additions_ratio_median and message_quality_pct as informational entries: no verdict, no gauge, sentinel concern', () => {
+  //
+  // avg_lines_changed joins them here (code-quality-metrics-6dg): three independent
+  // published fits agree commit size is heavy-tailed with no finite mean (Kolassa et al.'s
+  // GPD shape xi = 1.4617, Arafat and Riehle's power law exponent -1.8612, Hattori and
+  // Lanza's Pareto Q-Q fit), so a mean-based band scores against a statistic the population
+  // does not have.
+  it('builds net_additions_ratio_median, message_quality_pct and avg_lines_changed as informational entries: no verdict, no gauge, sentinel concern', () => {
     const entries = buildMetricCatalog(fullSummary());
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
     const messageQuality = entries.find(e => e.key === 'message_quality_pct');
+    const avgLinesChanged = entries.find(e => e.key === 'avg_lines_changed');
 
-    for (const entry of [netAdditions, messageQuality]) {
+    for (const entry of [netAdditions, messageQuality, avgLinesChanged]) {
       expect(entry.hasGauge).toBe(false);
       expect(entry.status).toBe('neutral');
       expect(entry.concern).toBe(-Infinity);
@@ -183,9 +190,12 @@ describe('buildMetricCatalog', () => {
 });
 
 describe('buildMetricCatalog when history_granularity is squashed', () => {
+  // avg_lines_changed dropped out of this list (code-quality-metrics-6dg): it is already
+  // informational for an unrelated reason (no finite mean for a heavy-tailed distribution),
+  // covered by the guard test below instead of being withheld a second time.
   const WITHHELD_KEYS = [
     'large_commits_pct', 'sprawling_commits_pct', 'uncovered_prod_rate', 'test_coverage_rate',
-    'avg_lines_changed', 'p90_lines_changed', 'p90_files_changed', 'test_isolation_rate',
+    'p90_lines_changed', 'p90_files_changed', 'test_isolation_rate',
     'commit_size_trend', 'velocity_trend'
   ];
 
@@ -217,15 +227,18 @@ describe('buildMetricCatalog when history_granularity is squashed', () => {
     expect(density.criticalBoundary).toBe(THRESHOLDS.DUPLICATION_PCT.critical);
   });
 
-  // [guard] message_quality_pct and net_additions_ratio_median already had their bands
-  // dropped for an unrelated reason (code-quality-metrics-6ti, code-quality-metrics-a9z) and
-  // are already informational; squashing composes with that rather than adding a second note.
-  it('[guard] leaves message_quality_pct and net_additions_ratio_median unchanged, not double-annotated, when history is squashed', () => {
+  // [guard] message_quality_pct, net_additions_ratio_median and avg_lines_changed already had
+  // their bands dropped for unrelated reasons (code-quality-metrics-6ti, code-quality-metrics-
+  // a9z, code-quality-metrics-6dg) and are already informational; squashing composes with that
+  // rather than adding a second note.
+  it('[guard] leaves message_quality_pct, net_additions_ratio_median and avg_lines_changed unchanged, not double-annotated, when history is squashed', () => {
     const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }));
     const messageQuality = entries.find(e => e.key === 'message_quality_pct');
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
+    const avgLinesChanged = entries.find(e => e.key === 'avg_lines_changed');
     expect(messageQuality.descriptiveNote).not.toMatch(/pull request/);
     expect(netAdditions.descriptiveNote).not.toMatch(/pull request/);
+    expect(avgLinesChanged.descriptiveNote).not.toMatch(/pull request/);
   });
 
   it('[guard] treats unknown the same as squashed: withholds the same commit-unit entries', () => {

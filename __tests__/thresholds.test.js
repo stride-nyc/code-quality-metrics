@@ -21,6 +21,13 @@ const { THRESHOLDS } = require('../lib/thresholds');
 // all -- not merely re-tiered, removed. See lib/thresholds.js's own comment
 // at the removal site for the full rationale.
 //
+// AVG_LINES_CHANGED is likewise deliberately absent (code-quality-metrics-6dg): three
+// independent published fits (Kolassa et al.'s Generalized Pareto shape xi = 1.4617, Arafat
+// and Riehle's power law exponent -1.8612, Hattori and Lanza's Pareto Q-Q fit) agree the
+// per-commit line-count population is heavy-tailed with no finite mean, so a mean-based
+// band is not a statistic the population has. See lib/thresholds.js's own comment at the
+// removal site for the full rationale.
+//
 // DORA_ARCHETYPE is also deliberately absent (code-quality-metrics-6vi): it used to hold a
 // second, hand-copied set of large/sprawling/testCoverage/uncoveredProd/messageQuality numbers
 // for classifyDoraArchetype() to read, and those copies went stale relative to the bands above
@@ -36,7 +43,6 @@ describe('THRESHOLDS', () => {
       TEST_COVERAGE_RATE: { warning: 30, healthy: 23 },
       TEST_ISOLATION_RATE: { positive: 10 },
       UNCOVERED_PROD_RATE: { healthy: 13, critical: null },
-      AVG_LINES_CHANGED: { healthy: 140, critical: 200 },
       AI_BATCH_SHARE: { additionsRatio: 3, share: 0.3 },
       P90_LINES_CHANGED: { healthy: 260, critical: null },
       P90_FILES_CHANGED: { healthy: 8, critical: null },
