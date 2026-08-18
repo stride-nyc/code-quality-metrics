@@ -5,6 +5,21 @@ jest.mock('child_process');
 const { execSync } = require('child_process');
 const { analyzeCommit, CONFIG } = require('../local-code-metrics');
 
+/**
+ * Run fn with CONFIG.ANALYSIS_IGNORE_PATTERNS temporarily set to patterns, restoring the
+ * original value afterward regardless of outcome. Mirrors __tests__/duplicate.test.js's own
+ * save/set/restore pattern for CONFIG.DUPLICATE_IGNORE_PATTERNS.
+ */
+function withAnalysisIgnorePatterns(patterns, fn) {
+  const original = CONFIG.ANALYSIS_IGNORE_PATTERNS;
+  CONFIG.ANALYSIS_IGNORE_PATTERNS = patterns;
+  try {
+    return fn();
+  } finally {
+    CONFIG.ANALYSIS_IGNORE_PATTERNS = original;
+  }
+}
+
 const MOCK_SHA = 'abc12345';
 const MOCK_BRANCH = 'feature/test';
 
@@ -226,6 +241,110 @@ describe('analyzeCommit', () => {
     const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
 
     expect(result.prod_file_paths).toEqual(['src/app.js']);
+  });
+
+  // --- ANALYSIS_IGNORE_PATTERNS exclusion (code-quality-metrics-1tp) ---
+  // isTestFile can only sort a file into test or production; it cannot say "neither",
+  // which is the whole defect in code-quality-metrics-y8j. Every exclusion test here
+  // configures a real pattern and asserts a matching file was excluded, then that an
+  // unmatched sibling was not, so an empty-pattern-list state can never make this pass.
+  test('excludes a matched file from prod/test classification while raw totals stay honest', () => {
+    withAnalysisIgnorePatterns(['**/bin/**'], () => {
+      mockNumstat([
+        numstatLine(500, 0, 'bin/Debug/App.dll'),
+        numstatLine(10, 2, 'src/app.js')
+      ].join('\n'));
+
+      const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+      // Classification counts only the non-excluded file.
+      expect(result.prod_files_count).toBe(1);
+      expect(result.test_files_count).toBe(0);
+      expect(result.prod_file_paths).toEqual(['src/app.js']);
+      expect(result.prod_additions).toBe(10);
+      expect(result.prod_deletions).toBe(2);
+
+      // Raw totals stay honest: the excluded file's lines and file count are still there,
+      // so a reader comparing this report to `git log` sees the real commit, not a
+      // silently shrunk one (the design decision code-quality-metrics-1tp calls for).
+      expect(result.files_changed).toBe(2);
+      expect(result.total_additions).toBe(510);
+      expect(result.total_deletions).toBe(2);
+    });
+  });
+
+  test('does not count an excluded file toward sprawling_commit’s file-count threshold', () => {
+    withAnalysisIgnorePatterns(['**/bin/**'], () => {
+      // SPRAWLING_COMMIT_THRESHOLD (5) ordinary files, plus 196 excluded bin/ files: without
+      // the fix this reads as 201 files touched and trips sprawling_commit on build output
+      // alone, exactly the measured dotnetdependencytracer case in code-quality-metrics-y8j.
+      const ordinaryFiles = Array.from({ length: CONFIG.SPRAWLING_COMMIT_THRESHOLD }, (_, i) =>
+        numstatLine(1, 0, `src/file${i}.js`)
+      );
+      const excludedFiles = Array.from({ length: 196 }, (_, i) =>
+        numstatLine(1000, 1000, `bin/Debug/file${i}.dll`)
+      );
+      mockNumstat([...ordinaryFiles, ...excludedFiles].join('\n'));
+
+      const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+      expect(result.sprawling_commit).toBe(false);
+      expect(result.files_changed).toBe(CONFIG.SPRAWLING_COMMIT_THRESHOLD + 196);
+      expect(result.excluded_files_count).toBe(196);
+    });
+  });
+
+  test('still flags sprawling_commit true once the non-excluded file count alone exceeds the threshold', () => {
+    withAnalysisIgnorePatterns(['**/bin/**'], () => {
+      const ordinaryFiles = Array.from({ length: CONFIG.SPRAWLING_COMMIT_THRESHOLD + 1 }, (_, i) =>
+        numstatLine(1, 0, `src/file${i}.js`)
+      );
+      mockNumstat([...ordinaryFiles, numstatLine(1, 0, 'bin/Debug/x.dll')].join('\n'));
+
+      expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).sprawling_commit).toBe(true);
+    });
+  });
+
+  test('reports excluded_additions and excluded_deletions summed across matched files', () => {
+    withAnalysisIgnorePatterns(['**/bin/**'], () => {
+      mockNumstat([
+        numstatLine(500, 100, 'bin/Debug/App.dll'),
+        numstatLine(20, 5, 'bin/Debug/Other.dll'),
+        numstatLine(10, 2, 'src/app.js')
+      ].join('\n'));
+
+      const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+      expect(result.excluded_files_count).toBe(2);
+      expect(result.excluded_additions).toBe(520);
+      expect(result.excluded_deletions).toBe(105);
+    });
+  });
+
+  test('an excluded file with no other production files leaves large_commit, uncovered_prod_commit, and test_prod_cochange_commit all false', () => {
+    withAnalysisIgnorePatterns(['**/bin/**'], () => {
+      const lines = CONFIG.LARGE_COMMIT_THRESHOLD + 1;
+      mockNumstat(numstatLine(lines, 0, 'bin/Debug/App.dll'));
+
+      const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+      expect(result.large_commit).toBe(false);
+      expect(result.uncovered_prod_commit).toBe(false);
+      expect(result.test_prod_cochange_commit).toBe(false);
+      expect(result.prod_files_count).toBe(0);
+    });
+  });
+
+  test('does not exclude any file when ANALYSIS_IGNORE_PATTERNS is empty (default)', () => {
+    mockNumstat([
+      numstatLine(500, 0, 'bin/Debug/App.dll'),
+      numstatLine(10, 2, 'src/app.js')
+    ].join('\n'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.prod_files_count).toBe(2);
+    expect(result.prod_file_paths).toEqual(['bin/Debug/App.dll', 'src/app.js']);
   });
 
   // --- outlier (withdrawn, code-quality-metrics-496) ---
