@@ -265,6 +265,10 @@ critical extreme by nodejs/node and curl/curl -- see `calibration/`):
 
 **A confound that matters more than the selectivity**: large commits are disproportionately not ordinary development. Hindle et al. (MSR 2008) hand-read 2,000 of the largest commits across nine projects and found the tail dominated by auto-generated documentation, branch merges, copyright-year sweeps, license changes, external module imports, and reformatting. D'Ambros, Lanza and Robbes (WCRE 2009) manually inspected the transactions in their three-system corpus that touched more than 100 classes and reported that "the vast majority... concerned license changes, Javadoc and documentation updates." Hattori and Lanza (ASE 2008) found bug fixes are the smallest commits in their nine-project corpus, not the largest. A rising large-commit rate can therefore reflect more vendoring or mechanical sweeps rather than more drift. This project's own calibration data hit the same pattern: `calibration/research-findings.md` records observation windows where a single vendored import dominated commit-size statistics.
 
+**What `ANALYSIS_IGNORE_PATTERNS` fixes here, and what it does not (code-quality-metrics-y8j, -3yd, -1tp, -3b6)**: until this key existed, nothing let a vendored or generated path count as anything other than production code in `large_commit`, `sprawling_commit`, the line-count distributions, prod/test classification, or `uncovered_prod_rate` — `DUPLICATE_IGNORE_PATTERNS` only ever reached the duplicate detector. Measured on stride-nyc/dotnetdependencytracer: 789 of 1972 tracked paths are committed `bin/` and `obj/` build output, and one commit changed 560,857 lines across 196 files, landing in `avg_lines_changed`, `p90_lines_changed`, and both percentage rates with full weight. A repo can now list such paths in its own `.codemetrics.json` so they count as neither test nor production, and `local_metrics_summary.json` (`vendored_generated_share`) reports the share matching the existing vendored/generated defaults even when nothing is configured, so the distortion is visible before anyone has set anything.
+
+The edge that remains: a human still has to notice the distortion and write the pattern. Nothing in this toolkit detects that a repository *should* configure `ANALYSIS_IGNORE_PATTERNS` and did not — `vendored_generated_share` reports what matches `DUPLICATE_IGNORE_PATTERNS`'s own defaults (`deps/`, `vendor/`, `third_party/`, `node_modules/`, `generated/`, lock files), which does not include `bin/`/`obj/` or any other build-output convention outside that list, so a .NET repository committing build output the way dotnetdependencytracer does gets no automatic flag from this share either, only from a human reading the raw size-shaped numbers and recognizing they look wrong. This is the same limitation the calibration method already lives with by hand: `calibration/observations.json` excludes a window only after a person notices and writes a note explaining why (two nodejs/node windows over a Web Platform Tests fixture import and a vendored dependency sync; one django window over a translations sync). State this plainly rather than implying the problem is solved: the mechanism exists now; the detection of when to use it does not.
+
 ---
 
 ### Metric 2: Sprawling Commit Percentage
@@ -979,6 +983,11 @@ const CONFIG = {
   LARGE_COMMIT_THRESHOLD: 100,        // lines changed threshold for large_commit flag
   SPRAWLING_COMMIT_THRESHOLD: 5,      // files changed threshold for sprawling_commit flag
 
+  // Paths excluded from the commit-shape metrics entirely (code-quality-metrics-y8j):
+  // a matched path counts as neither test nor production. Default is empty, deliberately --
+  // see "What ANALYSIS_IGNORE_PATTERNS fixes here, and what it does not" above.
+  ANALYSIS_IGNORE_PATTERNS: [],
+
   // Message quality
   MESSAGE_QUALITY_MIN_WORDS: 10,      // minimum word count for a "specific" message
                                       // (applies when message doesn't match conventional format)
@@ -1029,6 +1038,16 @@ Array of `CommitMetric` objects, one per analyzed commit:
   test_files_count: number,
   prod_files_count: number,
 
+  // Excluded and vendored/generated volume (code-quality-metrics-1tp, -3b6). Excluded fields
+  // are 0 unless ANALYSIS_IGNORE_PATTERNS is configured; vendored_default_* is computed
+  // always, against DUPLICATE_IGNORE_PATTERNS's own defaults, regardless of configuration.
+  excluded_files_count: number,
+  excluded_additions: number,
+  excluded_deletions: number,
+  vendored_default_files_count: number,
+  vendored_default_additions: number,
+  vendored_default_deletions: number,
+
   // Derived flags
   test_prod_cochange_commit: boolean,
   large_commit: boolean,
@@ -1064,6 +1083,21 @@ Single summary object for the analysis run:
   workflow_type: "feature_branch" | "trunk",  // "trunk" when no feature branches exist; the default branch was analyzed directly
   branches_analyzed: string[],      // feature branches found, or [resolved default branch] when workflow_type is "trunk"
   branch_commit_counts: Record<string, number>,
+
+  // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
+  // is the same defect class as the silent inclusion code-quality-metrics-y8j fixes.
+  analysis_exclusions: {
+    patterns: string[],             // effective ANALYSIS_IGNORE_PATTERNS, [] by default
+    excluded_files_count: number,
+    excluded_lines_count: number,
+    excluded_lines_pct: string      // "XX.XX", share of total lines analyzed
+  },
+  vendored_generated_share: {
+    patterns: string[],             // DUPLICATE_IGNORE_PATTERNS's own defaults, always non-empty
+    files_count: number,
+    lines_count: number,
+    lines_pct: string               // "XX.XX", computed even when nothing is configured
+  },
 
   // Core metrics
   large_commits_pct: string,        // "XX.XX"
