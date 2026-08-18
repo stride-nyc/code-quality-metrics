@@ -25,6 +25,7 @@ beforeEach(() => {
   claude.getAnthropicClient.mockResolvedValue(null);
   // Default: no static/semantic duplicate findings — overridden only in duplicate-detection tests
   duplicate.runDuplicateCheck.mockReturnValue([]);
+  duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
   duplicate.resolveModuleNeighbors.mockImplementation(paths => paths);
   claude.analyzeDuplicatesWithClaude.mockResolvedValue([]);
 });
@@ -671,6 +672,24 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(dupCall).toBeDefined();
     const output = JSON.parse(dupCall[1]);
     expect(output.static_duplicates).toEqual([fixtureDuplicate]);
+  });
+
+  // Calls runDuplicateAnalysis separately from runDuplicateCheck above: the
+  // existing runDuplicateCheck call/assertion is left untouched (per
+  // code-quality-metrics-549's adapter design, so pr-metrics.yml and this
+  // file's existing mocks/assertions keep working unmodified), and
+  // statistics is sourced from a second, dedicated call.
+  test('writes local_duplicate_analysis.json with statistics captured from runDuplicateAnalysis', async () => {
+    const fixtureStatistics = { clones: 2, duplicatedLines: 12, lines: 1595, sources: 11, percentage: 0.75 };
+    duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: fixtureStatistics });
+
+    await collectLocalMetrics();
+
+    expect(duplicate.runDuplicateAnalysis).toHaveBeenCalledWith(['src/app.js']);
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.statistics).toEqual(fixtureStatistics);
   });
 
   test('does not call the Claude semantic layer when no ANTHROPIC_API_KEY is set', async () => {

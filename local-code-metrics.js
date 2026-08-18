@@ -24,7 +24,7 @@ const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } =
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, analyzeDuplicatesWithClaude } = require('./lib/claude');
-const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
+const { runDuplicateCheck, runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
@@ -355,6 +355,11 @@ async function collectLocalMetrics(options = {}) {
   // resolved above rather than creating a second client.
   const prodFilePaths = [...new Set(metrics.flatMap(m => m.prod_file_paths || []))];
   const staticDuplicates = runDuplicateCheck(prodFilePaths);
+  // Called separately from runDuplicateCheck above (rather than replacing it)
+  // so the existing runDuplicateCheck call site, its tests, and pr-metrics.yml
+  // are untouched; this call exists solely to capture the aggregate
+  // statistics runDuplicateCheck discards. See code-quality-metrics-549.
+  const { statistics: duplicateStatistics } = runDuplicateAnalysis(prodFilePaths);
   /** @type {any[]} */
   let semanticFindings = [];
   if (anthropicClient && prodFilePaths.length > 0) {
@@ -433,6 +438,7 @@ async function collectLocalMetrics(options = {}) {
       files_scanned: prodFilePaths.length,
       static_duplicates: staticDuplicates,
       semantic_findings: semanticFindings,
+      statistics: duplicateStatistics,
       layers_run: { static: true, semantic: Boolean(anthropicClient) }
     };
     fs.writeFileSync(
