@@ -11,7 +11,12 @@
  * a threshold change is always a reviewed commit rather than a side effect of
  * re-running a script.
  *
- * Usage: node calibration/derive-bands.js [--json]
+ * Usage: node calibration/derive-bands.js [--json] [--era current|pre-ai]
+ *
+ * --era is optional and defaults to no filter: every observation with
+ * include_in_derivation true is pooled regardless of which era it was measured in,
+ * matching this script's behaviour before the era field existed. Pass --era to derive
+ * bands from a single era's observations only.
  */
 
 const fs = require('fs');
@@ -154,14 +159,33 @@ function deriveBand(metric, observations) {
   return { ...stats, direction: 'informational', healthy: null, critical: null, tier: 'informational', supportingRepos: [] };
 }
 
+/**
+ * Filter observations to a single era ('current' or 'pre-ai'). Passing no era (the
+ * default from the CLI, when --era is omitted) returns every observation unchanged,
+ * so era-blind derivation -- pooling every included observation regardless of when it
+ * was measured -- remains the default behaviour. See calibration/README.md for which
+ * era, if any, is recommended for setting bands; this function only implements the
+ * mechanism, it does not pick a side.
+ * @param {Array<object>} observations
+ * @param {string} [era]
+ * @returns {Array<object>}
+ */
+function selectByEra(observations, era) {
+  if (era === undefined) return observations;
+  return observations.filter(o => o.era === era);
+}
+
 function main() {
   if (!fs.existsSync(OBSERVATIONS)) {
     console.error(`No observations file at ${OBSERVATIONS}. See calibration/README.md.`);
     process.exit(1);
   }
   const data = JSON.parse(fs.readFileSync(OBSERVATIONS, 'utf8'));
-  const usable = data.observations.filter(o => o.include_in_derivation);
-  const excluded = data.observations.filter(o => !o.include_in_derivation);
+  const eraFlagIndex = process.argv.indexOf('--era');
+  const era = eraFlagIndex === -1 ? undefined : process.argv[eraFlagIndex + 1];
+  const observations = selectByEra(data.observations, era);
+  const usable = observations.filter(o => o.include_in_derivation);
+  const excluded = observations.filter(o => !o.include_in_derivation);
 
   /** @type {Record<string, Array<{repo: string, value: number}>>} */
   const byMetric = {};
@@ -218,4 +242,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { deriveBand, describe, percentile, isNearExtreme, NEAR_EXTREME_FRACTION, HIGHER_IS_WORSE, HIGHER_IS_BETTER, INFORMATIONAL };
+module.exports = { deriveBand, describe, percentile, isNearExtreme, selectByEra, NEAR_EXTREME_FRACTION, HIGHER_IS_WORSE, HIGHER_IS_BETTER, INFORMATIONAL };

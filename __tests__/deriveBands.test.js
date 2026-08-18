@@ -1,6 +1,6 @@
 'use strict';
 
-const { deriveBand } = require('../calibration/derive-bands');
+const { deriveBand, selectByEra } = require('../calibration/derive-bands');
 
 /** Build an observation list: [[repo, value], ...] -> [{repo, value}] */
 function obs(pairs) {
@@ -61,6 +61,29 @@ describe('deriveBand', () => {
 
   it('does not export a CRITICAL_MULTIPLE convention any more', () => {
     expect(require('../calibration/derive-bands').CRITICAL_MULTIPLE).toBeUndefined();
+  });
+});
+
+describe('selectByEra', () => {
+  it('filters to only observations matching the given era when an era is specified', () => {
+    const observations = [
+      { repo: 'repoA', era: 'current' },
+      { repo: 'repoB', era: 'pre-ai' },
+      { repo: 'repoC', era: 'current' }
+    ];
+    const result = selectByEra(observations, 'current');
+    expect(result).toEqual([
+      { repo: 'repoA', era: 'current' },
+      { repo: 'repoC', era: 'current' }
+    ]);
+  });
+
+  it('returns every observation unchanged when era is omitted', () => {
+    const observations = [
+      { repo: 'repoA', era: 'current' },
+      { repo: 'repoB', era: 'pre-ai' }
+    ];
+    expect(selectByEra(observations)).toEqual(observations);
   });
 });
 
