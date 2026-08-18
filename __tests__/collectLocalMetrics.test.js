@@ -45,6 +45,12 @@ function mockExecSequence(...values) {
     // `git branch -a --merged` query. Answer it out of band so it never consumes
     // a positional value, and return empty so nothing is filtered.
     if (typeof command === 'string' && command.includes('--merged')) return '';
+    // Tests predating history-granularity detection supply no value for its two
+    // queries (true merge-commit count, committer names). Answer them out of band
+    // the same way, defaulting to "no merges, no committer names" so detection
+    // still runs (as granular) without every prior test needing a positional value.
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -59,6 +65,25 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
   let i = 0;
   execSync.mockImplementation(command => {
     if (typeof command === 'string' && command.includes('--merged')) return mergedOutput;
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
+/**
+ * Like mockExecSequence, but answers the history-granularity queries (true
+ * merge-commit count, committer names) with the given values instead of the
+ * "no signal" default. Positional values cover every other command.
+ */
+function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, ...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    if (typeof command === 'string' && command.includes('--merges')) return mergesOutput;
+    if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
     const val = values[i] ?? '';
     i++;
     return val;
@@ -362,6 +387,43 @@ describe('collectLocalMetrics — successful run', () => {
     expect(typeof summary.message_quality_pct).toBe('string');
     expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
       .toContain(summary.dora_archetype);
+  });
+
+  test('writes local_metrics_summary.json with history_granularity detected as granular when no squash signals are present', () => {
+    return collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      const summary = JSON.parse(summaryCall[1]);
+      expect(summary.history_granularity).toBe('granular');
+      expect(summary.history_granularity_detected).toBe('granular');
+      expect(summary.history_granularity_confidence).toBe('high');
+      expect(summary.history_granularity_override).toBeNull();
+      expect(summary.history_granularity_signals).toEqual({
+        pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0
+      });
+    });
+  });
+
+  test('a --history override forces history_granularity, recording both the override and what detection actually found', async () => {
+    // Detection alone would say squashed (majority PR-referenced subjects); the
+    // override forces granular for this invocation without changing what detection
+    // itself reported.
+    mockExecSequenceWithHistorySignals(
+      '', 'Dev',
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing (#101)`,
+      NUMSTAT
+    );
+
+    const summary = await collectLocalMetrics({ history: 'granular' }).then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.history_granularity).toBe('granular');
+    expect(summary.history_granularity_detected).toBe('squashed');
+    expect(summary.history_granularity_override).toBe('granular');
   });
 
   test('writes local_metrics_summary.json with three-way test classification rates', async () => {
@@ -683,8 +745,13 @@ describe('collectLocalMetrics — duplicate detection', () => {
     await collectLocalMetrics();
 
     const logCalls = execSync.mock.calls.map(c => c[0]).filter(c => String(c).includes('git log'));
-    expect(logCalls.length).toBeGreaterThan(0);
-    logCalls.forEach(c => expect(c).toMatch(/--no-merges/));
+    // The history-granularity merge-commit count query (`git log --merges ...`) is a
+    // deliberate exception: its whole purpose is to count the true merges --no-merges
+    // strips from every other git log call, so it is excluded from this assertion rather
+    // than failing it.
+    const analysisLogCalls = logCalls.filter(c => !String(c).includes('--merges '));
+    expect(analysisLogCalls.length).toBeGreaterThan(0);
+    analysisLogCalls.forEach(c => expect(c).toMatch(/--no-merges/));
   });
 
   test('scans for duplicates once, not once per consumer', async () => {

@@ -23,7 +23,7 @@ const path = require('path');
 require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -74,12 +74,13 @@ function parseBranchList(output) {
 }
 
 /**
- * Parse --since <date> / --days <n> CLI flags into a collectLocalMetrics options object.
+ * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
+ * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed' }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -100,6 +101,14 @@ function parseCliArgs(argv) {
       }
       options.days = days;
       i++;
+    } else if (argv[i] === '--history') {
+      if (!argv[i + 1]) throw new Error("--history requires 'granular' or 'squashed'");
+      const history = argv[i + 1];
+      if (history !== 'granular' && history !== 'squashed') {
+        throw new Error(`--history must be 'granular' or 'squashed', got '${history}'`);
+      }
+      options.history = history;
+      i++;
     }
   }
   return options;
@@ -107,8 +116,10 @@ function parseCliArgs(argv) {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string }} [options] CLI window override: since (an explicit
- *   YYYY-MM-DD boundary) takes precedence over days (a count replacing CONFIG.ANALYSIS_DAYS).
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed' }} [options] CLI
+ *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
+ *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
+ *   auto-detection for this invocation only.
  */
 async function collectLocalMetrics(options = {}) {
   const analysisDays = options.days ?? CONFIG.ANALYSIS_DAYS;
@@ -265,6 +276,24 @@ async function collectLocalMetrics(options = {}) {
     return;
   }
 
+  // History granularity: independent of workflowType (which only distinguishes
+  // feature-branch from trunk, not squash-merge-delete from direct push -- see
+  // code-quality-metrics-bnq). --no-merges above strips true merge commits from
+  // the analyzed set, so their count is fetched separately here; their presence
+  // is itself evidence FOR granular history (a true merge-button workflow keeps
+  // individual commits, e.g. emberjs), not a squash signal.
+  const historyRefs = branchesToAnalyze.join(' ');
+  const mergeLog = runGitCommand(`git log --merges --since="${sinceStr}" --pretty=format:"%H" ${historyRefs}`);
+  const mergeCommitCount = mergeLog ? mergeLog.split('\n').filter(Boolean).length : 0;
+  const committerLog = runGitCommand(`git log --no-merges --since="${sinceStr}" --pretty=format:"%cn" ${historyRefs}`);
+  const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
+  const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
+  // Undetermined defaults to squashed, not unknown: squash-merge-delete is the more common
+  // workflow, and asserting a verdict against bands that don't apply is a worse error than
+  // withholding one that would have been valid (code-quality-metrics-bnq's notes).
+  const detectedForWithholding = detectedGranularity.value === 'unknown' ? 'squashed' : detectedGranularity.value;
+  const historyGranularity = options.history ?? detectedForWithholding;
+
   // Analyze commits in detail
   const commitsToAnalyze = uniqueCommits.slice(0, CONFIG.MAX_COMMITS);
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
@@ -395,6 +424,11 @@ async function collectLocalMetrics(options = {}) {
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
     workflow_type: workflowType,
+    history_granularity: historyGranularity,
+    history_granularity_detected: detectedGranularity.value,
+    history_granularity_confidence: detectedGranularity.confidence,
+    history_granularity_signals: detectedGranularity.signals,
+    history_granularity_override: options.history ?? null,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,
@@ -416,7 +450,12 @@ async function collectLocalMetrics(options = {}) {
     net_additions_ratio_median: ratioStats.p50,
     net_additions_ratio_p90: ratioStats.p90,
     message_quality_pct,
-    dora_archetype: classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
+    // Suppressed entirely (the key is omitted from the written JSON -- JSON.stringify drops an
+    // undefined value) rather than shown without a verdict, since the archetype is a composite
+    // of the commit-unit metrics withheld above (code-quality-metrics-bnq requirement #5).
+    dora_archetype: historyGranularity === 'squashed'
+      ? undefined
+      : classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };
@@ -558,7 +597,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -566,7 +605,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed]');
     process.exit(1);
   }
 
