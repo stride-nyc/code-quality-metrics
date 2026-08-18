@@ -1,6 +1,7 @@
 'use strict';
 
 const { renderReportHtml } = require('../lib/report-template');
+const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { buildMetricCatalog } = require('../lib/report');
 
 function fixtureSummary(overrides) {
@@ -275,11 +276,13 @@ describe('renderReportHtml', () => {
   it('renders a description of what each metric measures and its DORA connection inside the card', () => {
     const html = renderReportHtml(fixtureArgs());
 
-    // Sourced from lib/metric-descriptions.js, which traces to
-    // metrics-specification.md's Metrics Reference / DORA Capability
-    // Coverage Map. large_commits_pct is always present in the catalog.
-    expect(html).toContain('proxy for wholesale AI code acceptance');
-    expect(html).toContain('Working in Small Batches');
+    // Sourced from lib/metric-descriptions.js rather than duplicated here, so a
+    // deliberate rewording does not fail this test. What is under test is that the
+    // description reaches the card, not the prose itself. large_commits_pct is
+    // always present in the catalog.
+    const { measures, dora } = METRIC_DESCRIPTIONS.large_commits_pct;
+    expect(html).toContain(measures);
+    expect(html).toContain(dora);
 
     const cards = html.split('<article class="metric-card"').slice(1);
     expect(cards).toHaveLength(13);
@@ -335,6 +338,21 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('Layer 2 (semantic) ran');
   });
 
+  it('shows the semantic layer as not measured, not a confident zero, when layers_run.semantic is "unmeasured"', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 5,
+      static_duplicates: [],
+      semantic_findings: [],
+      layers_run: { static: true, semantic: 'unmeasured' }
+    };
+    const html = renderReportHtml(args);
+
+    expect(html).toContain('Duplicate Code');
+    expect(html).not.toContain('No semantic findings');
+    expect(html.toLowerCase()).toContain('not measured');
+  });
+
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
     const html = renderReportHtml(fixtureArgs());
     expect(html).not.toContain('Duplicate Code');
@@ -368,4 +386,22 @@ describe('renderReportHtml', () => {
     expect(semanticCard).toContain('Not measured');
     expect(semanticCard).not.toMatch(/class="metric-value">0</);
   });
+
+  // Guard, not a red: this wording already exists. Pinned here because naming only a
+  // missing API key sends readers to check configuration that is already correct, which
+  // is what happened on a run whose .env was fine.
+  it('the unmeasured layer indicator names failure and truncation, not just a missing key', () => {
+    const html = renderReportHtml({
+      ...fixtureArgs(),
+      duplicates: {
+        statistics: null,
+        static_duplicates: [],
+        semantic_findings: [],
+        layers_run: { static: true, semantic: 'unmeasured' }
+      }
+    });
+
+    expect(html).toMatch(/truncat|fail/i);
+  });
+
 });

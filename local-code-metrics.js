@@ -16,14 +16,17 @@
 const fs = require('fs');
 const path = require('path');
 
-// Load .env file if present — allows ANTHROPIC_API_KEY to be set without exporting to the shell
-require('dotenv').config({ quiet: true });
+// Load .env file if present — allows ANTHROPIC_API_KEY to be set without exporting to the
+// shell. Resolved relative to this script's own directory (not process.cwd()), since this
+// tool is routinely invoked against another repository's working directory. See
+// lib/env.js for the full precedence order.
+require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
-const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, analyzeDuplicatesWithClaude } = require('./lib/claude');
+const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
 /**
@@ -359,10 +362,20 @@ async function collectLocalMetrics(options = {}) {
   const { findings: staticDuplicates, statistics: duplicateStatistics } = runDuplicateAnalysis(prodFilePaths);
   /** @type {any[]} */
   let semanticFindings = [];
+  // false: layer did not run (no client). true: ran and produced a usable result
+  // (possibly genuinely zero findings). 'unmeasured': attempted but the call
+  // failed or its response was truncated — must not be confused with a real 0.
+  /** @type {boolean|'unmeasured'} */
+  let semanticLayerStatus = false;
   if (anthropicClient && prodFilePaths.length > 0) {
     console.log(`🔁 Running semantic duplicate analysis on ${prodFilePaths.length} production file(s)...`);
     const neighborFiles = resolveModuleNeighbors(prodFilePaths);
-    semanticFindings = await analyzeDuplicatesWithClaude(anthropicClient, neighborFiles, staticDuplicates);
+    const semanticResult = await runSemanticDuplicateAnalysis(anthropicClient, neighborFiles, staticDuplicates);
+    semanticFindings = semanticResult.findings;
+    // The outcome is a plain field on the result: 'ok' when the call produced a usable
+    // answer, 'unmeasured' when it failed or was truncated. Never collapse the second
+    // into a confident true, which is what made a failed call look like a real zero.
+    semanticLayerStatus = semanticResult.status === 'unmeasured' ? 'unmeasured' : true;
   }
 
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
@@ -436,7 +449,7 @@ async function collectLocalMetrics(options = {}) {
       static_duplicates: staticDuplicates,
       semantic_findings: semanticFindings,
       statistics: duplicateStatistics,
-      layers_run: { static: true, semantic: Boolean(anthropicClient) }
+      layers_run: { static: true, semantic: semanticLayerStatus }
     };
     fs.writeFileSync(
       path.join(outputDir, 'local_duplicate_analysis.json'),

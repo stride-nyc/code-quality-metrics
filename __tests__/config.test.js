@@ -18,4 +18,8 @@ describe('CONFIG duplicate detection defaults', () => {
   test('CONFIG.DUPLICATE_SCAN_PATHS is an array', () => {
     expect(Array.isArray(CONFIG.DUPLICATE_SCAN_PATHS)).toBe(true);
   });
+
+  test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
+    expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
+  });
 });
