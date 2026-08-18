@@ -85,6 +85,16 @@ describe('runDuplicateCheck', () => {
     const command = execSync.mock.calls[0][0];
     expect(command).toContain('**/generated/**');
   });
+
+  test('excludes lock files by default', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('**/package-lock.json');
+    expect(command).toContain('**/yarn.lock');
+    expect(command).toContain('**/pnpm-lock.yaml');
+    expect(command).toContain('**/*.lock');
+  });
 });
 
 describe('runDuplicateAnalysis', () => {
