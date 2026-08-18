@@ -198,6 +198,33 @@ jobs:
             })();
 
             // ---------------------------------------------------------------
+            // Minimum-sample guard for rate verdicts (code-quality-metrics-w9f)
+            // ---------------------------------------------------------------
+
+            // THRESHOLDS.LARGE_COMMITS_PCT, .SPRAWLING_COMMITS_PCT and .TEST_COVERAGE_RATE are
+            // calibrated from 50-commit repo-window samples (see lib/thresholds.js). A rate over
+            // this PR's own n=1..~10 commits can only take a handful of discrete values (0%,
+            // 1/n%, ..., 100%), so at n=1 the rate is either 0% or 100% and comparing it to a
+            // p75-of-window band is not a meaningful comparison -- the same reasoning that
+            // already kept P90_FILES_CHANGED off prodFilesCount above (a p90 across many commits
+            // in a time window is not the same measurement as one PR's raw count). Below this
+            // guard, the rate is still reported (DORA table, Commit Analysis table) but no
+            // pass/fail verdict is drawn from it.
+            //
+            // MIN_COMMITS_FOR_RATE_VERDICT is a convention chosen for this guard, not a value
+            // derived from calibration/observations.json or any cited source -- unlike the
+            // bands it gates comparisons against. Nothing in the calibration data speaks to how
+            // small a sample can get before a rate stops being informative; 5 is picked only as
+            // a round number clearly smaller than the 50-commit windows the bands were derived
+            // from, and clearly large enough that a single commit cannot swing the rate between
+            // 0% and 100%.
+            const MIN_COMMITS_FOR_RATE_VERDICT = 5;
+            const hasEnoughCommitsForRateVerdict = commitMetrics.length >= MIN_COMMITS_FOR_RATE_VERDICT;
+            const smallSampleNote = (commitMetrics.length > 0 && !hasEnoughCommitsForRateVerdict)
+              ? `_Sample size (${commitMetrics.length} commit${commitMetrics.length === 1 ? '' : 's'}) is below the ${MIN_COMMITS_FOR_RATE_VERDICT}-commit convention for a rate verdict (code-quality-metrics-w9f): large-commit %, sprawling-commit % and test-first discipline are reported below without a pass/fail judgement._`
+              : '';
+
+            // ---------------------------------------------------------------
             // Development pattern detection
             // ---------------------------------------------------------------
 
@@ -215,8 +242,10 @@ jobs:
             // hasTestDiscipline now gates on THRESHOLDS.TEST_COVERAGE_RATE.healthy instead of an
             // uncalibrated 50% cutoff (code-quality-metrics-4hu): testFirstPct is the same
             // construct test_coverage_rate bands (test+prod co-occurrence rate), just measured
-            // over this PR's commits instead of a repo-window sample.
-            const hasTestDiscipline = commitMetrics.length > 0 &&
+            // over this PR's commits instead of a repo-window sample. Also gated on
+            // hasEnoughCommitsForRateVerdict (code-quality-metrics-w9f): below that sample size
+            // the rate is not compared to the band at all.
+            const hasTestDiscipline = hasEnoughCommitsForRateVerdict &&
               testFirstPct > THRESHOLDS.TEST_COVERAGE_RATE.healthy;
 
             // ---------------------------------------------------------------
@@ -251,12 +280,17 @@ jobs:
             // commits flagged large/sprawling within this PR's commit sample), rather than the
             // previously uncalibrated 50%/30% cutoffs (code-quality-metrics-4hu). The message
             // text also now interpolates CONFIG.LARGE_COMMIT_THRESHOLD/SPRAWLING_COMMIT_THRESHOLD
-            // instead of restating 100/5 as separate literals (code-quality-metrics-vom).
-            if (largeCommits > commitMetrics.length * (THRESHOLDS.LARGE_COMMITS_PCT.critical / 100)) {
+            // instead of restating 100/5 as separate literals (code-quality-metrics-vom). Both
+            // are also gated on hasEnoughCommitsForRateVerdict (code-quality-metrics-w9f): at
+            // n=1 a rate can only be 0% or 100%, so comparing it to a window-calibrated critical
+            // bound is not a meaningful comparison below that sample size.
+            if (hasEnoughCommitsForRateVerdict &&
+                largeCommits > commitMetrics.length * (THRESHOLDS.LARGE_COMMITS_PCT.critical / 100)) {
               concerns.push(`${largeCommits}/${commitMetrics.length} commits exceed ${CONFIG.LARGE_COMMIT_THRESHOLD} production lines`);
             }
 
-            if (sprawlingCommits > commitMetrics.length * (THRESHOLDS.SPRAWLING_COMMITS_PCT.critical / 100)) {
+            if (hasEnoughCommitsForRateVerdict &&
+                sprawlingCommits > commitMetrics.length * (THRESHOLDS.SPRAWLING_COMMITS_PCT.critical / 100)) {
               concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than ${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files`);
             }
 
@@ -440,6 +474,8 @@ jobs:
               ].join('\n') : '',
               '',
               doraSection,
+              '',
+              smallSampleNote,
               '',
               duplicationSection,
               '',
