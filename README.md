@@ -113,8 +113,8 @@ against a defect or delivery outcome."
 | **Large Commit %** | ≤19% | Detects batch AI code acceptance |
 | **Sprawling Commit %** | ≤18% | Identifies scattered changes across files |
 | **Test Coverage Rate** (test+prod co-occurrence, not sequencing) | ≥23% | Same-commit test/production overlap |
-| **Message Quality %** | ≥66% | Conventional commits or descriptive messages |
-| **Net Additions Ratio (median)** | ≤0.63 | Flags batch-acceptance pattern (bounded -1–1: 1.0 = entirely net-new code) |
+| **Message Quality %** | reported, no target | Conventional commits or descriptive messages |
+| **Net Additions Ratio (median)** | reported, no target | Flags batch-acceptance pattern (bounded -1–1: 1.0 = entirely net-new code) |
 | **Duplication Density %** | ≤6% | Share of scanned production code textually duplicated |
 | **Avg Files Changed (p90)** | ≤8 | Measures development granularity |
 

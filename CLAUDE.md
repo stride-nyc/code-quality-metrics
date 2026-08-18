@@ -77,12 +77,20 @@ enforces this at runtime — never reads a `null` critical bound as zero).
 | Sprawling commit % (>5 files) | ≤18% | >20% | three-band |
 | Test coverage rate (test+prod co-occurrence) | ≥23% | — | two-band |
 | Uncovered prod rate | ≤13% | — | two-band |
-| Commit message quality % | ≥66% | — | two-band |
-| Avg lines changed | ≤140 | >200 | three-band |
+| Commit message quality % | — | — | informational |
+| Avg lines changed | — | — | informational |
 | p90 lines changed | ≤260 | — | two-band |
 | p90 files changed | ≤8 | — | two-band |
-| Net additions ratio (median) | ≤0.63 | >0.79 | three-band |
+| Net additions ratio (median) | — | — | informational |
 | Duplication density % | ≤6% | >6.5% | three-band |
+
+Three rows read informational because their bands were withdrawn on evidence, not because
+they are unmeasured: each value is still computed and reported, with no verdict attached.
+Message quality was found to measure Conventional Commits adoption rather than informativeness.
+Net additions ratio used a churn denominator the source literature discards. Avg lines changed
+has no finite mean to band: three independent published fits put commit size on a heavy-tailed
+distribution, and a generalized Pareto with shape above 1 has no finite mean at all. Seven
+metrics carry a band; three of those have a critical bound.
 
 Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
 
@@ -100,7 +108,7 @@ reservations. Do not cite these numbers as validated outcome thresholds.
 
 ### DORA Archetype Classification
 
-The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape. `classifyDoraArchetype` (`lib/metrics.js`) reads its boundaries directly from the calibrated bands in `lib/thresholds.js` rather than a separate hand-copied set, so four of the five boundary values a naive read might expect (large-commit healthy/critical, sprawling-commit healthy/critical, test-coverage healthy, uncovered-prod healthy) trace to the same calibration as the Key Metrics table above. Only the *grouping* of those signals into four named archetypes is this toolkit's own invention; DORA does not publish this grouping, and message-quality no longer plays any part in it (its own band was demoted to informational — see below). Do not read the field as a DORA classification.
+The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape. `classifyDoraArchetype` (`lib/metrics.js`) reads its boundaries directly from the calibrated bands in `lib/thresholds.js` rather than a separate hand-copied set, so every boundary value it compares against (large-commit healthy and critical, sprawling-commit healthy and critical, test-coverage healthy, uncovered-prod healthy) traces to the same calibration as the Key Metrics table above, and the function holds no hardcoded numeric literal at all. Only the *grouping* of those signals into four named archetypes is this toolkit's own invention; DORA does not publish this grouping, and message-quality no longer plays any part in it (its own band was demoted to informational — see below). Do not read the field as a DORA classification.
 
 It classifies the repository based on large commit %, sprawling commit %, test coverage rate, and uncovered prod rate, evaluated in this order:
 
