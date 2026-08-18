@@ -57,18 +57,45 @@ Three public components sharing pure-computation logic via `lib/`:
 
 ## Key Metrics and Thresholds
 
-| Metric | Healthy Threshold |
-|--------|------------------|
-| Large commit % (>100 prod lines) | <20% |
-| Sprawling commit % (>5 files) | <10% |
-| Test-to-production ratio | 0.5–2.0:1 |
-| Avg files changed per commit | <5 |
-| Commit message quality % | >60% |
-| Net additions ratio (median) | <0.50 |
+Bands are quantiles of a six-repository benchmark (nodejs/node, emberjs/ember.js, git/git,
+postgres/postgres, django/django, curl/curl), derived by `calibration/derive-bands.js` from
+`calibration/observations.json` — the same published-method framing Alves, Ypma and Visser use
+in "Deriving Metric Thresholds from Benchmark Data" (ICSM 2010, DOI 10.1109/ICSM.2010.5609747).
+**"Healthy" below means "at or below the 75th percentile of this benchmark," not "validated
+against a quality outcome."** No cited source publishes a boundary number for any of these
+metrics: DORA scores batch size from self-reported ordinal survey answers and never converts
+them to a line count, and GitClear reports trends and prevalence rather than a healthy line.
+Values below are current as of `node calibration/derive-bands.js --era current`; a metric marked
+two-band has no critical bound because its extreme rests on a single reference repository with
+no second repository corroborating it within 15% (`lib/report.js`'s `statusForTwoBand`
+enforces this at runtime — never reads a `null` critical bound as zero).
+
+| Metric | Healthy | Critical | Tier |
+|--------|---------|----------|------|
+| Large commit % (>100 prod lines) | ≤19% | >30% | three-band |
+| Sprawling commit % (>5 files) | ≤18% | >20% | three-band |
+| Test coverage rate (test+prod co-occurrence) | ≥23% | — | two-band |
+| Uncovered prod rate | ≤13% | — | two-band |
+| Commit message quality % | ≥66% | — | two-band |
+| Avg lines changed | ≤140 | >200 | three-band |
+| p90 lines changed | ≤260 | — | two-band |
+| p90 files changed | ≤8 | — | two-band |
+| Net additions ratio (median) | ≤0.63 | >0.79 | three-band |
+| Duplication density % | ≤6% | >6.5% | three-band |
 
 Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
 
-**These thresholds are being recalibrated and the table above will change.** No cited source publishes a boundary number for any of them: DORA scores batch size from self-reported ordinal survey answers and never converts them to a line count, and GitClear reports trends and prevalence rather than a healthy line. Bands are being derived instead from measuring six reference projects, recorded in `calibration/observations.json` with the reservations that qualify them. See `calibration/README.md` and the Threshold Provenance section of `metrics-specification.md`. Do not cite these numbers as research-backed.
+Two bands have corroboration from outside this project's own six repositories, as a *position*
+rather than a *boundary*: p90 lines changed (260) against Kolassa, Riehle & Salim's published p90
+of 261 LoC/commit over 8.7M commits (SOFSEM 2013), and p90 files changed (8) against Sadowski et
+al.'s ~90% of Google changes touching fewer than 10 files (ICSE-SEIP 2018) and Alali et al.'s gcc
+p90 of ~8 files (ICPC 2008). Thirteen reservations qualify every band, three of them high
+severity, including that a fitted, multi-feature just-in-time defect model already fails to
+transfer across projects (down to 0.38 AUC, worse than random — Kamei et al., EMSE 2016), which
+bears directly on how far an unfitted scalar band like these can be carried to a project unlike
+the six references. See `calibration/README.md` and the Threshold Provenance section of
+`metrics-specification.md` for the full derivation rule, the external anchors, and all thirteen
+reservations. Do not cite these numbers as validated outcome thresholds.
 
 ### DORA Archetype Classification
 

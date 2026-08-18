@@ -7,6 +7,23 @@ count, and GitClear reports trends and prevalence rather than a healthy line.
 The bands therefore have to come from measuring projects we are willing to hold
 up as disciplined, and from saying plainly which ones.
 
+**What a band means.** Deriving thresholds as quantiles of a benchmark of
+reference systems is itself a published method, not something invented for
+this project: Alves, Ypma and Visser, "Deriving Metric Thresholds from
+Benchmark Data" (ICSM 2010, DOI 10.1109/ICSM.2010.5609747) pool measurements
+across 100 Java/C# systems (roughly 12 MLOC, proprietary and open source) and
+read thresholds off percentiles of the pooled, LOC-weighted distribution. They
+are explicit that the method is outcome-agnostic: "our methodology derives
+meaningful thresholds which represent overall volume of code from a benchmark
+of systems" (§II-C), and they list validating thresholds against an external
+quality outcome as future work, not as something the method already
+establishes. That is the honest claim for every band below: it means "unusual
+relative to these six peers", not "unhealthy" and not "harmful". State the
+scale gap plainly rather than let the citation imply otherwise -- Alves used
+100 systems and roughly 12 million lines of code; this project uses six
+repositories and twelve calibration windows. The method transfers; the
+strength of the claim does not.
+
 ## Files
 
 | File | Purpose |
@@ -18,28 +35,49 @@ Run `node calibration/derive-bands.js` for a table, or `--json` for machine outp
 
 ## Derivation rule
 
-- **healthy** = the worst value any included reference produced. A project doing
-  no worse than the references is healthy by construction. This is the only
-  claim the data supports.
-- **critical** = healthy x 2. A stated convention, not a measurement. No
-  reference came close to it, so the observations cannot locate this boundary.
-  It is labelled as convention wherever it is reported, and should stay labelled
-  that way until something better exists.
+This is what `derive-bands.js` actually computes; keep this section in step with
+the script rather than letting it drift, which is exactly how it went stale
+before (`code-quality-metrics-xeh`).
+
+- **healthy** = the 75th percentile of the pooled observed values for a
+  higher-is-worse metric (25th percentile for a higher-is-better metric, since
+  the unhealthy end is the low tail there). Both bounds come from data, not
+  from a single worst case.
+- **critical** = the single worst value observed (best value, for
+  higher-is-better) -- but only reported when at least two distinct reference
+  repositories produced a value within 15% of that extreme
+  (`NEAR_EXTREME_FRACTION` in `derive-bands.js`). When the extreme rests on a
+  single repository or a single window, `critical` is `null` rather than
+  asserting a red boundary the observations cannot support, and the metric is
+  reported as **two-band** (good/warning only) instead of **three-band**
+  (good/warning/critical). `lib/report.js`'s `statusForTwoBand` is the runtime
+  half of this: a `null` critical boundary is a deliberate, checked absence of
+  evidence, not an omission to be coerced to zero.
+
+This supersedes an earlier, simpler rule this file used to state: healthy as
+the single worst observation, and critical as healthy times two, "a stated
+convention, not a measurement". That rule stopped being what the code does
+once the p75/max-with-corroboration tiering above landed
+(`derive-bands.js:27`), and this file was not updated to match, so a reader
+following the old text here would mis-derive every band and expect a critical
+bound at 2x healthy that the code has never produced.
 
 The script never edits `lib/thresholds.js`. Copy numbers across in a reviewed
 commit, so a threshold change is always deliberate.
 
 ## Reservations
 
-`observations.json` carries a `reservations` array: ten recorded concerns about
-using this sample to set thresholds, two of them high severity (a pre-AI baseline
-now exists -- see below -- which downgraded that one from high to medium). They
-are kept with the evidence rather than in `lib/thresholds.js` so the caveats
-travel with the data, and so adding a reference repository forces a reader to
-reconsider which still apply. `derive-bands.js` prints the high severity ones on
-every run.
+`observations.json` carries a `reservations` array: thirteen recorded concerns
+about using this sample to set thresholds, three of them high severity (a
+pre-AI baseline now exists -- see below -- which downgraded one from high to
+medium; three published transferability findings -- non-transferability across
+projects, context-dependence, and within-project drift over time -- were added
+afterward and one of those is itself high severity). They are kept with the
+evidence rather than in `lib/thresholds.js` so the caveats travel with the
+data, and so adding a reference repository forces a reader to reconsider which
+still apply. `derive-bands.js` prints the high severity ones on every run.
 
-The two that most limit how far these bands can be carried:
+The three that most limit how far these bands can be carried:
 
 - **Granular history only.** The bands are valid for repositories that preserve
   individual commits. A squash-merge repository yields one commit per pull
@@ -48,6 +86,13 @@ The two that most limit how far these bands can be carried:
 - **Circular definition.** The references were chosen because they are considered
   disciplined, and healthy is then defined as what they do. The bands support
   "no worse than these six", which is weaker than "healthy".
+- **Cross-project non-transfer.** Kamei et al. (EMSE 2016, Table 6) found a
+  fitted, multi-feature just-in-time defect model loses accuracy down to 0.38
+  AUC -- worse than random -- when applied to a project outside its training
+  set. An unfitted scalar band from six reference repositories has less claim
+  to transfer to an unseen project than a fitted model does, so these bands
+  should be read as describing these six repositories rather than generalizing
+  to one unlike them.
 
 A third, now medium severity, is worth calling out separately because it drove a
 whole second measurement pass:
