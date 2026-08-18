@@ -224,7 +224,10 @@ jobs:
                   net_additions_ratio_median: parseFloat(ratioStats.p50.toFixed(2)),
                   net_additions_ratio_p90: parseFloat(ratioStats.p90.toFixed(2)),
                   message_quality_pct: msgQualityPct,
-                  dora_archetype: classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2), message_quality_pct: msgQualityPct }),
+                  // message_quality_pct is not passed here: classifyDoraArchetype (lib/metrics.js)
+                  // reads only large-commit, sprawling, test-coverage and uncovered-prod from
+                  // THRESHOLDS, so message quality has no part in the archetype (code-quality-metrics-4hu).
+                  dora_archetype: classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2) }),
                   note: "Feature branches only - main/master excluded. Large commit threshold applied to production code only."
                 };
 

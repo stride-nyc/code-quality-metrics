@@ -220,10 +220,13 @@ jobs:
               concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than 5 files`);
             }
 
-
-            if (msgQualityPct < 40) {
-              concerns.push(`Message quality ${msgQualityPct.toFixed(0)}% is below 40% - consider more descriptive commit messages`);
-            }
+            // Message quality verdict withdrawn (code-quality-metrics-4hu): this used to push a
+            // concern against a hardcoded 40% cutoff while the DORA table two sections below
+            // states "no band, see spec" for the same value -- a contradiction inside one PR
+            // comment. MESSAGE_QUALITY_PCT carries no key in lib/thresholds.js (the metric was
+            // found to measure Conventional Commits adoption rather than informativeness, and
+            // 40 was never derived from anything). The value is still reported, without a
+            // verdict, in the DORA table and the Commit Analysis table below.
 
             if (hasIncrementalPattern) {
               strengths.push('Incremental development pattern detected');
@@ -277,8 +280,11 @@ jobs:
             // DORA archetype
             // ---------------------------------------------------------------
 
+            // message_quality_pct is not passed here: classifyDoraArchetype (lib/metrics.js)
+            // reads only large-commit, sprawling, test-coverage and uncovered-prod from
+            // THRESHOLDS, so message quality has no part in the archetype (code-quality-metrics-4hu).
             const archetype = commitMetrics.length > 0
-              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2), message_quality_pct: msgQualityPct.toFixed(2) })
+              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2) })
               : 'mixed-signals';
 
             const archetypeDescriptions = {
