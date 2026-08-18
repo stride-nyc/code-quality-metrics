@@ -30,7 +30,7 @@ const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWi
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
 /**
- * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
+ * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
  * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
@@ -202,7 +202,7 @@ async function collectLocalMetrics(options = {}) {
       // merging a single-commit branch reproduces that commit's diff and the same change
       // is counted twice. A merge commit's content belongs to the commits it merges.
       const logOutput = runGitCommand(
-        `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${branch}`
+        `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%B%x1e" ${branch}`
       );
 
       const branchCommits = parseGitLog(logOutput);
@@ -246,7 +246,7 @@ async function collectLocalMetrics(options = {}) {
 
     process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
     const trunkLog = runGitCommand(
-      `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${fallbackRef}`
+      `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%B%x1e" ${fallbackRef}`
     );
     const trunkCommits = parseGitLog(trunkLog);
     trunkCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });
@@ -321,7 +321,7 @@ async function collectLocalMetrics(options = {}) {
   const ratioStats = computeStatistics(ratios, timestamps);
 
   // Message quality
-  const qualityCount = metrics.filter(m => scoreMessageQuality(m.message)).length;
+  const qualityCount = metrics.filter(m => scoreMessageQuality(m.message, m.full_message)).length;
   const message_quality_pct = metrics.length > 0
     ? ((qualityCount / metrics.length) * 100).toFixed(2)
     : '0.00';
