@@ -181,6 +181,38 @@ paper on productivity effects across generations of AI coding tools (WP 35275), 
 analysis of AI-accelerated codebases, and a paper on inconsistent software clones. Check these
 before searching outward.
 
+## Recording work in beads
+
+This project tracks all work in beads, and you should file what you find rather than leaving
+it in a report. Issues you create are visible immediately: beads runs a single shared
+database, so it does not matter which checkout you are in.
+
+```
+bd search <keyword>          # check first, an issue may already exist
+bd create --title="..." --description="..." --type=task --priority=2 \
+          --deps discovered-from:<parent-id>
+bd show <id>
+```
+
+Four rules, the first two of which matter most:
+
+- **Search before creating.** An overlapping issue with no link to its sibling is the one
+  thing that genuinely causes trouble here, because it fragments the plan. This project has
+  already closed the wrong ticket once for exactly that reason.
+- **Do not commit anything under `.beads/`.** Both `issues.jsonl` and `interactions.jsonl` are
+  tracked and regenerate on every write, so committing them from a second checkout produces
+  merge conflicts. The database already holds your work; leave the export to whoever
+  integrates your branch.
+- **Link back** with `--deps discovered-from:<parent-id>` so a reader can see where a finding
+  came from. If your work relates to an existing threshold issue, note it there with
+  `bd update <id> --append-notes` instead of opening a rival issue.
+- **Do not close issues you did not do the work for**, and do not claim issues belonging to
+  other work in flight.
+
+File an issue for a finding that implies work: a threshold that should change, a source worth
+following, a claim in this project's documentation that needs correcting. Put pure findings in
+your report, not in beads.
+
 ## Output
 
 For each of the nine questions:
