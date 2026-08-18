@@ -68,6 +68,7 @@
   .t-ok   { color: #1D9E75; }
   .t-warn { color: #BA7517; }
   .t-crit { color: #D85A30; }
+  .t-info { color: #6B7280; }
   .t-label { font-size: 11px; color: var(--color-text-secondary); }
 
   .divider { border: none; border-top: 0.5px solid var(--color-border-tertiary); margin: 1rem 0 0; }
@@ -216,7 +217,7 @@ const GIT_METRICS = [
   },
   {
     title:'Commit size distribution', sub:'p50 / p90 / p95 lines', type:'full',
-    thresholds:[{r:'avg ≤ 140',l:'Healthy',cls:'t-ok'},{r:'avg 140-200',l:'Warning',cls:'t-warn'},{r:'avg > 200',l:'Critical',cls:'t-crit'},{r:'p90 ≤ 260',l:'Healthy (two-band)',cls:'t-ok'}],
+    thresholds:[{r:'p90 ≤ 260',l:'Healthy (two-band)',cls:'t-ok'},{r:'p90 > 260',l:'Warning',cls:'t-warn'},{r:'mean',l:'Informational: no band',cls:'t-info'}],
     source:'Capability #5, "Working in small batches", as above.',
     cite:'DORA 2025, p. 50',
     measured:'Percentiles of total lines changed per commit, whole diff including tests, computed with <code>simple-statistics</code>. Unlike the large-commit flag, these describe how much a reviewer reads, so test lines are counted.',
@@ -246,7 +247,7 @@ const GIT_METRICS = [
   },
   {
     title:'Net additions ratio', sub:'Median share net-new', type:'full',
-    thresholds:[{r:'≤ 0.63',l:'Healthy',cls:'t-ok'},{r:'0.63-0.79',l:'Warning',cls:'t-warn'},{r:'> 0.79',l:'Critical',cls:'t-crit'}],
+    thresholds:[{r:'reported',l:'Informational: no band',cls:'t-info'}],
     source:'GitClear reports that 2024 was the first year copy-pasted lines exceeded moved lines, and projects code churn doubling against its 2021 pre-AI baseline.',
     cite:'GitClear 2025, pp. 5, 8',
     measured:'Median of (additions - deletions) / (additions + deletions) per commit, bounded to plus or minus one.',
@@ -256,7 +257,7 @@ const GIT_METRICS = [
   },
   {
     title:'Commit message quality', sub:'Conventional or 10+ words', type:'partial',
-    thresholds:[{r:'≥ 66%',l:'Healthy (two-band)',cls:'t-ok'},{r:'< 66%',l:'Warning',cls:'t-warn'}],
+    thresholds:[{r:'reported',l:'Informational: no band',cls:'t-info'}],
     source:'Capability #4, "Strong version control practices", is a named DORA capability, but DORA describes it in terms of commit frequency, rollback capability and branching, never message wording.',
     cite:'DORA 2025, p. 50',
     measured:'Share of messages matching conventional commit format, or containing at least <code>MESSAGE_QUALITY_MIN_WORDS</code> (10) words. Now scored against the full commit body rather than the subject alone, which the short-subject convention used by postgres, git and curl requires: on an identical 50-commit set postgres moved from 22 to 94 percent. A trailing block of <code>Key: value</code> trailers is stripped first, since a body of only <code>PR-URL:</code> and <code>Reviewed-By:</code> lines otherwise passed on reviewer count alone.',
@@ -276,12 +277,12 @@ const GIT_METRICS = [
   },
   {
     title:'Duplication density', sub:'jscpd, share of lines', type:'full',
-    thresholds:[{r:'≤ 6%',l:'Healthy',cls:'t-ok'},{r:'6-6.5%',l:'Warning',cls:'t-warn'},{r:'> 6.5%',l:'Critical',cls:'t-crit'}],
+    thresholds:[{r:'≤ 2%',l:'Healthy',cls:'t-ok'},{r:'> 2%',l:'Warning',cls:'t-warn'}],
     source:'GitClear analysed 211 million changed lines from 2020 to 2024 and recorded an eight-fold increase in the frequency of code blocks with five or more duplicated lines during 2024. Their duplicate-block prevalence rose from 0.70% of commits in 2020 to 6.66% in 2024.',
     cite:'GitClear 2025, pp. 1, 5, 12',
     measured:'jscpd <code>statistics.total.percentage</code>: duplicated lines as a share of lines scanned across production files from the analysed commits. Vendored, generated and lock-file trees are excluded by default: Node vendors dependencies in-tree, and one <code>deps/</code> sync moved its measured duplication from 5.12 to 15.09 percent with no change in practice. The ignore list was also being passed to jscpd through the wrong flag, so every configured pattern was silently inert.',
     connect:'Different denominators. GitClear reports the share of <strong>commits containing</strong> a duplicate block; this reports the share of <strong>lines that are</strong> duplicated. 6.66% and 6% are not comparable quantities, and no source publishes a share-of-lines figure. The best evidence on duplication as a defect signal runs the other way: Rahman, Bird &amp; Devanbu (MSR 2010, four C projects) found clones "may be less defect prone than non-cloned code" and Wagner et al. (SANER 2016) found clone length does not predict faultiness (ρ = 0.268, p = 0.120). This metric is kept as a drift signal, not a defect-risk claim.',
-    basis:'Quantiles of the six-repository benchmark, three-band: healthy = 6 (p75), critical = 6.5, corroborated by nodejs/node, postgres/postgres and curl/curl -- superseding the original 3/10 band, which came from two repositories belonging to this project\'s author. The 6% healthy line resembles SonarQube\'s default gate (≤3%, under the old band) but is measured at half Sonar\'s minimum clone size (<code>DUPLICATE_MIN_LINES: 5</code>/<code>DUPLICATE_MIN_TOKENS: 50</code> vs Sonar\'s 10/100); Wagner et al. found halving the minimum roughly triples measured duplication on the same systems, so the resemblance is not validation (<code>code-quality-metrics-k1g</code>). See <code>calibration/</code>.',
+    basis:'Quantiles of the six-repository benchmark, two-band: healthy = 2 (p75), no critical bound, since only curl/curl sits within 15% of the worst observed value. Measured at Sonar\'s own minimum clone size (<code>DUPLICATE_MIN_LINES: 10</code>/<code>DUPLICATE_MIN_TOKENS: 100</code>), so the percentage means what Sonar\'s duplicated-lines gate and the published 3-23 percent clone-study range mean. The earlier 6/6.5 three-band was derived at 5/50 and outlived that setting: Wagner et al. found halving the minimum roughly triples measured duplication on the same systems, and re-measuring these six repositories at 10/100 moved the median 3.24x, so duplication was scored about three times too permissively until it was re-derived (<code>code-quality-metrics-8ad</code>). A band here is comparable only at the settings it was derived at. See <code>calibration/</code>.',
     v:'measured'
   },
   {

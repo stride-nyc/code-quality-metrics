@@ -672,13 +672,19 @@ matched by `DUPLICATE_IGNORE_PATTERNS`.
 `node_modules/`, `generated/` and common lock files — added after a vendored `deps/` sync on
 nodejs/node moved measured duplication from 5.12% to 15.09% with no change in practice).
 
-**Thresholds** (`DUPLICATION_PCT` in `lib/thresholds.js`; three-band, corroborated at the
-critical extreme by nodejs/node, postgres/postgres and curl/curl):
+**Thresholds** (`DUPLICATION_PCT` in `lib/thresholds.js`; two-band, no corroborated critical
+extreme: only curl/curl sits within 15% of the worst observed value):
 | Range | Signal |
 |-------|--------|
-| ≤ 6% | Healthy: at or below the 75th percentile of the benchmark |
-| 6–6.5% | Warning |
-| > 6.5% | Critical: at or above the worst value three reference repositories all produced |
+| ≤ 2% | Healthy: at or below the 75th percentile of the benchmark |
+| > 2% | Warning |
+
+Re-derived at `DUPLICATE_MIN_LINES` 10 and `DUPLICATE_MIN_TOKENS` 100 (`code-quality-metrics-8ad`).
+The prior band, healthy 6 and critical 6.5 as three-band, was derived at 5/50 and left in place
+when the detector was raised, so duplication was scored roughly three times more permissively
+than the reference set warranted, against a critical line the re-measured data does not support.
+**A band on this metric is comparable only at the detector settings it was derived at**, which is
+now gated by `__tests__/thresholdProvenance.test.js`.
 
 **The literature does not support reading duplication as a defect signal.** Rahman, Bird and
 Devanbu (MSR 2010, four C projects, 116-155 monthly snapshots each): "we find that clones may be

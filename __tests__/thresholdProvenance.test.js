@@ -150,3 +150,47 @@ describe('documentation provenance', () => {
     expect(documented).toEqual(expected);
   });
 });
+
+// ai_drift_metrics_coverage_map.html is organised by DORA metric, so one tile can
+// cover several of this toolkit's metrics. Gate the tier claim rather than the
+// numbers: a tile may show a Critical row only if something it covers actually has
+// a critical bound, and a tile covering only informational metrics may show no
+// numeric threshold at all. This catches a withdrawn band left on display, which
+// is how avg_lines_changed, net_additions_ratio_median and message_quality_pct
+// each survived in this file after losing their bands in lib/thresholds.js.
+// Tile title -> the THRESHOLDS keys it presents. null means "informational: no band".
+const COVERAGE_MAP_TILES = {
+  'Mean time to recovery': ['LARGE_COMMITS_PCT'],
+  'Sprawling commit %': ['SPRAWLING_COMMITS_PCT'],
+  'Test discipline': ['TEST_COVERAGE_RATE', 'UNCOVERED_PROD_RATE'],
+  'Commit size distribution': ['P90_LINES_CHANGED', null],
+  'File scope distribution': ['P90_FILES_CHANGED'],
+  'Net additions ratio': [null],
+  'Commit message quality': [null],
+  'Duplication density': ['DUPLICATION_PCT']
+};
+
+describe('coverage map provenance', () => {
+  test('the coverage map presents a critical band only where lib/thresholds.js has one, and no band at all for informational metrics', () => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'ai_drift_metrics_coverage_map.html'), 'utf8');
+
+    const presented = {};
+    const expected = {};
+
+    for (const [title, keys] of Object.entries(COVERAGE_MAP_TILES)) {
+      const tile = new RegExp(`title:'${title.replace(/[.*+?^$()|[\]\\]/g, '\\$&')}'[\\s\\S]{0,400}?thresholds:\\[([^\\]]*)\\]`).exec(html);
+      const rows = tile ? tile[1] : null;
+
+      const banded = keys.filter(Boolean);
+      const anyCritical = banded.some(k => THRESHOLDS[k].critical != null);
+      const allInformational = banded.length === 0;
+
+      presented[title] = rows === null
+        ? 'tile not found'
+        : { showsCritical: /Critical/.test(rows), showsAnyNumber: /[\d.]/.test(rows) };
+      expected[title] = { showsCritical: anyCritical, showsAnyNumber: !allInformational };
+    }
+
+    expect(presented).toEqual(expected);
+  });
+});
