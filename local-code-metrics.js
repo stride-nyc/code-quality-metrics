@@ -198,8 +198,11 @@ async function collectLocalMetrics(options = {}) {
     process.stdout.write(`📊 Analyzing branch: ${branch}... `);
 
     try {
+      // --no-merges: git show --numstat diffs a merge against its first parent, so
+      // merging a single-commit branch reproduces that commit's diff and the same change
+      // is counted twice. A merge commit's content belongs to the commits it merges.
       const logOutput = runGitCommand(
-        `git log --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${branch}`
+        `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${branch}`
       );
 
       const branchCommits = parseGitLog(logOutput);
@@ -243,7 +246,7 @@ async function collectLocalMetrics(options = {}) {
 
     process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
     const trunkLog = runGitCommand(
-      `git log --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${fallbackRef}`
+      `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%s" ${fallbackRef}`
     );
     const trunkCommits = parseGitLog(trunkLog);
     trunkCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });

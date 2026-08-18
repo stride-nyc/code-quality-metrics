@@ -674,6 +674,19 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(output.static_duplicates).toEqual([fixtureDuplicate]);
   });
 
+  test('excludes merge commits so their changes are not counted twice', async () => {
+    // git show --numstat diffs a merge against its first parent, so merging a
+    // single-commit branch reproduces that commit's diff exactly and the same change
+    // is counted twice. Verified on flight-info-spike: merge 7126d5c and its child
+    // dacea2c both reported 9 files and 943 lines. Asserting the git command because
+    // which commits git emits is not observable locally.
+    await collectLocalMetrics();
+
+    const logCalls = execSync.mock.calls.map(c => c[0]).filter(c => String(c).includes('git log'));
+    expect(logCalls.length).toBeGreaterThan(0);
+    logCalls.forEach(c => expect(c).toMatch(/--no-merges/));
+  });
+
   test('scans for duplicates once, not once per consumer', async () => {
     duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
 
