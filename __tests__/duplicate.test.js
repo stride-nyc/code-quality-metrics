@@ -78,6 +78,13 @@ describe('runDuplicateCheck', () => {
     expect(command).toContain('**/third_party/**');
     expect(command).toContain('**/node_modules/**');
   });
+
+  test('excludes generated-code trees by default', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('**/generated/**');
+  });
 });
 
 describe('runDuplicateAnalysis', () => {
