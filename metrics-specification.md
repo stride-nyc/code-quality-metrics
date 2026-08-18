@@ -300,11 +300,11 @@ django/django and curl/curl):
 
 ### Metric 3: Three-Way Test Coverage Classification
 
-**What it measures**: Replaces the binary `test_first_indicator` with three distinct commit categories, each carrying different signal quality for AI drift detection.
+**What it measures**: Replaces the binary `test_prod_cochange_commit` (renamed from `test_first_indicator` under code-quality-metrics-36d) with three distinct commit categories, each carrying different signal quality for AI drift detection.
 
 | Category | Formula | Per-commit flag | Summary field |
 |----------|---------|----------------|---------------|
-| Test Coverage | test AND prod files in same commit | `test_first_indicator` | `test_coverage_rate` |
+| Test Coverage | test AND prod files in same commit | `test_prod_cochange_commit` | `test_coverage_rate` |
 | Test Isolation | test files only (no prod files) | `test_only_commit` | `test_isolation_rate` |
 | Uncovered Prod | prod files only AND large commit | `uncovered_prod_commit` | `uncovered_prod_rate` |
 
@@ -344,15 +344,44 @@ same teens-to-thirties range as the 23% derived here.
 
 **Why `uncovered_prod_rate` matters**: A commit that is both prod-only and large is the clearest AI drift signal in this toolkit — it matches the pattern of a developer accepting a large AI-generated code block without writing any tests. `test_isolation_rate` is a positive signal: test-only commits indicate TDD red-phase work or deliberate test improvements, both of which the binary metric incorrectly classified as "bad".
 
-**The same-commit heuristic is a published-noisy proxy for what this metric reaches for.**
-`test_coverage_rate` and `test_first_indicator` measure co-occurrence in one commit, not
-sequencing. Sun et al. (TOSEM 2023) exists specifically to test whether same-commit
-co-occurrence identifies genuine test/production co-evolution and reports "the pervasive
-existence of noise". Borle et al. (EMSE 2018) make the same point in their own threats-to-validity
-section: "In a git history, test first could look like testing at the same time, or even testing
-later depending on how the git commits were formed." This does not change what the field measures
-in this release -- `test_first_indicator` still means same-commit co-occurrence, exactly as coded
-in `lib/git.js` -- but the label should not be read as evidence of test-first *sequencing*.
+**The same-commit heuristic is a published-noisy proxy for what this metric reaches for, which is
+why the per-commit flag is named for co-occurrence rather than ordering.** `test_coverage_rate`
+and `test_prod_cochange_commit` measure co-occurrence in one commit, not sequencing. The field was
+previously named `test_first_indicator`, a name this project has withdrawn (code-quality-metrics-36d)
+because it asserted an ordering the same-commit check cannot observe. Three peer-reviewed sources
+support the withdrawal:
+
+- Sun, Yan, Liu, Xia, Lei & Lo (TOSEM 32(6) art. 152, 2023, doi 10.1145/3607183) exist
+  specifically to test whether same-commit co-occurrence identifies genuine test/production
+  co-evolution and report "the pervasive existence of noise" in samples identified this way, with
+  a six-category noise taxonomy.
+- Borle, Feghhi, Stroulia, Greiner & Hindle (EMSE 2018, doi 10.1007/s10664-017-9576-3) make the
+  same point in their own threats-to-validity section: "In a git history, test first could look
+  like testing at the same time, or even testing later depending on how the git commits were
+  formed."
+- Marsavina, Romano & Zaidman (SCAM 2014, Section V.A) report that test changes triggered by a
+  production change often land in a *later* commit rather than the same one, so "a number of
+  subsequent commits have to be inspected" before the pairing this metric looks for would even
+  appear.
+
+`test_prod_cochange_commit` still means same-commit co-occurrence, exactly as coded in
+`lib/git.js`, and the rename does not change what it measures or claim the noise these sources
+document has been resolved -- it only stops the field's own name from making a claim (test-first
+sequencing) the measurement cannot support. The rename also penalises, by omission, the deliberate
+practice of landing a failing test and its production code as two separate atomic commits: that
+practice looks identical to test-after work under this same-commit check.
+
+Fucci, Turhan & Oivo (TSE 43(7):597-614, 2017) bear on the same question from a different angle: in
+their controlled study, *sequencing* (the share of test-first development cycles) dropped out of
+both their quality and productivity models, while *granularity* (cycle length) and *uniformity*
+(consistency of cycle length) survived as predictors. That result points toward commit size and
+batch consistency, both of which this toolkit already measures (Metrics 1 and 4), as the
+better-founded proxies for the underlying practice this metric reaches for, rather than ordering.
+
+**No study cited here relates a co-change rate to a defect or other quality outcome.** Nothing in
+this section, or in `test_coverage_rate`'s calibrated band above, should be read as
+quality-validated: the band says where this population's rate sits relative to a six-repository
+benchmark, not that a higher rate produces fewer defects or higher quality code.
 
 **DORA connection**: none directly. Automated testing is not among the seven capabilities in DORA's 2025 AI Capabilities Model (*State of AI-Assisted Software Development 2025*, p. 50), which names clear AI stance, healthy data ecosystems, AI-accessible internal data, strong version control practices, working in small batches, user-centric focus, and quality internal platforms. This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this document called testing DORA's "single strongest predictor"; that claim was not supported by the report and has been removed.
 
@@ -1001,7 +1030,7 @@ Array of `CommitMetric` objects, one per analyzed commit:
   prod_files_count: number,
 
   // Derived flags
-  test_first_indicator: boolean,
+  test_prod_cochange_commit: boolean,
   large_commit: boolean,
   sprawling_commit: boolean,
   change_ratio: string,         // "X.XX" or "inf"
