@@ -1113,7 +1113,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1179,7 +1178,8 @@
           ]
         },
         "repo_head_unchanged": "cb9bb66780936138b360e61d50133fdf080998e3"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "nodejs/node",
@@ -1211,7 +1211,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1277,7 +1276,8 @@
           ]
         },
         "repo_head_unchanged": "c0327d3cbb982c75cb2233e9f4ed483e39c03c73"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -1309,7 +1309,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1375,7 +1374,8 @@
           ]
         },
         "repo_head_unchanged": "26071400a790fa8c4c81c4485785d613fb8c9702"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -1407,7 +1407,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1473,7 +1472,8 @@
           ]
         },
         "repo_head_unchanged": "b7bcbe7f43da2e4e86471edf01966210fe00ea0f"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -1505,7 +1505,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1571,7 +1570,8 @@
           ]
         },
         "repo_head_unchanged": "18e66859d87fb4b76599f73460b54f0848c76b16"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -1603,7 +1603,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1669,7 +1668,8 @@
           ]
         },
         "repo_head_unchanged": "2cc71917514657b93014134350864f4849edfc83"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -1701,7 +1701,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1767,7 +1766,8 @@
           ]
         },
         "repo_head_unchanged": "92e20d4a4382810a30bdb394473d6ee891edab73"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -1799,7 +1799,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1865,7 +1864,8 @@
           ]
         },
         "repo_head_unchanged": "be21341e13d996b54ff8a2f1f9c8f4f1b63fc9ea"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -1897,7 +1897,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1963,7 +1962,8 @@
           ]
         },
         "repo_head_unchanged": "30ebe0001c1d10bebc68567f796d821f7b309f4d"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -1995,7 +1995,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2061,7 +2060,8 @@
           ]
         },
         "repo_head_unchanged": "6be668b0cc6524c9900181c5bd8273ef2f256a34"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -2093,7 +2093,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2159,7 +2158,8 @@
           ]
         },
         "repo_head_unchanged": "05ddf5511ac765c8fc4eb44507ab7c585116f665"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -2191,7 +2191,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2257,7 +2256,8 @@
           ]
         },
         "repo_head_unchanged": "614b94eeccc9e798a5592baaa784df763bd85528"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "nodejs/node",
@@ -2289,7 +2289,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2355,7 +2354,8 @@
           ]
         },
         "repo_head_unchanged": "453ed053432e0c1ae34457e5c364b7091af2615e"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "nodejs/node",
@@ -2387,7 +2387,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2453,7 +2452,8 @@
           ]
         },
         "repo_head_unchanged": "c118304ad02d96f330ecd44c6437a1f9c677fc60"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -2485,7 +2485,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2551,7 +2550,8 @@
           ]
         },
         "repo_head_unchanged": "83a0c2fdfa8f22fd353dcab32ea41c4bcacaa379"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -2583,7 +2583,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2649,7 +2648,8 @@
           ]
         },
         "repo_head_unchanged": "27d547de76b5c19b530cae6b0798075890188d18"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -2681,7 +2681,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2747,7 +2746,8 @@
           ]
         },
         "repo_head_unchanged": "ef60740e9efb364d8bb0fba120adecf860cc8ed0"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -2779,7 +2779,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2845,7 +2844,8 @@
           ]
         },
         "repo_head_unchanged": "a4f324a423ddfe3680bf6105f8c113d0e76305a0"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -2877,7 +2877,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2943,7 +2942,8 @@
           ]
         },
         "repo_head_unchanged": "4c3d05d875dd173a81a995c6e14d69496b467eec"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -2975,7 +2975,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3041,7 +3040,8 @@
           ]
         },
         "repo_head_unchanged": "69bd60672af63eaa8b19cdcea175df5ff172e80e"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -3073,7 +3073,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3139,7 +3138,8 @@
           ]
         },
         "repo_head_unchanged": "6485a5f450b3dc60e690c31a75e0e9574a896842"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -3171,7 +3171,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3237,7 +3236,8 @@
           ]
         },
         "repo_head_unchanged": "eaf9764d3bb25970da89de5799d8d308715628ba"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -3269,7 +3269,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3335,7 +3334,8 @@
           ]
         },
         "repo_head_unchanged": "275b74a53d47174fcc29bab2fc23f599e1205f41"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -3367,7 +3367,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3433,7 +3432,8 @@
           ]
         },
         "repo_head_unchanged": "0b4c4145aac87047513e30a348e63fde96da892d"
-      }
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "python/cpython",
@@ -3465,7 +3465,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3502,7 +3501,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed), consistent with commit-unit verdicts being inapplicable to a squash-merged repository -- recorded as null here for the same reason, not an omission. See merge_style_evidence for the PR_REFERENCE_PATTERN GH-N gap found while confirming this window."
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed), consistent with commit-unit verdicts being inapplicable to a squash-merged repository -- recorded as null here for the same reason, not an omission. See merge_style_evidence for the PR_REFERENCE_PATTERN GH-N gap found while confirming this window.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "python/cpython",
@@ -3534,7 +3534,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3571,7 +3570,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "apache/kafka",
@@ -3603,7 +3603,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3640,7 +3639,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "apache/kafka",
@@ -3672,7 +3672,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3709,7 +3708,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "microsoft/playwright",
@@ -3741,7 +3741,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3778,7 +3777,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "microsoft/TypeScript (originally selected) was dropped: `git log --since=2026-07-19` on its main branch found only 2 commits, because primary compiler development has moved off this branch (public 'native port' effort); a window that thin cannot stand in for 50 commits of practice. Replaced with microsoft/playwright, same organization, still actively squash-merged. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "microsoft/TypeScript (originally selected) was dropped: `git log --since=2026-07-19` on its main branch found only 2 commits, because primary compiler development has moved off this branch (public 'native port' effort); a window that thin cannot stand in for 50 commits of practice. Replaced with microsoft/playwright, same organization, still actively squash-merged. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "microsoft/playwright",
@@ -3810,7 +3810,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3847,7 +3846,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "49 of 50 commits analyzed: one blob failed to lazy-fetch from the blobless clone's promisor remote ('No stats found for commit'), a further instance of the transient blobless-fetch defect also seen on django/django's 2026-03-02 window in the granular set. duplication_pct (20.73%) is far above every other window measured in either population; the window's largest commit, 'chore(cli): provide skills (#39069)' (3229 lines / 25 files), adds a batch of near-templated skill/config files, which plausibly drives most of the clone count. Recorded as measured rather than excluded, since it is a real window, not a tool defect, but the DUPLICATE_IGNORE_PATTERNS list (deps/vendor/third_party/generated/lockfiles) does not cover a templated-content burst like this one. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "49 of 50 commits analyzed: one blob failed to lazy-fetch from the blobless clone's promisor remote ('No stats found for commit'), a further instance of the transient blobless-fetch defect also seen on django/django's 2026-03-02 window in the granular set. duplication_pct (20.73%) is far above every other window measured in either population; the window's largest commit, 'chore(cli): provide skills (#39069)' (3229 lines / 25 files), adds a batch of near-templated skill/config files, which plausibly drives most of the clone count. Recorded as measured rather than excluded, since it is a real window, not a tool defect, but the DUPLICATE_IGNORE_PATTERNS list (deps/vendor/third_party/generated/lockfiles) does not cover a templated-content burst like this one. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "facebook/react",
@@ -3879,7 +3879,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3916,7 +3915,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "filtered_from (51) is only just above commits_analyzed (50): react's main branch had a slow 30-day window at measurement time, so this window is close to its own --since boundary rather than a deep truncation. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "filtered_from (51) is only just above commits_analyzed (50): react's main branch had a slow 30-day window at measurement time, so this window is close to its own --since boundary rather than a deep truncation. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "facebook/react",
@@ -3948,7 +3948,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -3985,7 +3984,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "TanStack/query",
@@ -4017,7 +4017,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -4054,7 +4053,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "TanStack/query",
@@ -4086,7 +4086,6 @@
         "DUPLICATE_MIN_LINES": 10,
         "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -4123,7 +4122,8 @@
       "exclusion_reason": null,
       "era": "current",
       "population": "squash-merge",
-      "notes": "p90_files_changed (86) reflects TanStack/query's monorepo-wide 'ci: Version Packages' release-bot commits, which touch every published package's package.json/CHANGELOG.md in one commit; this is a structural feature of this monorepo's release process, not an outlier to discard. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission."
+      "notes": "p90_files_changed (86) reflects TanStack/query's monorepo-wide 'ci: Version Packages' release-bot commits, which touch every published package's package.json/CHANGELOG.md in one commit; this is a structural feature of this monorepo's release process, not an outlier to discard. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "TanStack/query",

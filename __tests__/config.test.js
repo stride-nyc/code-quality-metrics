@@ -26,4 +26,13 @@ describe('CONFIG duplicate detection defaults', () => {
   test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
     expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
   });
+
+  // code-quality-metrics-wcj: '**/designs/**' was a fact about one target repo
+  // (stride-nyc/flight-info-spike) sitting in defaults shared by every consumer.
+  // It moves to that repo's own .codemetrics.json (see lib/repoConfig.js and
+  // AGENTS.md's "Per-Repo Configuration Overrides" section for the mechanism),
+  // not into this shared file.
+  test('CONFIG.DUPLICATE_IGNORE_PATTERNS no longer carries the flight-info-spike-specific **/designs/** pattern', () => {
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).not.toContain('**/designs/**');
+  });
 });
