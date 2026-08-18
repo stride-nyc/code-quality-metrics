@@ -264,15 +264,13 @@ jobs:
               if (prodOnlyCommits === commitMetrics.length) {
                 testConcerns.push('All commits lack test coverage');
               }
-            } else if (testRatio < 0.3) {
-              testAdequacy = 'needs-improvement';
-              testConcerns.push('Low test coverage ratio - consider adding more tests');
-            } else if (testRatio >= 0.3 && testRatio <= 2.0) {
-              testAdequacy = 'good';
-              testPraise.push('Good balance of production and test code');
             } else {
-              testAdequacy = 'excellent';
-              testPraise.push('Comprehensive test coverage');
+              // No calibrated band exists for this ratio (code-quality-metrics-a1n):
+              // it never appears in lib/thresholds.js or calibration/derive-bands.js, and
+              // the two numeric ranges this used to display (0.3-2.0 gating the verdict,
+              // 0.5-2.0 in the displayed target) disagreed with each other. Report the
+              // ratio descriptively rather than attaching an uncalibrated verdict to it.
+              testAdequacy = 'measured';
             }
 
             // ---------------------------------------------------------------
@@ -391,12 +389,12 @@ jobs:
               testAdequacy !== 'n/a' ? [
                 '## Test Coverage',
                 '',
-                `**Test Adequacy:** ${testAdequacy}`,
+                testAdequacy === 'measured'
+                  ? `**Test-to-Production Ratio:** ${testRatio.toFixed(2)}:1 (no calibrated target for this ratio; reported descriptively)`
+                  : `**Test Adequacy:** ${testAdequacy}`,
                 '',
                 testPraise.length > 0 ? testPraise.map(p => `- ${p}`).join('\n') : '',
-                testConcerns.length > 0 ? testConcerns.map(c => `- ${c}`).join('\n') : '',
-                '',
-                '**Target ratio:** 0.5-2.0 test lines per production line'
+                testConcerns.length > 0 ? testConcerns.map(c => `- ${c}`).join('\n') : ''
               ].join('\n') : '',
               '',
               doraSection,
