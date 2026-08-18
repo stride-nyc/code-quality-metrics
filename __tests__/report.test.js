@@ -215,16 +215,21 @@ describe('buildMetricCatalog when history_granularity is squashed', () => {
   // [guard] duplication measures file contents, not commit shape, so it keeps its verdict
   // regardless of history_granularity (code-quality-metrics-bnq requirement #4).
   it('[guard] keeps the duplication density verdict intact when history is squashed', () => {
+    // Sits past healthy, so an intact verdict is a visible one. duplication_pct is
+    // two-band since its re-derivation at 10/100 (code-quality-metrics-8ad), so the
+    // strongest verdict available is 'warning'; asserting 'critical' here would be
+    // asserting a bound the data does not support.
     const dup = {
-      statistics: { percentage: THRESHOLDS.DUPLICATION_PCT.critical, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
+      statistics: { percentage: THRESHOLDS.DUPLICATION_PCT.healthy + 5, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
       semantic_findings: [],
       layers_run: { static: true, semantic: false }
     };
     const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }), dup);
     const density = entries.find(e => e.key === 'duplication_density_pct');
     expect(density.hasGauge).toBe(true);
-    expect(density.status).toBe('critical');
-    expect(density.criticalBoundary).toBe(THRESHOLDS.DUPLICATION_PCT.critical);
+    expect(density.status).toBe('warning');
+    expect(density.descriptiveNote).toBeUndefined();
+    expect(density.criticalBoundary).toBeNull();
   });
 
   // [guard] message_quality_pct, net_additions_ratio_median and avg_lines_changed already had
@@ -384,15 +389,20 @@ describe('buildMetricCatalog with duplicates', () => {
     expect(density.status).toBe('good');
   });
 
-  it('computes concern = 1 (critical) for duplication density at its critical boundary', () => {
-    // percentage is read from THRESHOLDS rather than hardcoded so a recalibration
-    // that moves DUPLICATION_PCT.critical doesn't break this test for no reason.
+  it('never reports critical for duplication density, however far past healthy, since it has no critical bound', () => {
+    // This test previously drove percentage to THRESHOLDS.DUPLICATION_PCT.critical and
+    // asserted concern 1. Reading the boundary from THRESHOLDS protected it against a
+    // value change but not against a tier change: the 10/100 re-derivation
+    // (code-quality-metrics-8ad) left duplication_pct two-band, so there is no critical
+    // boundary to sit at. The concern-1 critical path stays covered by
+    // large_commits_pct, which is genuinely three-band.
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
-      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: THRESHOLDS.DUPLICATION_PCT.critical, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
+      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: THRESHOLDS.DUPLICATION_PCT.healthy * 20, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
     }));
     const density = entries.find(e => e.key === 'duplication_density_pct');
-    expect(density.concern).toBe(1);
-    expect(density.status).toBe('critical');
+    expect(density.status).toBe('warning');
+    expect(density.concern).toBe(-1);
+    expect(density.criticalBoundary).toBeNull();
   });
 
   it('renders duplicated-lines-out-of-total and clone-count as informational stat cards', () => {

@@ -46,7 +46,7 @@ describe('THRESHOLDS', () => {
       AI_BATCH_SHARE: { additionsRatio: 3, share: 0.3 },
       P90_LINES_CHANGED: { healthy: 260, critical: null },
       P90_FILES_CHANGED: { healthy: 8, critical: null },
-      DUPLICATION_PCT: { healthy: 6, critical: 6.5 }
+      DUPLICATION_PCT: { healthy: 2, critical: null }
     });
   });
 });
