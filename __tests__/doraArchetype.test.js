@@ -1,8 +1,20 @@
 'use strict';
 
 const { classifyDoraArchetype } = require('../local-code-metrics');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 describe('classifyDoraArchetype', () => {
+  it('returns "harmonious-high-achiever" even when message quality is poor', () => {
+    const { HARMONIOUS } = THRESHOLDS.DORA_ARCHETYPE;
+    expect(classifyDoraArchetype({
+      large_commits_pct: String(HARMONIOUS.large - 15),
+      sprawling_commits_pct: String(HARMONIOUS.sprawling - 8),
+      test_coverage_rate: String(HARMONIOUS.testCoverage + 40),
+      uncovered_prod_rate: String(HARMONIOUS.uncoveredProd - 9),
+      message_quality_pct: String(HARMONIOUS.messageQuality - 59)
+    })).toBe('harmonious-high-achiever');
+  });
+
   it('returns "harmonious-high-achiever" for all-healthy metrics', () => {
     expect(classifyDoraArchetype({
       large_commits_pct: '10.00',
