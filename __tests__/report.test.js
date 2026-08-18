@@ -76,7 +76,7 @@ describe('buildMetricCatalog', () => {
   });
 
   it('computes concern = 1 (critical) for a higher-is-worse metric at its critical boundary', () => {
-    const entries = buildMetricCatalog(fullSummary({ large_commits_pct: '40.00' }));
+    const entries = buildMetricCatalog(fullSummary({ large_commits_pct: '30.00' }));
     const entry = entries.find(e => e.key === 'large_commits_pct');
     expect(entry.concern).toBe(1);
     expect(entry.status).toBe('critical');
@@ -149,17 +149,61 @@ describe('buildMetricCatalog', () => {
 
   it('sources healthy/critical boundaries for the newly-added threshold bands from lib/thresholds.js', () => {
     const entries = buildMetricCatalog(fullSummary());
-    const p90Lines = entries.find(e => e.key === 'p90_lines_changed');
-    expect(p90Lines.healthyBoundary).toBe(200);
-    expect(p90Lines.criticalBoundary).toBe(500);
-
     const p90Files = entries.find(e => e.key === 'p90_files_changed');
-    expect(p90Files.healthyBoundary).toBe(8);
-    expect(p90Files.criticalBoundary).toBe(15);
+    expect(p90Files.healthyBoundary).toBe(9.5);
+    expect(p90Files.criticalBoundary).toBe(13);
 
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
     expect(netAdditions.healthyBoundary).toBe(0.33);
     expect(netAdditions.criticalBoundary).toBe(0.50);
+  });
+});
+
+describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
+  it('never reports critical for a two-band metric, however far past healthy the value sits', () => {
+    // p90_lines_changed is two-band (healthy 260, critical null): the extreme
+    // rests on a single reference repo (see lib/thresholds.js's comment).
+    const mild = buildMetricCatalog(fullSummary({ p90_lines_changed: 300 }))
+      .find(e => e.key === 'p90_lines_changed');
+    expect(mild.status).toBe('warning');
+    expect(mild.criticalBoundary).toBeNull();
+
+    const extreme = buildMetricCatalog(fullSummary({ p90_lines_changed: 50000 }))
+      .find(e => e.key === 'p90_lines_changed');
+    expect(extreme.status).toBe('warning');
+    expect(extreme.status).not.toBe('critical');
+  });
+
+  it('reports good, not warning, for a two-band metric comfortably inside the healthy range', () => {
+    // Regression: computeConcern treated a null criticalBoundary as 0, which
+    // fabricated a "warning" for values well inside healthy (e.g.
+    // sprawling_commits_pct at 8%, healthy 19) because (8-19)/(0-19) > 0.
+    const sprawling = buildMetricCatalog(fullSummary({ sprawling_commits_pct: '8.00' }))
+      .find(e => e.key === 'sprawling_commits_pct');
+    expect(sprawling.status).toBe('good');
+
+    const avgLines = buildMetricCatalog(fullSummary({ avg_lines_changed: '50.00' }))
+      .find(e => e.key === 'avg_lines_changed');
+    expect(avgLines.status).toBe('good');
+  });
+
+  it('fixes concern at -1 for two-band metrics, keeping them out of the relevance sort against real critical/warning findings', () => {
+    const entries = buildMetricCatalog(fullSummary({ sprawling_commits_pct: '90.00' }));
+    const sprawling = entries.find(e => e.key === 'sprawling_commits_pct');
+    expect(sprawling.concern).toBe(-1);
+  });
+
+  it('marks a two-band entry with tier two-band and a three-band entry with tier three-band', () => {
+    const entries = buildMetricCatalog(fullSummary());
+    expect(entries.find(e => e.key === 'sprawling_commits_pct').tier).toBe('two-band');
+    expect(entries.find(e => e.key === 'large_commits_pct').tier).toBe('three-band');
+  });
+
+  it('never reports critical for test_coverage_rate even far below healthy (two-band, not a fabricated critical bound)', () => {
+    const entry = buildMetricCatalog(fullSummary({ test_coverage_rate: '1.00' }))
+      .find(e => e.key === 'test_coverage_rate');
+    expect(entry.status).toBe('warning');
+    expect(entry.criticalBoundary).toBeNull();
   });
 });
 

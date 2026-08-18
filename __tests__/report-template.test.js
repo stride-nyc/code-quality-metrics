@@ -258,10 +258,34 @@ describe('renderReportHtml', () => {
   it('renders a threshold description for each metric card describing its healthy and critical boundaries', () => {
     const html = renderReportHtml(fixtureArgs());
 
-    // large_commits_pct: higher-is-worse, healthy 20, critical 40 (from lib/thresholds.js)
-    expect(html).toContain('Healthy below 20, critical above 40');
-    // test_coverage_rate: higher-is-better, healthy 50, critical (warning) 30
-    expect(html).toContain('Healthy above 50, critical below 30');
+    // large_commits_pct: higher-is-worse, healthy 23, critical 30 (from lib/thresholds.js)
+    expect(html).toContain('Healthy below 23, critical above 30');
+  });
+
+  it('describes a two-band metric honestly: a healthy bound but no fabricated critical bound', () => {
+    // test_coverage_rate is two-band (healthy 50, critical null): the low extreme
+    // rests on a single reference repo. The card must say so, never state a
+    // numeric critical boundary that does not exist.
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+
+    expect(coverageCard).toBeDefined();
+    expect(coverageCard).not.toMatch(/critical (above|below) \d/);
+    expect(coverageCard.toLowerCase()).toContain('no critical bound');
+  });
+
+  it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
+    // test_coverage_rate is two-band. A gauge asserting a red zone it cannot
+    // support would overstate what the data shows, so it must render only two
+    // bands (good, warning) and no gauge-critical path at all.
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+
+    expect(coverageCard).not.toContain('gauge-critical');
+    const bandCount = (coverageCard.match(/class="gauge-band /g) || []).length;
+    expect(bandCount).toBe(2);
   });
 
   it('omits a threshold description for informational entries with no numeric boundary', () => {
