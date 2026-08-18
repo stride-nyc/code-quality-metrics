@@ -76,6 +76,27 @@ describe('buildMetricCatalog', () => {
     expect(entries).toHaveLength(13);
   });
 
+  // code-quality-metrics-a9z, code-quality-metrics-6ti: both bands are dropped, not
+  // re-tiered, because the literature review found no defensible boundary for either
+  // measure. Reported descriptively: no gauge, no good/warning/critical verdict, and a
+  // concern fixed at -Infinity (never a new finite sentinel -- see
+  // duplication_semantic_findings's own history, code-quality-metrics-82k, where a fixed
+  // finite sentinel got outranked by a formula-computed concern once a band narrowed) so
+  // neither entry ever competes with a real scored metric in the relevance sort.
+  it('builds net_additions_ratio_median and message_quality_pct as informational entries: no verdict, no gauge, sentinel concern', () => {
+    const entries = buildMetricCatalog(fullSummary());
+    const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
+    const messageQuality = entries.find(e => e.key === 'message_quality_pct');
+
+    for (const entry of [netAdditions, messageQuality]) {
+      expect(entry.hasGauge).toBe(false);
+      expect(entry.status).toBe('neutral');
+      expect(entry.concern).toBe(-Infinity);
+      expect(entry.healthyBoundary).toBeNull();
+      expect(entry.criticalBoundary).toBeNull();
+    }
+  });
+
   it('computes concern = 1 (critical) for a higher-is-worse metric at its critical boundary', () => {
     const entries = buildMetricCatalog(fullSummary({ large_commits_pct: '30.00' }));
     const entry = entries.find(e => e.key === 'large_commits_pct');
@@ -124,12 +145,13 @@ describe('buildMetricCatalog', () => {
     expect(concerns).toEqual(sorted);
   });
 
-  it('sets hasGauge true only for the five bounded-percentage metrics', () => {
+  // message_quality_pct dropped out of the gauge set (code-quality-metrics-6ti): a gauge
+  // implies a band, and this metric no longer has one.
+  it('sets hasGauge true only for the four bounded-percentage metrics with a scored band', () => {
     const entries = buildMetricCatalog(fullSummary());
     const gaugeKeys = entries.filter(e => e.hasGauge).map(e => e.key).sort();
     expect(gaugeKeys).toEqual([
       'large_commits_pct',
-      'message_quality_pct',
       'sprawling_commits_pct',
       'test_coverage_rate',
       'uncovered_prod_rate'
@@ -147,10 +169,16 @@ describe('buildMetricCatalog', () => {
     const p90Files = entries.find(e => e.key === 'p90_files_changed');
     expect(p90Files.healthyBoundary).toBe(THRESHOLDS.P90_FILES_CHANGED.healthy);
     expect(p90Files.criticalBoundary).toBe(THRESHOLDS.P90_FILES_CHANGED.critical);
+  });
 
+  // code-quality-metrics-a9z: THRESHOLDS no longer has a NET_ADDITIONS_RATIO_MEDIAN key at
+  // all (the band was dropped, not re-tiered), so this entry's boundaries are always null,
+  // never sourced from THRESHOLDS.
+  it('carries no boundary at all for net_additions_ratio_median now that its band is dropped', () => {
+    const entries = buildMetricCatalog(fullSummary());
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
-    expect(netAdditions.healthyBoundary).toBe(THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy);
-    expect(netAdditions.criticalBoundary).toBe(THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.critical);
+    expect(netAdditions.healthyBoundary).toBeNull();
+    expect(netAdditions.criticalBoundary).toBeNull();
   });
 });
 
@@ -206,17 +234,18 @@ describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
     expect(entry.criticalBoundary).toBeNull();
   });
 
-  // message_quality_pct is two-band under era:current (calibration/derive-bands.js:
-  // only emberjs/ember.js corroborates the extreme) -- it was three-band before this
-  // recalibration, which is what the removed "matching hand-computed examples" test
-  // exercised. There is currently no real higher-is-better, three-band metric left in
-  // the catalog (test_coverage_rate is two-band in both eras), so the concern
-  // formula's higher-is-better branch has no metric-level regression coverage right
-  // now; see code-quality-metrics-82k's report for this gap.
-  it('never reports critical for message_quality_pct even far below healthy (two-band, not a fabricated critical bound)', () => {
+  // message_quality_pct is no longer two-band or three-band at all (code-quality-metrics-6ti
+  // dropped its band, not re-tiered it): it never reports good, warning or critical,
+  // however low the value, because there is no boundary left to compare it against. There is
+  // currently no real higher-is-better, three-band metric left in the catalog
+  // (test_coverage_rate is two-band in both eras), so the concern formula's higher-is-better
+  // branch has no metric-level regression coverage right now; see code-quality-metrics-82k's
+  // report for this gap.
+  it('never reports a verdict for message_quality_pct however low the value (band dropped, not re-tiered)', () => {
     const entry = buildMetricCatalog(fullSummary({ message_quality_pct: '1.00' }))
       .find(e => e.key === 'message_quality_pct');
-    expect(entry.status).toBe('warning');
+    expect(entry.status).toBe('neutral');
+    expect(entry.healthyBoundary).toBeNull();
     expect(entry.criticalBoundary).toBeNull();
   });
 });

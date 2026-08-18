@@ -139,6 +139,8 @@ describe('renderReportHtml', () => {
     expect(indices).toEqual(sortedIndices);
   });
 
+  // message_quality_pct dropped out of the gauge set (code-quality-metrics-6ti): a gauge
+  // implies a band, and this metric no longer has one.
   it('renders a semicircular gauge svg for each catalog entry with hasGauge true', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
@@ -146,22 +148,21 @@ describe('renderReportHtml', () => {
     const gaugeCount = (html.match(/<svg class="gauge"/g) || []).length;
     const expectedCount = args.catalog.filter(entry => entry.hasGauge).length;
 
-    expect(expectedCount).toBe(5);
+    expect(expectedCount).toBe(4);
     expect(gaugeCount).toBe(expectedCount);
   });
 
+  // code-quality-metrics-a9z: net_additions_ratio_median no longer has any band, so it never
+  // reports warning/critical/good, however the value moves -- only the fixed 'neutral'
+  // status this metric now always carries.
   it('renders a status chip for plain stat cards with hasGauge false', () => {
-    // Derive a value inside the warning band rather than hardcoding one. The literal 0.45
-    // was warning under the old 0.33/0.50 band and became good at 0.51/0.79, so it broke on
-    // recalibration for a reason unrelated to what this test checks.
-    const band = THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN;
-    const args = fixtureArgs({ net_additions_ratio_median: (band.healthy + band.critical) / 2 });
+    const args = fixtureArgs({ net_additions_ratio_median: 0.9 });
     const html = renderReportHtml(args);
     const entry = args.catalog.find(e => e.key === 'net_additions_ratio_median');
 
     expect(entry.hasGauge).toBe(false);
-    expect(entry.status).toBe('warning');
-    expect(html).toContain('<span class="status-chip">warning</span>');
+    expect(entry.status).toBe('neutral');
+    expect(html).toContain('<span class="status-chip">neutral</span>');
   });
 
   it('embeds all six vendored fonts via @font-face base64 data URIs', () => {
@@ -302,6 +303,26 @@ describe('renderReportHtml', () => {
     expect(coverageCard).toBeDefined();
     expect(coverageCard).not.toMatch(/critical (above|below) \d/);
     expect(coverageCard.toLowerCase()).toContain('no critical bound');
+  });
+
+  // code-quality-metrics-a9z, code-quality-metrics-6ti: both bands are dropped entirely
+  // (no gauge, no verdict), which is exactly the situation this project has already flagged
+  // as a bug risk for the two-band tier -- a bare number with no explanation reads as broken.
+  // The card must say why, briefly, the same way the two-band tile above says "No critical
+  // bound: the high end rests on a single reference repository."
+  it('renders a brief reason for the missing verdict on net_additions_ratio_median and message_quality_pct cards', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+
+    const netAdditionsCard = cards.find(card => card.includes('>Net-new ratio (median)</p>'));
+    expect(netAdditionsCard).toBeDefined();
+    expect(netAdditionsCard).toContain('class="metric-threshold"');
+    expect(netAdditionsCard.toLowerCase()).toContain('no healthy/critical band');
+
+    const messageQualityCard = cards.find(card => card.includes('>Message quality</p>'));
+    expect(messageQualityCard).toBeDefined();
+    expect(messageQualityCard).toContain('class="metric-threshold"');
+    expect(messageQualityCard.toLowerCase()).toContain('no healthy/critical band');
   });
 
   it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
