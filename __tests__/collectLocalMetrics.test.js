@@ -985,3 +985,76 @@ describe('collectLocalMetrics — repo-local .codemetrics.json override (code-qu
     expect(JSON.parse(secondSummaryCall[1]).config_sources.files).toEqual([]);
   });
 });
+
+describe('collectLocalMetrics — analysis exclusions and vendored-default share (code-quality-metrics-3b6)', () => {
+  test('writes local_metrics_summary.json with an analysis_exclusions block reporting excluded file/line counts and share', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      // 500 lines in an excluded bin/ file, 10 lines in an ordinary file: 510 total.
+      `500\t0\tbin/Debug/App.dll\n10\t0\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.analysis_exclusions.patterns).toContain('**/bin/**');
+    expect(summary.analysis_exclusions.excluded_files_count).toBe(1);
+    expect(summary.analysis_exclusions.excluded_lines_count).toBe(500);
+    // 500 of 510 total lines analyzed excluded.
+    expect(summary.analysis_exclusions.excluded_lines_pct).toBe('98.04');
+  });
+
+  test('reports zero excluded volume when ANALYSIS_IGNORE_PATTERNS is not configured (default)', async () => {
+    const SHA = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.analysis_exclusions.patterns).toEqual([]);
+    expect(summary.analysis_exclusions.excluded_files_count).toBe(0);
+    expect(summary.analysis_exclusions.excluded_lines_pct).toBe('0.00');
+  });
+
+  // The higher-value half (code-quality-metrics-3b6): visible even when nothing is
+  // configured, since CONFIG.DUPLICATE_IGNORE_PATTERNS's defaults are not empty.
+  test('reports vendored_generated_share even when ANALYSIS_IGNORE_PATTERNS is not configured', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `300\t0\tvendor/lib.js\n10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.vendored_generated_share.files_count).toBe(1);
+    expect(summary.vendored_generated_share.lines_count).toBe(300);
+    // 300 of 310 total lines.
+    expect(summary.vendored_generated_share.lines_pct).toBe('96.77');
+  });
+});
