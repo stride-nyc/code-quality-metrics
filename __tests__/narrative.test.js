@@ -3,6 +3,7 @@
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
 const { generateFindingsNarrative, buildNarrativePayload } = require('../lib/narrative');
+const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 
 function fixtureSummary(overrides) {
   return Object.assign({
@@ -158,5 +159,13 @@ describe('buildNarrativePayload', () => {
 
     expect(JSON.stringify(payload)).not.toContain('0.4108463434675432');
     expect(duplication.value).toBe('0.41');
+  });
+
+  test("includes the metric's own explanatory prose from METRIC_DESCRIPTIONS", () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const sprawling = payload.find(entry => entry.key === 'sprawling_commits_pct');
+
+    expect(sprawling.description.measures).toBe(METRIC_DESCRIPTIONS.sprawling_commits_pct.measures);
   });
 });
