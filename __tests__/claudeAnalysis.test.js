@@ -346,3 +346,19 @@ describe('runSemanticDuplicateAnalysis', () => {
     expect(fs.readFileSync).toHaveBeenCalledTimes(CONFIG.AI_DUPLICATE_MAX_FILES);
   });
 });
+
+describe('semantic duplicate output budget', () => {
+  test('requests enough output tokens to hold a complete findings array', async () => {
+    // A real 40-file response measured ~1000 output tokens against the old 1024 cap, so
+    // completion was a coin flip: one run finished at 969, another hit 1024 and truncated.
+    // Asserting the request parameter because the cap only manifests API-side; there is no
+    // local observable for "the response was not cut off".
+    const create = jest.fn().mockResolvedValue({
+      stop_reason: 'end_turn',
+      content: [{ type: 'text', text: '[]' }]
+    });
+    await runSemanticDuplicateAnalysis({ messages: { create } }, ['a.js'], []);
+
+    expect(create.mock.calls[0][0].max_tokens).toBeGreaterThanOrEqual(4096);
+  });
+});

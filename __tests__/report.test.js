@@ -43,6 +43,32 @@ function fullSummary(overrides) {
   }, overrides);
 }
 
+describe('buildMetricCatalog duplication semantic states', () => {
+  const dup = semantic => ({
+    statistics: { percentage: 1, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
+    semantic_findings: [],
+    layers_run: { static: true, semantic }
+  });
+  const tile = semantic => buildMetricCatalog(fullSummary(), dup(semantic))
+    .find(e => e.key === 'duplication_semantic_findings');
+
+  test('marks the semantic tile unmeasured when the layer ran but could not be measured', () => {
+    // layers_run.semantic is 'false | true | "unmeasured"'. The string is truthy, so a
+    // Boolean() check would call a failed or truncated run a confident zero.
+    expect(tile('unmeasured').status).toBe('unmeasured');
+    expect(tile('unmeasured').value).toBe('Not measured');
+  });
+
+  test('reports a real count only when the layer actually produced a result', () => {
+    expect(tile(true).status).toBe('neutral');
+    expect(tile(true).value).toBe(0);
+  });
+
+  test('marks the semantic tile unmeasured when the layer never ran', () => {
+    expect(tile(false).status).toBe('unmeasured');
+  });
+});
+
 describe('buildMetricCatalog', () => {
   it('returns one entry per catalog metric, 13 total', () => {
     const entries = buildMetricCatalog(fullSummary());
