@@ -2896,6 +2896,24 @@
       "severity": "low",
       "concern": "Six tool defects were found by measuring rather than by inspection, three of which changed what a metric counts: production-only line counting, repository-root test directory detection, and merge commit exclusion. The first 12 observations are retired for that reason.",
       "implication": "Observations are only valid for the tool commit that produced them, which is recorded per record. Any future fix that changes what a metric counts retires the affected observations again."
+    },
+    {
+      "id": "context-dependence",
+      "severity": "medium",
+      "concern": "Zhang, Mockus, Zou, Khomh and Hassan ('How Does Context Affect the Distribution of Software Maintainability Metrics?', ICSM 2013, DOI 10.1109/ICSM.2013.46) measured 320 SourceForge systems across 39 metrics and found that every one of six studied context factors (domain, language, age, lifespan, number of changes, number of downloads) shifts metric distributions; language alone shifted 35 of the 39 metrics. The six repositories behind these bands are one context (mature, granular-history, C/C++/JS/Python infrastructure projects with heavy public review cultures), not a population sample.",
+      "implication": "A band derived here should not be assumed to hold for a project in a different language, domain, age bracket, or size class. This compounds, rather than duplicates, the narrow-population reservation: that one is about who the six projects are, this one is about the general empirical fact that commit-shape metrics move with context at all."
+    },
+    {
+      "id": "cross-project-non-transfer",
+      "severity": "high",
+      "concern": "Kamei, Fukushima, McIntosh, Yamashita, Ubayashi and Hassan ('Studying just-in-time defect prediction using cross-project models', EMSE 21(5):2072-2106, 2016, DOI 10.1007/s10664-015-9400-x, Table 6) found within-project JIT defect models score 0.74-0.83 AUC on their own project, but the same models applied cross-project on the same eleven projects fall as low as 0.38 AUC -- worse than random. That is a fitted, multi-feature statistical model failing to transfer. A single scalar band derived from six reference repositories, with no fitting and no outcome validation at all, has strictly less claim to transfer to a project outside that six than a fitted model has to a project outside its training set.",
+      "implication": "Applying these bands to a project unlike the six references is not a modest extrapolation; the nearest published analogue to that extrapolation performs at or below chance. The bands should be read as describing these six projects, not as generalizing to an unseen one, until an outcome-validated transfer test exists."
+    },
+    {
+      "id": "within-project-drift-of-model-properties",
+      "severity": "medium",
+      "concern": "McIntosh and Kamei ('Are Fix-Inducing Changes a Moving Target?', TSE 44(5):412-428, 2018, DOI 10.1109/TSE.2017.2693980) found JIT defect models lose 11-34 percentage points of AUC just one year after training, and the explanatory share of the Size family of metrics swings between 10-43% (Qt) and 3-37% (OpenStack) of period-specific importance. A frozen threshold is exactly the artefact this paper warns against: the relationship between a commit-shape metric and whatever it is meant to predict does not hold still even within a single project's own history.",
+      "implication": "These bands should be treated as dated to their calibration run (tool_commit and observation date are recorded per record for this reason) and re-derived periodically rather than treated as a permanent constant, even for the same six reference repositories."
     }
   ],
   "reservations_note": "These reservations qualify every band derived from this file. They are recorded here rather than in lib/thresholds.js so that the caveats travel with the evidence, and so that adding reference repositories forces a reader to reconsider which reservations still apply."
