@@ -347,6 +347,37 @@ describe('analyzeCommit', () => {
     expect(result.prod_file_paths).toEqual(['bin/Debug/App.dll', 'src/app.js']);
   });
 
+  // --- vendored/generated default share (code-quality-metrics-3b6), always-on ---
+  // This is the higher-value half of step 3: it must be visible on a repo that has
+  // configured nothing, using CONFIG.DUPLICATE_IGNORE_PATTERNS's existing non-empty
+  // defaults (deps/, vendor/, third_party/, ...), independent of ANALYSIS_IGNORE_PATTERNS.
+  test('reports vendored_default_files_count and line counts for paths matching the existing vendored/generated defaults, even when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual([]);
+    mockNumstat([
+      numstatLine(300, 50, 'vendor/lib.js'),
+      numstatLine(10, 2, 'src/app.js')
+    ].join('\n'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.vendored_default_files_count).toBe(1);
+    expect(result.vendored_default_additions).toBe(300);
+    expect(result.vendored_default_deletions).toBe(50);
+    // Observational only: nothing is excluded from classification unless
+    // ANALYSIS_IGNORE_PATTERNS says so, so the vendored file is still counted as production.
+    expect(result.prod_files_count).toBe(2);
+  });
+
+  test('does not count an ordinary file toward vendored_default_files_count', () => {
+    mockNumstat(numstatLine(10, 2, 'src/app.js'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.vendored_default_files_count).toBe(0);
+    expect(result.vendored_default_additions).toBe(0);
+    expect(result.vendored_default_deletions).toBe(0);
+  });
+
   // --- outlier (withdrawn, code-quality-metrics-496) ---
   test('does not include an outlier field in its result', () => {
     // The per-commit outlier flag used mean + 2*stddev on a distribution with no finite
