@@ -17,6 +17,28 @@ describe('deriveBand', () => {
     expect(result.critical).toBeNull();
   });
 
+  // code-quality-metrics-a9z and code-quality-metrics-6ti: the literature review found no
+  // defensible boundary for either metric (net_additions_ratio_median's own form is the
+  // weakest relative-churn measure tested in the primary source; message_quality_pct mostly
+  // measures Conventional Commits adoption, not quality). Both are now reported
+  // descriptively, so derive-bands.js must stop proposing a band for them too, the same way
+  // it already treats test_isolation_rate.
+  it('marks net_additions_ratio_median and message_quality_pct informational now that their scored bands are dropped', () => {
+    const churn = deriveBand('net_additions_ratio_median', obs([
+      ['repoA', 0.5], ['repoB', 0.2]
+    ]));
+    expect(churn.tier).toBe('informational');
+    expect(churn.healthy).toBeNull();
+    expect(churn.critical).toBeNull();
+
+    const messageQuality = deriveBand('message_quality_pct', obs([
+      ['repoA', 80], ['repoB', 50]
+    ]));
+    expect(messageQuality.tier).toBe('informational');
+    expect(messageQuality.healthy).toBeNull();
+    expect(messageQuality.critical).toBeNull();
+  });
+
   it('marks a higher-is-worse metric two-band when only one repo sits near the max', () => {
     // repoA supplies both windows near the max (100, 92); repoB is far below (10, 12).
     // Only repoA is within 15% of the max (100), so the critical bound rests on one repo.
