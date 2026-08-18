@@ -9,7 +9,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const claude = require('../lib/claude');
 const duplicate = require('../lib/duplicate');
-const { collectLocalMetrics } = require('../local-code-metrics');
+const { collectLocalMetrics, CONFIG } = require('../local-code-metrics');
 
 const FAKE_ROOT = '/fake/repo';
 const FAKE_REMOTE = 'git@github.com:org/repo.git';
@@ -28,6 +28,11 @@ beforeEach(() => {
   duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
   duplicate.resolveModuleNeighbors.mockImplementation(paths => paths);
   claude.runSemanticDuplicateAnalysis.mockResolvedValue({ status: 'skipped', findings: [] });
+  // Default: no repo-local .codemetrics.json — overridden only in the
+  // config-override tests below. jest.clearAllMocks() above clears call
+  // history but not a prior test's mockImplementation, so this has to be
+  // reasserted every test to avoid one test's override leaking into the next.
+  fs.existsSync.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -884,5 +889,69 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
     const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
     expect(dupCall).toBeUndefined();
+  });
+});
+
+describe('collectLocalMetrics — repo-local .codemetrics.json override (code-quality-metrics-wcj)', () => {
+  test('unions a class A override into CONFIG and records it in the summary config_sources', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/flight-info-spike-example/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+    expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/deps/**');
+    expect(summary.config_sources.class_b_overridden).toBe(false);
+    expect(summary.config_sources.files).toHaveLength(1);
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+  });
+
+  // GUARD: proves resolveConfigOverrides is re-applied to CONFIG fresh on every
+  // run rather than accumulating, since CONFIG is a shared, mutated singleton
+  // across every invocation in this same process (this test file included).
+  // Written to catch the exact "reads its own expectation back out of the
+  // code under test" shape called out for this work: without a reset step,
+  // this run would still see the previous run's override and pass for the
+  // wrong reason.
+  test('[guard] resets CONFIG to the true defaults on a run with no override, after a previous run applied one', async () => {
+    const SHA_ONE = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT, FAKE_REMOTE, 'main',
+      `${SHA_ONE}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/flight-info-spike-example/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+    await collectLocalMetrics();
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+
+    const SHA_TWO = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT, FAKE_REMOTE, 'main',
+      `${SHA_TWO}|2024-01-16T10:00:00Z|Dev|feat: add another thing`,
+      `10\t5\tsrc/app2.js`
+    );
+    fs.existsSync.mockReturnValue(false);
+
+    await collectLocalMetrics();
+
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).not.toContain('**/flight-info-spike-example/**');
+    const secondSummaryCall = fs.writeFileSync.mock.calls
+      .filter(c => c[0].includes('local_metrics_summary'))
+      .pop();
+    expect(JSON.parse(secondSummaryCall[1]).config_sources.files).toEqual([]);
   });
 });

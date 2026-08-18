@@ -23,11 +23,26 @@ const path = require('path');
 require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
+const { resolveConfigOverrides } = require('./lib/repoConfig');
 const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
+
+// Captured once at module load, before any run can mutate CONFIG via a
+// repo-local override, so every invocation of collectLocalMetrics can reset
+// these four keys to their true defaults before applying its own run's
+// overrides on top. Without this reset, CONFIG (a shared, mutated singleton --
+// every lib/*.js module that required it holds this exact same object) would
+// compound one run's override into the next run in the same process, which is
+// exactly what this project's own test suite would otherwise hit silently.
+const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
+  DUPLICATE_IGNORE_PATTERNS: [...CONFIG.DUPLICATE_IGNORE_PATTERNS],
+  TEST_FILE_PATTERNS: [...CONFIG.TEST_FILE_PATTERNS],
+  DUPLICATE_MIN_LINES: CONFIG.DUPLICATE_MIN_LINES,
+  DUPLICATE_MIN_TOKENS: CONFIG.DUPLICATE_MIN_TOKENS
+});
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
@@ -123,6 +138,23 @@ function parseCliArgs(argv) {
  */
 async function collectLocalMetrics(options = {}) {
   const analysisDays = options.days ?? CONFIG.ANALYSIS_DAYS;
+
+  // PRECEDENCE (highest to lowest): CLI flags (--since/--days, applied via
+  // `options` above and parseCliArgs' own flags) > a .codemetrics.json in the
+  // analysis target, resolved from process.cwd() > lib/config.js's own
+  // defaults. See lib/repoConfig.js's own doc comment for the full rationale
+  // (JSON not JS, array union not replace, why this is three tiers and not
+  // loadEnv's four) and AGENTS.md's "Per-Repo Configuration Overrides" section
+  // for an example file. Reset-then-apply every run: see
+  // CONFIG_OVERRIDABLE_DEFAULTS' own comment for why.
+  const { effective: effectiveConfig, sources: configSources, classBOverridden } =
+    resolveConfigOverrides(CONFIG_OVERRIDABLE_DEFAULTS, process.cwd());
+  Object.assign(CONFIG, effectiveConfig);
+  const config_sources = {
+    files: configSources.map(source => source.file),
+    overrides: configSources.reduce((acc, source) => Object.assign(acc, source.overrides), {}),
+    class_b_overridden: classBOverridden
+  };
 
   console.log('=== AI Code Drift Local Analysis ===');
   console.log('');
@@ -435,6 +467,7 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_confidence: detectedGranularity.confidence,
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
+    config_sources,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,
