@@ -141,6 +141,15 @@ describe('renderReportHtml', () => {
     expect(html).toContain('data-status="warning"');
   });
 
+  // classifyDoraArchetype (lib/metrics.js) dropped the uncovered_prod_rate arm from
+  // foundational-challenges: UNCOVERED_PROD_RATE is two-band with no critical bound to
+  // compare against, so the archetype is large-commit only now. The verdict string must
+  // not keep describing the dropped arm.
+  it('does not describe foundational-challenges as a coverage-gap signal, since the condition no longer tests uncovered_prod_rate', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'foundational-challenges' }));
+    expect(html).not.toContain('coverage-gap');
+  });
+
   it('renders harmonious-high-achiever as good and mixed-signals as neutral, distinct from foundational-challenges', () => {
     const good = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(good).toContain('class="verdict" data-status="good"');
