@@ -220,9 +220,6 @@ jobs:
               concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than 5 files`);
             }
 
-            if (medianAdditionsRatio > THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy) {
-              concerns.push(`Median net additions ratio ${medianAdditionsRatio.toFixed(2)} exceeds ${THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy} - possible batch-acceptance pattern`);
-            }
 
             if (msgQualityPct < 40) {
               concerns.push(`Message quality ${msgQualityPct.toFixed(0)}% is below 40% - consider more descriptive commit messages`);
@@ -244,9 +241,6 @@ jobs:
               strengths.push(`${testOnlyCommits} test-only commits`);
             }
 
-            if (msgQualityPct >= THRESHOLDS.MESSAGE_QUALITY_PCT.healthy) {
-              strengths.push(`Message quality ${msgQualityPct.toFixed(0)}% meets discipline threshold`);
-            }
 
             // ---------------------------------------------------------------
             // Test adequacy
@@ -328,8 +322,8 @@ jobs:
               `| Small Batches | Large commit % | ${largePct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.LARGE_COMMITS_PCT.healthy, THRESHOLDS.LARGE_COMMITS_PCT.critical)} |`,
               `| Small Batches | Sprawling commit % | ${sprawlingPct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy, THRESHOLDS.SPRAWLING_COMMITS_PCT.critical)} |`,
               `| Version Control | Test-first discipline | ${testFirstPct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} |`,
-              `| Version Control | Message quality | ${msgQualityPct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.MESSAGE_QUALITY_PCT.healthy, THRESHOLDS.MESSAGE_QUALITY_PCT.critical)} |`,
-              `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | ${formatBand('below', THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy, THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.critical, '')} |`
+              `| Version Control | Message quality | ${msgQualityPct.toFixed(0)}% | no band, see spec |`,
+              `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | no band, see spec |`
             ].join('\n') : '';
 
             const layerIndicator = anthropicClient
