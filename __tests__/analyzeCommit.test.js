@@ -83,13 +83,15 @@ describe('analyzeCommit', () => {
 
     expect(result.prod_files_count).toBe(1);
     expect(result.test_files_count).toBe(1);
-    expect(result.test_first_indicator).toBe(true);
+    expect(result.test_prod_cochange_commit).toBe(true);
+    expect(result.test_first_indicator).toBeUndefined();
   });
 
-  test('sets test_first_indicator false when only production files changed', () => {
+  test('sets test_prod_cochange_commit false when only production files changed', () => {
     mockNumstat(numstatLine(20, 5, 'src/app.js'));
     const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
-    expect(result.test_first_indicator).toBe(false);
+    expect(result.test_prod_cochange_commit).toBe(false);
+    expect(result.test_first_indicator).toBeUndefined();
   });
 
   test('marks large_commit true when total lines exceed threshold', () => {
