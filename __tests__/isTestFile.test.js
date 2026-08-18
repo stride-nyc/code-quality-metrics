@@ -76,4 +76,19 @@ describe('isTestFile', () => {
   test('does not match .cs file that merely contains "Test" mid-name without suffix', () => {
     expect(isTestFile('TestableService.cs')).toBe(false);
   });
+
+  test('classifies a repo-root test directory as test files', () => {
+    // git show --numstat emits repo-relative paths with no leading slash, so a pattern
+    // requiring one can never match a top-level test directory. Node, ESLint and most
+    // Python, Go and Ruby projects put tests exactly there.
+    expect(isTestFile('test/parallel/test-foo.js')).toBe(true);
+    expect(isTestFile('tests/lib/rules/no-var.js')).toBe(true);
+    expect(isTestFile('test/fixtures/wpt/worker.js')).toBe(true);
+  });
+
+  test('does not treat a production file merely named like a test as a test file', () => {
+    expect(isTestFile('src/test-helper.js')).toBe(false);
+    expect(isTestFile('src/latest/index.js')).toBe(false);
+  });
+
 });
