@@ -2846,8 +2846,8 @@
     {
       "id": "granular-history-only",
       "severity": "high",
-      "concern": "All six reference repositories preserve individual commits. They had to: the tool measures commits, and a squash-merge repository yields one commit per pull request, so its numbers describe pull request shape instead of working habits. Most projects on GitHub squash, including eslint, prettier, vuejs/core, TypeScript, angular, webpack, babel, react and svelte, all screened and rejected on that basis.",
-      "implication": "These bands are valid for granular-history repositories. Applied to a squash-merge repository the unit of measurement differs, so a squashed repo will look worse on every size metric for reasons unrelated to practice. Squash repositories need their own reference set and their own bands."
+      "concern": "All six reference repositories preserve individual commits. They had to: the tool measures commits, and a squash-merge repository yields one commit per pull request, so its numbers describe pull request shape instead of working habits. Roughly twenty one well known projects were rejected on that basis to find six usable, including eslint, prettier, vuejs/core, TypeScript, angular, webpack, babel, react, svelte, jest, express, python/cpython, apache/kafka and kubernetes. Squash merging is the more common workflow, so the reference set is drawn from the minority case.",
+      "implication": "These bands are valid for granular-history repositories, which are the minority. Applied to a squash-merge repository the unit of measurement differs, so it will look worse on every size metric for reasons unrelated to practice. Note also that granular history is not independent of project generation: the six references are predominantly older projects with mailing list or integrator cultures predating the GitHub squash norm, which compounds the narrow-population reservation rather than sitting beside it. Squash repositories need their own reference set and their own bands, and until then their verdicts should be withheld rather than computed."
     },
     {
       "id": "circular-definition",
