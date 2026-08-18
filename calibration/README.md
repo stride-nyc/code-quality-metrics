@@ -68,21 +68,18 @@ commit, so a threshold change is always deliberate.
 ## Reservations
 
 `observations.json` carries a `reservations` array: thirteen recorded concerns
-about using this sample to set thresholds, three of them high severity (a
-pre-AI baseline now exists -- see below -- which downgraded one from high to
-medium; three published transferability findings -- non-transferability across
-projects, context-dependence, and within-project drift over time -- were added
-afterward and one of those is itself high severity). They are kept with the
-evidence rather than in `lib/thresholds.js` so the caveats travel with the
-data, and so adding a reference repository forces a reader to reconsider which
-still apply. `derive-bands.js` prints the high severity ones on every run.
+about using this sample to set thresholds, two of them currently high severity
+(granular-history-only and pre-AI-baseline were each downgraded from high to
+medium once their own suggested remedy was measured -- see below; three published
+transferability findings -- non-transferability across projects, context-dependence,
+and within-project drift over time -- were added afterward and one of those is itself
+high severity). They are kept with the evidence rather than in `lib/thresholds.js` so
+the caveats travel with the data, and so adding a reference repository forces a
+reader to reconsider which still apply. `derive-bands.js` prints the high severity
+ones on every run.
 
-The three that most limit how far these bands can be carried:
+The two that most limit how far these bands can be carried:
 
-- **Granular history only.** The bands are valid for repositories that preserve
-  individual commits. A squash-merge repository yields one commit per pull
-  request, so it will look worse on every size metric for reasons that have
-  nothing to do with practice. Squash repositories need their own reference set.
 - **Circular definition.** The references were chosen because they are considered
   disciplined, and healthy is then defined as what they do. The bands support
   "no worse than these six", which is weaker than "healthy".
@@ -94,9 +91,21 @@ The three that most limit how far these bands can be carried:
   should be read as describing these six repositories rather than generalizing
   to one unlike them.
 
-A third, now medium severity, is worth calling out separately because it drove a
-whole second measurement pass:
+Two more, now medium severity, are worth calling out separately because each drove
+its own follow-up measurement pass:
 
+- **Granular history only (partially addressed).** The bands are valid for
+  repositories that preserve individual commits; a squash-merge repository yields
+  one commit per pull request, so it looked worse on every size metric for reasons
+  that had nothing to do with practice, and every commit-unit verdict was withheld
+  for it. A separate squash-merge reference set now exists (`population:
+  "squash-merge"` in `observations.json`; see "Populations" above) -- five
+  repositories, ten included windows -- with its own bands derivable via
+  `derive-bands.js --population squash-merge`. This is a real remedy, which is why
+  the severity dropped, but not a complete one: the squash-merge set is smaller
+  than the granular one (six repositories, twenty-four included windows pooled
+  across eras), so its own bands carry a wider version of the same
+  two-windows-per-repo and narrow-population reservations.
 - **Pre-AI baseline (partially addressed).** Every window used to be from 2026, so
   the references may already have adopted AI assistance. A pre-2022 (2019-2020)
   window has now been measured for all six repositories -- twelve `era: "pre-ai"`
