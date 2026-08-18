@@ -168,4 +168,15 @@ describe('buildNarrativePayload', () => {
 
     expect(sprawling.description.measures).toBe(METRIC_DESCRIPTIONS.sprawling_commits_pct.measures);
   });
+
+  test('marks an informational entry as carrying no verdict, and leaves a scored entry unmarked', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const messageQuality = payload.find(entry => entry.key === 'message_quality_pct');
+    const sprawling = payload.find(entry => entry.key === 'sprawling_commits_pct');
+
+    expect(messageQuality.direction).toBe('informational');
+    expect(messageQuality.verdict).toBe('none');
+    expect(sprawling.verdict).toBeUndefined();
+  });
 });
