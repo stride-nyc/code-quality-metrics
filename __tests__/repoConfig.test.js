@@ -72,6 +72,41 @@ describe('resolveConfigOverrides — class A (DUPLICATE_IGNORE_PATTERNS, TEST_FI
   });
 });
 
+// code-quality-metrics-3yd: ANALYSIS_IGNORE_PATTERNS is class A too -- it corrects what the
+// commit-shape metrics count, not how sensitive a detector is, so the calibrated bands still
+// apply to a run that configures it. SAMPLE_DEFAULTS above deliberately omits this key
+// (its own real default is empty, and other tests in this file assert exact object shapes
+// against SAMPLE_DEFAULTS), so this block extends it locally rather than adding a fifth key
+// to every existing assertion in the file.
+const SAMPLE_DEFAULTS_WITH_ANALYSIS_IGNORE = Object.freeze({
+  ...SAMPLE_DEFAULTS,
+  ANALYSIS_IGNORE_PATTERNS: ['**/existing/**']
+});
+
+describe('resolveConfigOverrides — ANALYSIS_IGNORE_PATTERNS is class A, unions with defaults', () => {
+  test('adds a repo-local pattern to ANALYSIS_IGNORE_PATTERNS without dropping the defaults', () => {
+    const targetDir = makeTempDir('cqm-analysis-ignore-');
+    writeConfigFile(targetDir, { ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS_WITH_ANALYSIS_IGNORE, targetDir);
+
+    expect(result.effective.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/existing/**', '**/bin/**']);
+    expect(result.classBOverridden).toBe(false);
+    expect(result.sources).toEqual([
+      { file: path.join(targetDir, '.codemetrics.json'), overrides: { ANALYSIS_IGNORE_PATTERNS: ['**/existing/**', '**/bin/**'] } }
+    ]);
+  });
+
+  test('does not duplicate a pattern already present in the defaults', () => {
+    const targetDir = makeTempDir('cqm-analysis-ignore-dedup-');
+    writeConfigFile(targetDir, { ANALYSIS_IGNORE_PATTERNS: ['**/existing/**'] });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS_WITH_ANALYSIS_IGNORE, targetDir);
+
+    expect(result.effective.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/existing/**']);
+  });
+});
+
 describe('resolveConfigOverrides — class B (DUPLICATE_MIN_LINES, DUPLICATE_MIN_TOKENS) replaces and flags classBOverridden', () => {
   test('replaces DUPLICATE_MIN_LINES and reports classBOverridden true', () => {
     const targetDir = makeTempDir('cqm-class-b-');

@@ -922,6 +922,32 @@ describe('collectLocalMetrics — repo-local .codemetrics.json override (code-qu
     expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
   });
 
+  // code-quality-metrics-3yd/1tp: ANALYSIS_IGNORE_PATTERNS must be reset-then-applied the
+  // same way DUPLICATE_IGNORE_PATTERNS already is above, or CONFIG_OVERRIDABLE_DEFAULTS
+  // lacking the key makes resolveConfigOverrides's union spread `[...effective[key], ...]`
+  // spread `undefined` the moment a repo actually configures it.
+  test('unions a repo-local ANALYSIS_IGNORE_PATTERNS override into CONFIG and records it in the summary config_sources', async () => {
+    const SHA = 'f'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.overrides.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/bin/**']);
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/bin/**']);
+  });
+
   // GUARD: proves resolveConfigOverrides is re-applied to CONFIG fresh on every
   // run rather than accumulating, since CONFIG is a shared, mutated singleton
   // across every invocation in this same process (this test file included).
