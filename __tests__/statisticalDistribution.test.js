@@ -56,57 +56,15 @@ describe('computeStatistics', () => {
     expect(computeStatistics(sizes, timestamps).trend).toBe('stable');
   });
 
-  it('marks a value far above the rest of the distribution as an outlier', () => {
+  it('does not return an isOutlier predicate (withdrawn — code-quality-metrics-496)', () => {
+    // The per-commit outlier flag this predicate backed was withdrawn, not re-tuned: every
+    // window-relative cutoff measured (mean + 2*stddev, a bare p95, a log-scale Tukey fence at
+    // several multipliers) either violated monotonicity or went inert on this toolkit's own
+    // heavy-tailed data. See metrics-specification.md's Per-Commit Outlier Flag section.
     const sizes = [10, 10, 10, 10, 10, 10, 10, 10, 10, 1000];
     const now = Date.now();
     const timestamps = sizes.map((_, i) => now + i * 1000);
     const result = computeStatistics(sizes, timestamps);
-    expect(result.isOutlier(1000)).toBe(true);
-    expect(result.isOutlier(10)).toBe(false);
-  });
-
-  it('no values are outliers when distribution is uniform', () => {
-    const sizes = [50, 50, 50, 50];
-    const now = Date.now();
-    const timestamps = sizes.map((_, i) => now + i * 1000);
-    const result = computeStatistics(sizes, timestamps);
-    expect(result.isOutlier(50)).toBe(false);
-  });
-
-  it('keeps a commit flagged after a larger commit joins the window (monotonicity)', () => {
-    // code-quality-metrics-496: the old mean + 2*stddev cutoff moves toward a newly
-    // added extreme value, which can push previously-flagged commits back under the
-    // cutoff. Reproduces that shape (a body of ordinary commits plus a few already-large
-    // ones), then adds one commit larger than everything already in the window.
-    const baseline = [
-      30, 45, 60, 25, 80, 120, 55, 40, 35, 90, 70, 60, 50, 45, 38, 42, 65, 72,
-      58, 48, 36, 44, 53, 61, 39, 47, 68, 59, 41, 46, 63, 55, 49, 37, 52, 44
-    ];
-    const now = Date.now();
-    const windowBefore = [...baseline, 1800, 2200, 2925];
-    const windowAfter = [...windowBefore, 6518];
-    const timestampsBefore = windowBefore.map((_, i) => now + i * 1000);
-    const timestampsAfter = windowAfter.map((_, i) => now + i * 1000);
-
-    const statsBefore = computeStatistics(windowBefore, timestampsBefore);
-    const flaggedBefore = windowBefore.filter(v => statsBefore.isOutlier(v));
-
-    // Sanity: the scenario must actually discriminate (something flagged, but not
-    // everything), otherwise the assertions below would hold vacuously.
-    expect(flaggedBefore.length).toBeGreaterThan(0);
-    expect(flaggedBefore.length).toBeLessThan(windowBefore.length);
-
-    const statsAfter = computeStatistics(windowAfter, timestampsAfter);
-
-    // Property under test: adding a larger commit to the window must never un-flag
-    // a commit that was already flagged. Expected behaviour here is the invariant
-    // itself (still flagged), not a recomputed cutoff value from the production formula.
-    flaggedBefore.forEach(v => {
-      expect(statsAfter.isOutlier(v)).toBe(true);
-    });
-
-    // Discriminating power must persist too: an ordinary baseline commit must still
-    // read as non-outlier, so the property above isn't satisfied by flagging everything.
-    expect(statsAfter.isOutlier(baseline[0])).toBe(false);
+    expect(result).not.toHaveProperty('isOutlier');
   });
 });

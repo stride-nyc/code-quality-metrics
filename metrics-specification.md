@@ -718,48 +718,63 @@ failed or skipped call cannot be read as a clean result.
 
 ## Derived Metrics
 
-### Per-Commit Outlier Flag
+### Per-Commit Outlier Flag (withdrawn)
 
-**What it measures**: Whether an individual commit is a statistical outlier relative to the rest of the analysis window.
+**Status**: withdrawn under code-quality-metrics-496. This toolkit no longer computes or reports
+a per-commit outlier flag. `local_commit_metrics.json` no longer includes an `outlier` field.
 
-**Formula** (revised under code-quality-metrics-496; see below for why):
-```
-logSizes = log(commit_size + 1) for every commit size in the window
-q1_log, q3_log = 25th and 75th percentile of logSizes (linear interpolation)
-iqr_log  = q3_log - q1_log
-fence    = exp(q3_log + 3 × iqr_log) - 1
-outlier  = (total_additions + total_deletions) > fence
-```
+**What it used to measure**: whether an individual commit was a statistical outlier relative to
+the rest of the analysis window, originally `outlier = size > mean + 2 × stddev`.
 
-This is Tukey's fence (Tukey, 1977) on log-transformed commit sizes, at the "far out" multiplier
-(3 × IQR) rather than the classic 1.5 × IQR "outlier" fence. Logging first matches the roughly
-log-normal body this distribution's heavy tail sits on top of (see Metric 4 and Metric 5 above).
+**Why it was withdrawn, not re-tuned**: the original rule was non-monotonic in the wrong
+direction. Because mean and stddev are not stable statistics for this distribution (a generalized
+Pareto with shape 1.4617 has no finite mean, and no finite variance above shape 0.5 — see Metric
+4's heavy-tail discussion), adding one sufficiently large commit to a window pulled the cutoff up
+enough to un-flag commits that were already flagged, even though those commits did not change
+size. Measured on a 39-commit window (max 2925 lines): the cutoff was 1721, flagging
+1800/2200/2925; adding one 6518-line commit raised the cutoff to 2867 and un-flagged 1800 and
+2200; adding two more extreme commits raised it to 5873 and un-flagged 2925 as well. The worse the
+drift in a window, the fewer commits the old rule flagged — the inverse of what the flag was for.
 
-**Why the formula changed**: the original rule, `outlier = size > mean + 2 × stddev`, is
-non-monotonic in the wrong direction. Because mean and stddev are not stable statistics for this
-distribution (a generalized Pareto with shape 1.4617 has no finite mean, and no finite variance
-above shape 0.5 — see Metric 4's heavy-tail discussion and the caveat in `lib/statistics.js`),
-adding one sufficiently large commit to a window pulls the cutoff up enough to un-flag commits
-that were already flagged, even though those commits did not change size. Measured on a 39-commit
-window (max 2925 lines): the cutoff was 1721, flagging 1800/2200/2925; adding one 6518-line commit
-raised the cutoff to 2867 and un-flagged 1800 and 2200; adding two more extreme commits raised it
-to 5873 and un-flagged 2925 as well. The worse the drift in a window, the fewer commits the old
-rule flagged — the inverse of what the flag is for.
+Two candidate replacements were measured and rejected in turn:
 
-Q1 and Q3 sit deep in the body of the distribution rather than near the tail, so adding one
-extreme value shifts their interpolated position by a small, bounded amount (the gap between two
-already-existing body values), rather than being pulled toward the new value's own magnitude the
-way mean + 2×stddev is, or the way a bare high percentile (e.g. p95) still is — a bare p95 cutoff
-was measured to invert on the same reproduction. The far-out (3×) multiplier is used rather than
-the classic 1.5× fence because 1.5× sits close enough to ordinary body values on this toolkit's
-own measured windows to flicker across the fence as new commits are added; 3× does not, on every
-window measured so far. This is a large empirical improvement over the old rule, not a proof that
-no input can invert it.
+- **A bare p95 cutoff** (already computed, and the first candidate this issue proposed) inverts
+  on the same reproduction: adding the 6518-line commit un-flags 2200 (cutoff moves 1840 → 2236).
+  A window-relative percentile is still pulled toward a newly added extreme value near the tail.
+- **A Tukey fence (Tukey, 1977) on log-transformed commit sizes**, at the "far out" 3×IQR
+  multiplier, does not invert on that same reproduction (Q1/Q3 sit deep in the body rather than
+  near the tail, so one added extreme value shifts them only by the gap between two pre-existing
+  body values). But on the bug's own realistic window shape — a body itself spanning orders of
+  magnitude (single-digit to several-hundred-line commits, median 90) rather than the narrow body
+  used in the first reproduction — the log-scale IQR is large enough that the fence lands in the
+  tens of thousands of lines: it required upward of ~28,600 lines to fire at all in that window,
+  and never fired on the bug's own measured commits (1800–12000 lines). A rule that never fires on
+  the distribution it targets passed a monotonicity test only because nothing was ever flagged —
+  the same vacuous-green shape as an always-false predicate, just reached by a real formula rather
+  than a stub.
 
-**Per-commit field**: `outlier: boolean`, written into `local_commit_metrics.json` for every
-analyzed commit. It is not currently surfaced in console output or the HTML drift report; useful
-for manual investigation of the per-commit JSON, where outlier commits are the ones most likely to
-warrant direct review.
+A wider sweep (6 rules — Tukey at k=1.5/2/3 on raw values, Hampel at k=3/5/8 — over 3000
+randomized heavy-tailed windows, each grown by appending 1–3 larger values) found every
+window-relative rule violates monotonicity 45–70% of the time. An absolute cutoff scores 0%
+violations by construction, because it does not depend on the window's contents, but no absolute
+multiplier of `CONFIG.LARGE_COMMIT_THRESHOLD` has any empirical grounding — introducing one here
+would reintroduce exactly the kind of unbacked magic number this toolkit removed elsewhere (see
+code-quality-metrics-251 and code-quality-metrics-4hu). Consistent with how this project handled
+`message_quality_pct`'s and `net_additions_ratio_median`'s bands (see Metric 7, Metric 8, and the
+Key Metrics table in `CLAUDE.md`): when a construct cannot support its claim, the claim is
+withdrawn rather than shipped in a weaker form.
+
+**What still covers this need**: `p50_lines_changed`, `p90_lines_changed`, and
+`p95_lines_changed` in `local_metrics_summary.json` describe the window's distribution without
+claiming any single commit is exceptional. `large_commit` (Metric 1) remains as the absolute,
+non-window-relative size flag — its threshold is a calibrated band position, not a per-window
+statistic, so it does not have this monotonicity problem.
+
+**Known residual**: `lib/git.js`'s `analyzeCommit` still stamps a placeholder `outlier: false` on
+every commit object it returns; `local-code-metrics.js` deletes the field before writing
+`local_commit_metrics.json` so the withdrawn construct does not resurface as a silent, permanent
+`false`. Removing the placeholder at its source in `lib/git.js` is left as follow-up work, since
+`lib/git.js` was out of scope for this fix.
 
 ---
 
@@ -990,8 +1005,9 @@ Array of `CommitMetric` objects, one per analyzed commit:
   large_commit: boolean,
   sprawling_commit: boolean,
   change_ratio: string,         // "X.XX" or "inf"
-  outlier: boolean,             // true if > mean + 2σ for this analysis window
   commit_type: "feature_branch" | "trunk",  // "trunk" when the repo has no feature branches (see workflow_type below)
+  // Note: no `outlier` field. The per-commit outlier flag was withdrawn (code-quality-metrics-496);
+  // see the Derived Metrics > Per-Commit Outlier Flag (withdrawn) section above.
 
   // Message quality (new)
   message_quality: boolean,     // true if message meets quality threshold
