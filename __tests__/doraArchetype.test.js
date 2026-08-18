@@ -3,9 +3,19 @@
 const { classifyDoraArchetype } = require('../local-code-metrics');
 const { THRESHOLDS } = require('../lib/thresholds');
 
+// The exact numbers DORA_ARCHETYPE used to duplicate under THRESHOLDS before
+// code-quality-metrics-6vi removed it (see lib/thresholds.js's removal-site comment). Kept
+// here, not in production, only so the tests below can prove the classifier no longer reads a
+// boundary anywhere in this stale range.
+const RETIRED_STALE_BOUNDS = {
+  HARMONIOUS: { large: 20, sprawling: 10, testCoverage: 50, uncoveredProd: 10, messageQuality: 60 },
+  LEGACY_BOTTLENECK: { sprawling: 25, large: 30 },
+  FOUNDATIONAL_CHALLENGES: { large: 40, uncoveredProd: 20 }
+};
+
 describe('classifyDoraArchetype', () => {
   it('returns "harmonious-high-achiever" even when message quality is poor', () => {
-    const { HARMONIOUS } = THRESHOLDS.DORA_ARCHETYPE;
+    const { HARMONIOUS } = RETIRED_STALE_BOUNDS;
     expect(classifyDoraArchetype({
       large_commits_pct: String(HARMONIOUS.large - 15),
       sprawling_commits_pct: String(HARMONIOUS.sprawling - 8),
@@ -27,7 +37,7 @@ describe('classifyDoraArchetype', () => {
 
   it('treats sprawling commit rate as harmonious once it clears the calibrated healthy band, not the stale duplicated one', () => {
     const { SPRAWLING_COMMITS_PCT, LARGE_COMMITS_PCT, TEST_COVERAGE_RATE, UNCOVERED_PROD_RATE } = THRESHOLDS;
-    const { HARMONIOUS } = THRESHOLDS.DORA_ARCHETYPE;
+    const { HARMONIOUS } = RETIRED_STALE_BOUNDS;
     // Below the calibrated SPRAWLING_COMMITS_PCT.healthy band but above the stale,
     // duplicated HARMONIOUS.sprawling value it used to be compared against.
     expect(SPRAWLING_COMMITS_PCT.healthy).toBeGreaterThan(HARMONIOUS.sprawling);
@@ -62,7 +72,7 @@ describe('classifyDoraArchetype', () => {
 
   it('returns "legacy-bottleneck" once sprawling clears the calibrated critical band, not the stale duplicated one', () => {
     const { SPRAWLING_COMMITS_PCT, LARGE_COMMITS_PCT } = THRESHOLDS;
-    const { LEGACY_BOTTLENECK } = THRESHOLDS.DORA_ARCHETYPE;
+    const { LEGACY_BOTTLENECK } = RETIRED_STALE_BOUNDS;
     // Above the calibrated SPRAWLING_COMMITS_PCT.critical band but below the stale,
     // duplicated LEGACY_BOTTLENECK.sprawling value it used to be compared against.
     expect(LEGACY_BOTTLENECK.sprawling).toBeGreaterThan(SPRAWLING_COMMITS_PCT.critical);
@@ -87,7 +97,7 @@ describe('classifyDoraArchetype', () => {
 
   it('returns "foundational-challenges" once large clears the calibrated critical band, not the stale duplicated one', () => {
     const { LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT } = THRESHOLDS;
-    const { FOUNDATIONAL_CHALLENGES } = THRESHOLDS.DORA_ARCHETYPE;
+    const { FOUNDATIONAL_CHALLENGES } = RETIRED_STALE_BOUNDS;
     // Above the calibrated LARGE_COMMITS_PCT.critical band but below the stale,
     // duplicated FOUNDATIONAL_CHALLENGES.large value it used to be compared against.
     expect(FOUNDATIONAL_CHALLENGES.large).toBeGreaterThan(LARGE_COMMITS_PCT.critical);
