@@ -279,4 +279,29 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/message quality/i);
   });
+
+  // Found running a real scratchpad repro against flight-info-spike (code-quality-metrics-ll1's
+  // "verify the defect yourself" step), not from the test list: duplication_lines' value is a
+  // composite string ("15 / 3651", built from statistics.duplicatedLines/lines in lib/report.js),
+  // not a bare numeral. A model correctly citing either embedded number was being rejected as
+  // fabricated. Real production output: 'Positive: Duplication density stands at 0.41%, ... with
+  // only 1 clone block and 15 duplicated lines across 3651 scanned ...' -> rejected with
+  // 'cites "15", which does not appear in the metric catalog or top-commit payload'.
+  test('accepts a number embedded in a composite string value, not only a whole-string numeral', () => {
+    const payload = [{
+      key: 'duplication_lines',
+      label: 'Duplicated lines',
+      value: '15 / 3651',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Positive: 15 duplicated lines were found across 3651 scanned lines.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
