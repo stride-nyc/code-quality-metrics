@@ -1,6 +1,6 @@
 'use strict';
 
-const { deriveBand, selectByEra } = require('../calibration/derive-bands');
+const { deriveBand, selectByEra, selectByPopulation } = require('../calibration/derive-bands');
 
 /** Build an observation list: [[repo, value], ...] -> [{repo, value}] */
 function obs(pairs) {
@@ -121,6 +121,43 @@ describe('selectByEra', () => {
       { repo: 'repoB', era: 'pre-ai' }
     ];
     expect(selectByEra(observations)).toEqual(observations);
+  });
+});
+
+// code-quality-metrics-7sk: a squash-merge reference set (one commit is a whole pull request)
+// must never be pooled with the granular reference set (one commit is an individual commit) --
+// the two populations describe different units. selectByPopulation defaults to 'granular' so
+// that not passing --population reproduces exactly what derive-bands.js already did before any
+// squash-merge observation existed: every existing observation lacks a `population` field, and
+// every existing caller gets the same numbers as before this option was added.
+describe('selectByPopulation', () => {
+  it('defaults to granular, excluding squash-merge observations, when population is omitted', () => {
+    const observations = [
+      { repo: 'repoA' },
+      { repo: 'repoB', population: 'squash-merge' },
+      { repo: 'repoC', population: 'granular' }
+    ];
+    expect(selectByPopulation(observations)).toEqual([
+      { repo: 'repoA' },
+      { repo: 'repoC', population: 'granular' }
+    ]);
+  });
+
+  it('treats an observation with no population field as granular', () => {
+    const observations = [{ repo: 'repoA' }, { repo: 'repoB', population: 'squash-merge' }];
+    expect(selectByPopulation(observations, 'granular')).toEqual([{ repo: 'repoA' }]);
+  });
+
+  it('returns only squash-merge observations when population is squash-merge', () => {
+    const observations = [
+      { repo: 'repoA' },
+      { repo: 'repoB', population: 'squash-merge' },
+      { repo: 'repoC', population: 'squash-merge' }
+    ];
+    expect(selectByPopulation(observations, 'squash-merge')).toEqual([
+      { repo: 'repoB', population: 'squash-merge' },
+      { repo: 'repoC', population: 'squash-merge' }
+    ]);
   });
 });
 
