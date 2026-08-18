@@ -91,4 +91,14 @@ describe('isTestFile', () => {
     expect(isTestFile('src/latest/index.js')).toBe(false);
   });
 
+  test('classifies a repo-root bare t/ directory as test files (git.git convention)', () => {
+    expect(isTestFile('t/t1400-update-ref.sh')).toBe(true);
+  });
+
+  test('does not treat a nested t/ directory as tests, only the repo root', () => {
+    // A bare "t" directory nested inside the tree is far more likely to be something else
+    // (e.g. a translation locale, a generated fixture); only a repo-root t/ is anchored on.
+    expect(isTestFile('src/t/util.js')).toBe(false);
+  });
+
 });
