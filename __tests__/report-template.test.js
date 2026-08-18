@@ -156,6 +156,11 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('No archetype could be determined from the current signals.');
   });
 
+  it('does not double the word "suppressed" in the verdict line', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed', dora_archetype: undefined }));
+    expect(html).not.toContain('suppressed: Archetype suppressed');
+  });
+
   it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
