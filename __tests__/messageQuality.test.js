@@ -53,4 +53,13 @@ describe('scoreMessageQuality', () => {
   it('falls back to the subject when the full message is an empty string', () => {
     expect(scoreMessageQuality('feat: add login', '')).toBe(true);
   });
+
+  it('returns false for a body consisting only of trailers', () => {
+    // nodejs/node a159b570: subject alone is 6 words with no conventional prefix
+    // (false alone), but the body is padded to 30 words by PR-URL/Reviewed-By
+    // trailers with no prose, which must not count toward the word-count check.
+    const subject = 'lib: fix typo idenity => identity';
+    const body = `${subject}\n\nPR-URL: https://github.com/nodejs/node/pull/12345\nReviewed-By: Foo Bar <foo@example.com>\nReviewed-By: Baz Qux <baz@example.com>\nReviewed-By: A B <a@example.com>\nReviewed-By: C D <c@example.com>\nReviewed-By: E F <e@example.com>`;
+    expect(scoreMessageQuality(subject, body)).toBe(false);
+  });
 });
