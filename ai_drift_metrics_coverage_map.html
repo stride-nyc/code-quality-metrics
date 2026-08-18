@@ -266,12 +266,12 @@ const GIT_METRICS = [
   },
   {
     title:'Practice archetype', sub:'Four buckets from git data', type:'partial',
-    thresholds:[{r:'harmonious-high-achiever',l:'All four in range',cls:'t-ok'},{r:'legacy-bottleneck',l:'Sprawl + large',cls:'t-warn'},{r:'foundational-challenges',l:'Large > 40%',cls:'t-crit'}],
+    thresholds:[{r:'harmonious-high-achiever',l:'All four in range',cls:'t-ok'},{r:'legacy-bottleneck',l:'Sprawl + large, both critical',cls:'t-warn'},{r:'foundational-challenges',l:'Large > 30% alone',cls:'t-warn'}],
     source:'DORA identifies <strong>seven</strong> team archetypes from cluster analysis of survey responses from nearly 5,000 professionals. The clustering inputs are eight self-reported constructs: team performance, individual effectiveness, product performance, delivery throughput, delivery instability, valuable work, friction and burnout. Foundational challenges is characterised by "high reported levels of burnout and significant friction".',
     cite:'DORA 2025, pp. 3, 14-17',
-    measured:'Four buckets assigned from thresholds on large-commit %, sprawling-commit %, test coverage and message quality.',
+    measured:'Four buckets assigned from thresholds on large-commit %, sprawling-commit %, test coverage rate and uncovered-prod rate, read directly from the calibrated bands in lib/thresholds.js. Message quality plays no part: its own band was dropped to informational.',
     connect:'The <strong>names are borrowed, the method is not</strong>. DORA derives archetypes from how people report their working conditions; this derives them from commit shape. No git measure appears anywhere in DORA\'s clustering. Three of the four names are real DORA archetypes, mixed-signals is invented, and the four buckets collapse seven DORA clusters. DORA\'s legacy bottleneck describes teams "in a constant state of reaction, where unstable systems dictate their work", which is not what a high sprawl plus large commit signature means here.',
-    basis:'All five boundary values are invented. This field should not be read as a DORA classification.',
+    basis:'Four of the five boundary values a naive read might expect (large-commit healthy/critical, sprawling healthy/critical, test-coverage healthy, uncovered-prod healthy) now trace to the same calibrated bands as the metrics above, not a separate copy. Only the grouping of these signals into four named archetypes is invented; this field should not be read as a DORA classification.',
     v:'unstated'
   },
   {
