@@ -67,6 +67,33 @@ substitution whose result the harness cannot resolve.
 redirects will produce an agent that hits the guard repeatedly and burns turns recovering.
 Write brief examples in the form the guard accepts.
 
+## Dispatching Agents
+
+**State explicitly whether the agent may dispatch further agents.** In most cases it may not.
+An agent briefed only to read two files once dispatched its own background fork, which wrote and
+committed implementation code concurrently in the same worktree. Nothing prevented it and nothing
+detected it; the work was only salvaged because the parent audited every commit the fork produced.
+A brief that is silent on this is not a brief that forbids it.
+
+## Running the Report Against an External Repository
+
+`local-code-metrics.js` writes its JSON and HTML output to `process.cwd()` under fixed names, so
+two runs in the same directory overwrite each other with no warning. This is the same shape as the
+jscpd shared-output race, which was fixed in the tool; this one lives in how runs are dispatched.
+
+**Copy the repository into your scratchpad and run there.** Never run in place against a shared
+fixture:
+
+- Two concurrent agents doing it clobbered each other's output. Irreplaceable pre-fix evidence
+  survived only because it had been renamed out of the default output paths earlier, by luck
+  rather than design.
+- A copy costs a blobless clone and removes the hazard entirely.
+- If a run must happen in place, say so in the brief and ensure no other agent is running against
+  that repository at the same time.
+
+Anything a repository holds that you did not create is evidence until proven otherwise. Do not
+delete untracked files there to tidy up, and back them up before any run that could overwrite them.
+
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 
