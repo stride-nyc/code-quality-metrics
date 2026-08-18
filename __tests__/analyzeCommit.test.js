@@ -225,4 +225,16 @@ describe('analyzeCommit', () => {
 
     expect(result.prod_file_paths).toEqual(['src/app.js']);
   });
+
+  // --- outlier (withdrawn, code-quality-metrics-496) ---
+  test('does not include an outlier field in its result', () => {
+    // The per-commit outlier flag used mean + 2*stddev on a distribution with no finite
+    // mean and was non-monotonic (a sweep of six candidate rules over 3000 randomised
+    // heavy-tailed windows found every window-relative rule violates monotonicity 45-70%
+    // of the time). It was withdrawn entirely; analyzeCommit must not resurrect a
+    // hardcoded placeholder for it.
+    mockNumstat(numstatLine(5, 2, 'src/app.js'));
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+    expect(result).not.toHaveProperty('outlier');
+  });
 });
