@@ -83,18 +83,6 @@ describe('buildMetricCatalog', () => {
     expect(entry.status).toBe('critical');
   });
 
-  it('computes concern for message_quality_pct (higher-is-better) matching hand-computed examples', () => {
-    const bad = buildMetricCatalog(fullSummary({ message_quality_pct: '11.11' }))
-      .find(e => e.key === 'message_quality_pct');
-    expect(bad.concern).toBeCloseTo(2.44, 2);
-    expect(bad.status).toBe('critical');
-
-    const good = buildMetricCatalog(fullSummary({ message_quality_pct: '70.00' }))
-      .find(e => e.key === 'message_quality_pct');
-    expect(good.concern).toBeCloseTo(-0.5, 5);
-    expect(good.status).toBe('good');
-  });
-
   it('marks test_isolation_rate as good when above 10 with fixed concern -2, never critical or warning', () => {
     const high = buildMetricCatalog(fullSummary({ test_isolation_rate: '15.00' }))
       .find(e => e.key === 'test_isolation_rate');
@@ -214,6 +202,20 @@ describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
   it('never reports critical for test_coverage_rate even far below healthy (two-band, not a fabricated critical bound)', () => {
     const entry = buildMetricCatalog(fullSummary({ test_coverage_rate: '1.00' }))
       .find(e => e.key === 'test_coverage_rate');
+    expect(entry.status).toBe('warning');
+    expect(entry.criticalBoundary).toBeNull();
+  });
+
+  // message_quality_pct is two-band under era:current (calibration/derive-bands.js:
+  // only emberjs/ember.js corroborates the extreme) -- it was three-band before this
+  // recalibration, which is what the removed "matching hand-computed examples" test
+  // exercised. There is currently no real higher-is-better, three-band metric left in
+  // the catalog (test_coverage_rate is two-band in both eras), so the concern
+  // formula's higher-is-better branch has no metric-level regression coverage right
+  // now; see code-quality-metrics-82k's report for this gap.
+  it('never reports critical for message_quality_pct even far below healthy (two-band, not a fabricated critical bound)', () => {
+    const entry = buildMetricCatalog(fullSummary({ message_quality_pct: '1.00' }))
+      .find(e => e.key === 'message_quality_pct');
     expect(entry.status).toBe('warning');
     expect(entry.criticalBoundary).toBeNull();
   });
