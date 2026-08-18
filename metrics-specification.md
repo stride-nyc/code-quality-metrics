@@ -94,7 +94,7 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 | 10–25% | Warning: watch for scope creep |
 | > 25% | Critical: possible shotgun surgery |
 
-**DORA connection**: DORA's research documents a 154% increase in pull request size with high AI adoption. Sprawling commits are the commit-level precursor to oversized PRs.
+**DORA connection**: DORA's 2024 research measured a 7.2% reduction in delivery stability and a 1.5% reduction in throughput for every 25% increase in AI adoption (*Accelerate State of DevOps 2024*, pp. 39-40). Sprawling commits are one commit-level mechanism that could produce that outcome, but this link is an inference by this toolkit: DORA does not measure files changed per commit, and publishes no figure for pull request size.
 
 ---
 
@@ -131,7 +131,7 @@ uncovered_prod_rate  = (commits where test_files_count = 0 AND prod_files_count 
 
 **Why `uncovered_prod_rate` matters**: A commit that is both prod-only and large is the clearest AI drift signal in this toolkit — it matches the pattern of a developer accepting a large AI-generated code block without writing any tests. `test_isolation_rate` is a positive signal: test-only commits indicate TDD red-phase work or deliberate test improvements, both of which the binary metric incorrectly classified as "bad".
 
-**DORA connection**: DORA's research identifies automated testing as the single strongest predictor of whether AI tools help or hurt a team. Teams without it when they adopt AI see the fastest debt accumulation.
+**DORA connection**: none directly. Automated testing is not among the seven capabilities in DORA's 2025 AI Capabilities Model (*State of AI-Assisted Software Development 2025*, p. 50), which names clear AI stance, healthy data ecosystems, AI-accessible internal data, strong version control practices, working in small batches, user-centric focus, and quality internal platforms. This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this document called testing DORA's "single strongest predictor"; that claim was not supported by the report and has been removed.
 
 ---
 
@@ -159,7 +159,7 @@ slope < 0: "shrinking"
 
 **Implementation**: `simple-statistics` library: `quantile()`, `mean()`, `standardDeviation()`, `linearRegression()`
 
-**Risk signal**: `commit_size_trend: "growing"` combined with `velocity_trend: "accelerating"` is the joint indicator DORA describes as "volume without discipline."
+**Risk signal**: `commit_size_trend: "growing"` combined with `velocity_trend: "accelerating"`. This is a hypothesis held by this toolkit, not a DORA finding. The phrase "volume without discipline" was previously attributed to DORA here; it appears in no DORA publication and has been removed.
 
 **Thresholds** (p90 guidance):
 | Range | Signal |
@@ -684,7 +684,7 @@ informational rather than threshold-driven: test isolation rate and velocity
 each carry a fixed negative concern value so they normally sort after every
 threshold-driven metric. Commit size trend and velocity trend behave the same
 way by default, but when the two combine into "growing commit size" plus
-"accelerating velocity" (the "volume without discipline" pattern), both are
+"accelerating velocity" (this toolkit's own drift hypothesis, not a DORA term), both are
 flagged `warning` with a concern of `0.5` instead, so that joint signal
 surfaces in the sorted list the same way a real threshold breach would.
 

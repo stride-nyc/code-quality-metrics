@@ -139,7 +139,7 @@ Provides engineering intelligence with indirect AI drift detection. Monitors pul
 
 **Focus on trends, not point-in-time readings.** A jump from 10% to 30% large commits over 60 days deserves investigation even if 30% is below your threshold. Velocity combined with direction is the leading indicator; an absolute number is the lagging one.
 
-**Calibrate thresholds to DORA capabilities.** The thresholds in this toolkit (large commit < 20%, sprawling commit < 10%, test discipline > 50%) correspond to the boundaries DORA found separating teams that benefit from AI tools from teams that are harmed by them. They are not arbitrary.
+**Treat the thresholds as heuristics, and calibrate them to your own baseline.** The thresholds in this toolkit (large commit < 20%, sprawling commit < 10%, test discipline > 50%) are informed by DORA's qualitative finding that working in small batches and strong version control practices amplify the benefits of AI adoption, but they are not derived from it. DORA measures batch size through self-reported survey responses scored on an ordinal scale, not from commit history, and publishes no numeric boundary for any git-derived metric. An earlier version of this article claimed these thresholds "correspond to the boundaries DORA found" and were "not arbitrary"; that was incorrect and has been withdrawn. Measure your own repository first, then set boundaries you can defend.
 
 ---
 
