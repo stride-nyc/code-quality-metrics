@@ -27,7 +27,7 @@ beforeEach(() => {
   duplicate.runDuplicateCheck.mockReturnValue([]);
   duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
   duplicate.resolveModuleNeighbors.mockImplementation(paths => paths);
-  claude.analyzeDuplicatesWithClaude.mockResolvedValue([]);
+  claude.runSemanticDuplicateAnalysis.mockResolvedValue({ status: 'skipped', findings: [] });
 });
 
 afterEach(() => {
@@ -698,10 +698,24 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(output.statistics).toEqual(fixtureStatistics);
   });
 
+  test('reads the semantic outcome from the analysis result, not a hidden marker', async () => {
+    claude.getAnthropicClient.mockResolvedValue({});
+    claude.selectClaudeCommits.mockReturnValue([]);
+    duplicate.resolveModuleNeighbors.mockReturnValue(['src/app.js']);
+    claude.runSemanticDuplicateAnalysis.mockResolvedValue({ status: 'ok', findings: [] });
+
+    await collectLocalMetrics();
+
+    // The outcome travels as a plain field on the result. Smuggling it back as a
+    // concealed property on the returned array would make this fail.
+    expect(claude.runSemanticDuplicateAnalysis).toHaveBeenCalled();
+    expect(claude.analyzeDuplicatesWithClaude).not.toHaveBeenCalled();
+  });
+
   test('does not call the Claude semantic layer when no ANTHROPIC_API_KEY is set', async () => {
     await collectLocalMetrics();
 
-    expect(claude.analyzeDuplicatesWithClaude).not.toHaveBeenCalled();
+    expect(claude.runSemanticDuplicateAnalysis).not.toHaveBeenCalled();
 
     const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
     const output = JSON.parse(dupCall[1]);
@@ -712,14 +726,15 @@ describe('collectLocalMetrics — duplicate detection', () => {
     claude.getAnthropicClient.mockResolvedValue({});
     claude.selectClaudeCommits.mockReturnValue([]);
     duplicate.resolveModuleNeighbors.mockReturnValue(['src/app.js', 'src/util.js']);
-    claude.analyzeDuplicatesWithClaude.mockResolvedValue([
-      { file1: 'src/app.js', file2: 'src/util.js', similarity: 'high', confidence: 0.9 }
-    ]);
+    claude.runSemanticDuplicateAnalysis.mockResolvedValue({
+      status: 'ok',
+      findings: [{ file1: 'src/app.js', file2: 'src/util.js', similarity: 'high', confidence: 0.9 }]
+    });
 
     await collectLocalMetrics();
 
     expect(duplicate.resolveModuleNeighbors).toHaveBeenCalledWith(['src/app.js']);
-    expect(claude.analyzeDuplicatesWithClaude).toHaveBeenCalledWith({}, ['src/app.js', 'src/util.js'], []);
+    expect(claude.runSemanticDuplicateAnalysis).toHaveBeenCalledWith({}, ['src/app.js', 'src/util.js'], []);
 
     const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
     const output = JSON.parse(dupCall[1]);
@@ -729,21 +744,11 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(output.layers_run).toEqual({ static: true, semantic: true });
   });
 
-  // The real analyzeDuplicatesWithClaude tags its returned array with a hidden,
-  // non-enumerable status marker so a truncated/errored call can be told apart
-  // from a genuine empty result without changing the array shape callers and
-  // existing tests already depend on (see lib/claude.js). This simulates that.
-  function taggedUnmeasuredFindings() {
-    const findings = [];
-    Object.defineProperty(findings, '__semanticStatus', { value: 'unmeasured', enumerable: false });
-    return findings;
-  }
-
   test('writes layers_run.semantic as "unmeasured" when the Claude semantic call fails or truncates, never a confident true', async () => {
     claude.getAnthropicClient.mockResolvedValue({});
     claude.selectClaudeCommits.mockReturnValue([]);
     duplicate.resolveModuleNeighbors.mockReturnValue(['src/app.js']);
-    claude.analyzeDuplicatesWithClaude.mockResolvedValue(taggedUnmeasuredFindings());
+    claude.runSemanticDuplicateAnalysis.mockResolvedValue({ status: 'unmeasured', findings: [], error: 'response truncated at max_tokens' });
 
     await collectLocalMetrics();
 
