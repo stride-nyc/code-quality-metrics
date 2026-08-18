@@ -182,6 +182,67 @@ describe('buildMetricCatalog', () => {
   });
 });
 
+describe('buildMetricCatalog when history_granularity is squashed', () => {
+  const WITHHELD_KEYS = [
+    'large_commits_pct', 'sprawling_commits_pct', 'uncovered_prod_rate', 'test_coverage_rate',
+    'avg_lines_changed', 'p90_lines_changed', 'p90_files_changed', 'test_isolation_rate',
+    'commit_size_trend', 'velocity_trend'
+  ];
+
+  it('withholds every commit-unit verdict: no gauge, neutral status, sentinel concern, no boundary, and an explanation', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }));
+    for (const key of WITHHELD_KEYS) {
+      const entry = entries.find(e => e.key === key);
+      expect(entry.hasGauge).toBe(false);
+      expect(entry.status).toBe('neutral');
+      expect(entry.concern).toBe(-Infinity);
+      expect(entry.healthyBoundary).toBeNull();
+      expect(entry.criticalBoundary).toBeNull();
+      expect(entry.descriptiveNote).toMatch(/pull request/);
+    }
+  });
+
+  // [guard] duplication measures file contents, not commit shape, so it keeps its verdict
+  // regardless of history_granularity (code-quality-metrics-bnq requirement #4).
+  it('[guard] keeps the duplication density verdict intact when history is squashed', () => {
+    const dup = {
+      statistics: { percentage: THRESHOLDS.DUPLICATION_PCT.critical, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
+      semantic_findings: [],
+      layers_run: { static: true, semantic: false }
+    };
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }), dup);
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+    expect(density.hasGauge).toBe(true);
+    expect(density.status).toBe('critical');
+    expect(density.criticalBoundary).toBe(THRESHOLDS.DUPLICATION_PCT.critical);
+  });
+
+  // [guard] message_quality_pct and net_additions_ratio_median already had their bands
+  // dropped for an unrelated reason (code-quality-metrics-6ti, code-quality-metrics-a9z) and
+  // are already informational; squashing composes with that rather than adding a second note.
+  it('[guard] leaves message_quality_pct and net_additions_ratio_median unchanged, not double-annotated, when history is squashed', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }));
+    const messageQuality = entries.find(e => e.key === 'message_quality_pct');
+    const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
+    expect(messageQuality.descriptiveNote).not.toMatch(/pull request/);
+    expect(netAdditions.descriptiveNote).not.toMatch(/pull request/);
+  });
+
+  it('[guard] treats unknown the same as squashed: withholds the same commit-unit entries', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'unknown' }));
+    const large = entries.find(e => e.key === 'large_commits_pct');
+    expect(large.status).toBe('neutral');
+    expect(large.concern).toBe(-Infinity);
+  });
+
+  it('[guard] leaves entries untouched when history_granularity is granular', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'granular' }));
+    const large = entries.find(e => e.key === 'large_commits_pct');
+    expect(large.hasGauge).toBe(true);
+    expect(large.descriptiveNote).toBeUndefined();
+  });
+});
+
 describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
   it('never reports critical for a two-band metric, however far past healthy the value sits', () => {
     // p90_lines_changed is two-band (healthy 260, critical null): the extreme
