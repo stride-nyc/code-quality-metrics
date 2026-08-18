@@ -171,7 +171,12 @@ jobs:
                       files_changed: detail.data.files?.length || 0,
                       test_files_count: testFiles.length,
                       prod_files_count: prodFiles.length,
-                      test_first_indicator: testFiles.length > 0 && prodFiles.length > 0,
+                      // Same-commit co-occurrence, not an ordering claim -- see
+                      // code-quality-metrics-36d and lib/git.js's analyzeCommit for the
+                      // citations (Sun et al. TOSEM 2023, Borle et al. EMSE 2018,
+                      // Marsavina et al. SCAM 2014) behind renaming this away from
+                      // test_first_indicator.
+                      test_prod_cochange_commit: testFiles.length > 0 && prodFiles.length > 0,
                       test_only_commit: testFiles.length > 0 && prodFiles.length === 0,
                       uncovered_prod_commit: testFiles.length === 0 && prodFiles.length > 0 && (prodFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0)) > CONFIG.LARGE_COMMIT_THRESHOLD,
                       prod_additions: prodFiles.reduce((sum, f) => sum + f.additions, 0),
@@ -210,7 +215,7 @@ jobs:
 
                 const largePct = parseFloat((metrics.filter(m => m.large_commit).length / metrics.length * 100).toFixed(2));
                 const sprawlingPct = parseFloat((metrics.filter(m => m.sprawling_commit).length / metrics.length * 100).toFixed(2));
-                const testCoveragePct = parseFloat((metrics.filter(m => m.test_first_indicator).length / metrics.length * 100).toFixed(2));
+                const testCoveragePct = parseFloat((metrics.filter(m => m.test_prod_cochange_commit).length / metrics.length * 100).toFixed(2));
                 const testIsolationPct = parseFloat((metrics.filter(m => m.test_only_commit).length / metrics.length * 100).toFixed(2));
                 const uncoveredProdPct = parseFloat((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length * 100).toFixed(2));
 
@@ -354,7 +359,7 @@ jobs:
               '### Interpretation',
               '',
               `- Target: <${THRESHOLDS.LARGE_COMMITS_PCT.healthy}% large commits, <${THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy}% sprawling commits`,
-              `- Test-first discipline should remain above ${THRESHOLDS.TEST_COVERAGE_RATE.healthy}%`,
+              `- Test/prod co-change rate (same-commit only, not test-first ordering) should remain above ${THRESHOLDS.TEST_COVERAGE_RATE.healthy}%`,
               '- Large commits measured by production code only (excludes test files)',
               `- p90 lines changed: ${summary.p90_lines_changed} vs. healthy target ${formatBand('below', THRESHOLDS.P90_LINES_CHANGED.healthy, THRESHOLDS.P90_LINES_CHANGED.critical, ' lines')}`,
               '',
