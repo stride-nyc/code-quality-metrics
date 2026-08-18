@@ -94,6 +94,84 @@ fixture:
 Anything a repository holds that you did not create is evidence until proven otherwise. Do not
 delete untracked files there to tidy up, and back them up before any run that could overwrite them.
 
+## Per-Repo Configuration Overrides
+
+`lib/config.js`'s `CONFIG` is the defaults layer, shared by the local script and both GitHub
+workflows. A fact about one specific analysis target (a vendored directory that exists in that
+repo and nowhere else, a language-specific duplicate-detector tuning) does not belong there,
+because it is wrong for every other repo the tool is pointed at. Those facts belong in a
+`.codemetrics.json` file committed to the target repository itself, resolved by
+`lib/repoConfig.js`'s `resolveConfigOverrides` from `process.cwd()` (code-quality-metrics-wcj).
+
+**Precedence, highest first:**
+
+1. CLI flags — the existing `--since` and `--days` on `local-code-metrics.js`.
+2. `.codemetrics.json` in the analysis target, resolved from `process.cwd()`.
+3. `lib/config.js`'s own defaults.
+
+Three tiers, not `lib/env.js`'s four: `loadEnv` needs a tool-local `.env` tier because a secret
+has to live somewhere outside the repo under analysis; configuration does not, because
+`lib/config.js` already is that tier.
+
+**Format is JSON, not JS.** A `.js` config file would mean `require()`-ing arbitrary code from
+the repository under analysis, and this tool is routinely pointed at repos the operator does not
+control — a code-execution hazard for no benefit. JSON also needs no new dependency, so both
+GitHub workflows could read the same file unchanged if they chose to (neither does today; only
+`local-code-metrics.js` calls `resolveConfigOverrides`).
+
+**Only four keys are overridable, in two classes with different consequences:**
+
+- Class A — `DUPLICATE_IGNORE_PATTERNS`, `TEST_FILE_PATTERNS`. These correct what a measurement
+  counts, not how sensitive detection is. Bands still apply. Array values **union** with the
+  defaults rather than replacing them: a team adding one vendored directory should not have to
+  restate the ten default patterns to keep them, since forgetting one would silently inflate its
+  own duplication number. There is no removal syntax; nobody has asked for one.
+- Class B — `DUPLICATE_MIN_LINES`, `DUPLICATE_MIN_TOKENS`. These are detector sensitivity, and
+  overriding either one **invalidates the duplication band**: Wagner et al. (SANER 2016) measured
+  roughly a threefold difference in reported duplication on the same systems at different
+  minimums, so a percentage measured at an overridden sensitivity is not comparable to a band
+  derived at the default. A class B override still changes what jscpd measures, but
+  `lib/report.js`'s `buildMetricCatalog` withholds the `duplication_density_pct` verdict whenever
+  `summary.config_sources.class_b_overridden` is true, the same way squashed history withholds the
+  commit-unit verdicts.
+
+`LARGE_COMMIT_THRESHOLD` and `SPRAWLING_COMMIT_THRESHOLD` are **never overridable**: they are the
+bars the six-repository reference set was measured against (`lib/thresholds.js`), and a repo
+setting its own bar is the exact circularity `calibration/derive-bands.js` exists to escape. A
+team wanting different bars re-derives against its own reference set through
+`calibration/derive-bands.js`, a reviewed act, not a config value. `resolveConfigOverrides`
+rejects an attempt to override either of these with a message that says why, and rejects any
+other unrecognized key outright rather than silently ignoring it.
+
+**Discoverability:** every run's `local_metrics_summary.json` carries a `config_sources` field
+alongside `history_granularity` — the file(s) that contributed an override, the effective value
+of every overridden key, and whether a class B override is in effect. An override that changes
+the headline number by an order of magnitude has to be visible in the output, not only in a file
+the reader may not have.
+
+**Example.** `stride-nyc/flight-info-spike` has a `designs/` directory that is not a convention
+this tool's shared defaults should carry for every repo it analyzes (it previously measured 16.50
+percent whole-repo duplication with that directory included, against 1.23 percent once excluded —
+an order-of-magnitude difference from one setting). That repo's own `.codemetrics.json` — not
+created here; this project does not modify that repository — should read:
+
+```json
+{
+  "DUPLICATE_IGNORE_PATTERNS": ["**/designs/**"]
+}
+```
+
+This unions `**/designs/**` onto `lib/config.js`'s existing ignore patterns (`**/deps/**`,
+`**/vendor/**`, and so on) rather than replacing them, so a run against that repo still excludes
+every default vendored/generated path in addition to `designs/`.
+
+**Consequence for `CLAUDE.md`'s "Duplicate Detection Tuning" table:** its Java, Python and Go
+example blocks all change `DUPLICATE_MIN_LINES`/`DUPLICATE_MIN_TOKENS` — class B. A repo that
+follows that table via its own `.codemetrics.json` gets a working override, but
+`duplication_density_pct` comes back withheld for that run until a reference set exists for that
+language's detector settings. The table describes a capability the tool now has, but following it
+does not make the band travel with it.
+
 <!-- BEGIN BEADS INTEGRATION -->
 ## Issue Tracking with bd (beads)
 
