@@ -83,18 +83,6 @@ describe('buildMetricCatalog', () => {
     expect(entry.status).toBe('critical');
   });
 
-  it('computes concern for message_quality_pct (higher-is-better) matching hand-computed examples', () => {
-    const bad = buildMetricCatalog(fullSummary({ message_quality_pct: '11.11' }))
-      .find(e => e.key === 'message_quality_pct');
-    expect(bad.concern).toBeCloseTo(2.44, 2);
-    expect(bad.status).toBe('critical');
-
-    const good = buildMetricCatalog(fullSummary({ message_quality_pct: '70.00' }))
-      .find(e => e.key === 'message_quality_pct');
-    expect(good.concern).toBeCloseTo(-0.5, 5);
-    expect(good.status).toBe('good');
-  });
-
   it('marks test_isolation_rate as good when above 10 with fixed concern -2, never critical or warning', () => {
     const high = buildMetricCatalog(fullSummary({ test_isolation_rate: '15.00' }))
       .find(e => e.key === 'test_isolation_rate');
@@ -150,14 +138,16 @@ describe('buildMetricCatalog', () => {
 
   it('sources healthy/critical boundaries for the newly-added threshold bands from lib/thresholds.js', () => {
     const entries = buildMetricCatalog(fullSummary());
-    const p90Files = entries.find(e => e.key === 'p90_files_changed');
-    expect(p90Files.healthyBoundary).toBe(9.5);
-    expect(p90Files.criticalBoundary).toBe(13);
 
     // Read from THRESHOLDS rather than restating the numbers. thresholds.test.js already
     // locks the values; what matters here is that the catalog carries the configured
     // boundary through. Hardcoding it made every recalibration break this test for no
-    // reason, which is what happened when this band was adopted.
+    // reason, which is what happened when this band was adopted, and again when
+    // p90_files_changed's own tier changed under a later recalibration.
+    const p90Files = entries.find(e => e.key === 'p90_files_changed');
+    expect(p90Files.healthyBoundary).toBe(THRESHOLDS.P90_FILES_CHANGED.healthy);
+    expect(p90Files.criticalBoundary).toBe(THRESHOLDS.P90_FILES_CHANGED.critical);
+
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
     expect(netAdditions.healthyBoundary).toBe(THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.healthy);
     expect(netAdditions.criticalBoundary).toBe(THRESHOLDS.NET_ADDITIONS_RATIO_MEDIAN.critical);
@@ -182,31 +172,50 @@ describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
   it('reports good, not warning, for a two-band metric comfortably inside the healthy range', () => {
     // Regression: computeConcern treated a null criticalBoundary as 0, which
     // fabricated a "warning" for values well inside healthy (e.g.
-    // sprawling_commits_pct at 8%, healthy 19) because (8-19)/(0-19) > 0.
-    const sprawling = buildMetricCatalog(fullSummary({ sprawling_commits_pct: '8.00' }))
-      .find(e => e.key === 'sprawling_commits_pct');
-    expect(sprawling.status).toBe('good');
+    // p90_lines_changed at 150, healthy 260) because (150-260)/(0-260) > 0.
+    // p90_lines_changed (higher-is-worse) and test_coverage_rate (higher-is-better)
+    // are used here rather than sprawling_commits_pct/avg_lines_changed because
+    // those two are two-band under one calibration era and three-band under
+    // another (see lib/thresholds.js's comments); a stable two-band exemplar in
+    // each direction keeps this test from breaking on every recalibration.
+    const p90Lines = buildMetricCatalog(fullSummary({ p90_lines_changed: 150 }))
+      .find(e => e.key === 'p90_lines_changed');
+    expect(p90Lines.status).toBe('good');
 
-    const avgLines = buildMetricCatalog(fullSummary({ avg_lines_changed: '50.00' }))
-      .find(e => e.key === 'avg_lines_changed');
-    expect(avgLines.status).toBe('good');
+    const testCoverage = buildMetricCatalog(fullSummary({ test_coverage_rate: '90.00' }))
+      .find(e => e.key === 'test_coverage_rate');
+    expect(testCoverage.status).toBe('good');
   });
 
   it('fixes concern at -1 for two-band metrics, keeping them out of the relevance sort against real critical/warning findings', () => {
-    const entries = buildMetricCatalog(fullSummary({ sprawling_commits_pct: '90.00' }));
-    const sprawling = entries.find(e => e.key === 'sprawling_commits_pct');
-    expect(sprawling.concern).toBe(-1);
+    const entries = buildMetricCatalog(fullSummary({ p90_lines_changed: 50000 }));
+    const p90Lines = entries.find(e => e.key === 'p90_lines_changed');
+    expect(p90Lines.concern).toBe(-1);
   });
 
   it('marks a two-band entry with tier two-band and a three-band entry with tier three-band', () => {
     const entries = buildMetricCatalog(fullSummary());
-    expect(entries.find(e => e.key === 'sprawling_commits_pct').tier).toBe('two-band');
+    expect(entries.find(e => e.key === 'p90_lines_changed').tier).toBe('two-band');
     expect(entries.find(e => e.key === 'large_commits_pct').tier).toBe('three-band');
   });
 
   it('never reports critical for test_coverage_rate even far below healthy (two-band, not a fabricated critical bound)', () => {
     const entry = buildMetricCatalog(fullSummary({ test_coverage_rate: '1.00' }))
       .find(e => e.key === 'test_coverage_rate');
+    expect(entry.status).toBe('warning');
+    expect(entry.criticalBoundary).toBeNull();
+  });
+
+  // message_quality_pct is two-band under era:current (calibration/derive-bands.js:
+  // only emberjs/ember.js corroborates the extreme) -- it was three-band before this
+  // recalibration, which is what the removed "matching hand-computed examples" test
+  // exercised. There is currently no real higher-is-better, three-band metric left in
+  // the catalog (test_coverage_rate is two-band in both eras), so the concern
+  // formula's higher-is-better branch has no metric-level regression coverage right
+  // now; see code-quality-metrics-82k's report for this gap.
+  it('never reports critical for message_quality_pct even far below healthy (two-band, not a fabricated critical bound)', () => {
+    const entry = buildMetricCatalog(fullSummary({ message_quality_pct: '1.00' }))
+      .find(e => e.key === 'message_quality_pct');
     expect(entry.status).toBe('warning');
     expect(entry.criticalBoundary).toBeNull();
   });
@@ -273,8 +282,10 @@ describe('buildMetricCatalog with duplicates', () => {
   });
 
   it('computes concern = 1 (critical) for duplication density at its critical boundary', () => {
+    // percentage is read from THRESHOLDS rather than hardcoded so a recalibration
+    // that moves DUPLICATION_PCT.critical doesn't break this test for no reason.
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
-      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: 10, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
+      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: THRESHOLDS.DUPLICATION_PCT.critical, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
     }));
     const density = entries.find(e => e.key === 'duplication_density_pct');
     expect(density.concern).toBe(1);
