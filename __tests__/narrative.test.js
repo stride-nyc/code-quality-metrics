@@ -2,7 +2,7 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload } = require('../lib/narrative');
 
 function fixtureSummary(overrides) {
   return Object.assign({
@@ -129,5 +129,34 @@ describe('generateFindingsNarrative: client provided', () => {
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();
+  });
+});
+
+describe('buildNarrativePayload', () => {
+  test('strips concern, hasGauge and tier from every entry', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const sprawling = payload.find(entry => entry.key === 'sprawling_commits_pct');
+
+    expect(sprawling.concern).toBeUndefined();
+    expect(sprawling.hasGauge).toBeUndefined();
+    expect(sprawling.tier).toBeUndefined();
+  });
+
+  // GUARD, not a called-shot RED: the rounding this asserts was already added in the
+  // previous cycle's implementation (formatValue is applied to value/healthyBoundary/
+  // criticalBoundary in the same edit that stripped concern/hasGauge/tier), so this test
+  // was green on arrival. Kept as its own case, separate from the field-stripping test
+  // above, because it pins the specific measured defect (code-quality-metrics-ll1's
+  // 0.4108463434675432) rather than relying on the other test to cover it incidentally.
+  test('rounds a long floating-point value the same way the report cards do', () => {
+    const catalog = buildMetricCatalog(fixtureSummary(), {
+      statistics: { percentage: 0.4108463434675432, duplicatedLines: 15, lines: 3651, clones: 1 }
+    });
+    const payload = buildNarrativePayload(catalog);
+    const duplication = payload.find(entry => entry.key === 'duplication_density_pct');
+
+    expect(JSON.stringify(payload)).not.toContain('0.4108463434675432');
+    expect(duplication.value).toBe('0.41');
   });
 });
