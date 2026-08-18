@@ -75,8 +75,8 @@ function readReportInputs(dir) {
   const summary = readRequiredJson(dir, 'local_metrics_summary.json');
   const metrics = readRequiredJson(dir, 'local_commit_metrics.json');
   const fontData = readFontData();
-  const catalog = buildMetricCatalog(summary);
   const duplicates = readOptionalDuplicateAnalysis(dir);
+  const catalog = buildMetricCatalog(summary, duplicates);
   return { summary, metrics, fontData, catalog, duplicates };
 }
 
