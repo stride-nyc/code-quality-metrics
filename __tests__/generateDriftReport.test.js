@@ -83,6 +83,31 @@ describe('generateReport', () => {
     expect(html).toContain('src/dup-a.js');
   });
 
+  it('wires local_duplicate_analysis.json statistics into the metric grid as a duplication density tile', () => {
+    const dir = makeTmpDir();
+    writeFixtureInputs(dir);
+    const duplicateAnalysis = {
+      analyzed_at: '2026-08-17T00:00:00.000Z',
+      files_scanned: 11,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: {
+        clones: 2, duplicatedLines: 12, duplicatedTokens: 90, lines: 1595,
+        tokens: 6196, sources: 11, percentage: 0.75, percentageTokens: 2.07,
+        newClones: 0, newDuplicatedLines: 0
+      },
+      layers_run: { static: true, semantic: false }
+    };
+    fs.writeFileSync(path.join(dir, 'local_duplicate_analysis.json'), JSON.stringify(duplicateAnalysis, null, 2));
+
+    const outputPath = generateReport(dir);
+    const html = fs.readFileSync(outputPath, 'utf8');
+
+    expect(html).toContain('Duplication density');
+    expect(html).toContain('Clone count');
+    expect(html).toContain('Not measured');
+  });
+
   it('omits the Duplicate Code section when local_duplicate_analysis.json is absent (older analysis runs)', () => {
     const dir = makeTmpDir();
     writeFixtureInputs(dir);

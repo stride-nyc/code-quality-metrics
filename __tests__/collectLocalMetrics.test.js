@@ -25,6 +25,7 @@ beforeEach(() => {
   claude.getAnthropicClient.mockResolvedValue(null);
   // Default: no static/semantic duplicate findings — overridden only in duplicate-detection tests
   duplicate.runDuplicateCheck.mockReturnValue([]);
+  duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
   duplicate.resolveModuleNeighbors.mockImplementation(paths => paths);
   claude.analyzeDuplicatesWithClaude.mockResolvedValue([]);
 });
@@ -661,16 +662,40 @@ describe('collectLocalMetrics — duplicate detection', () => {
 
   test("writes local_duplicate_analysis.json with static duplicates found across analyzed commits' production files", async () => {
     const fixtureDuplicate = { firstFile: { name: 'src/app.js', start: 1, end: 5 }, secondFile: { name: 'src/other.js', start: 1, end: 5 }, lines: 5, tokens: 60 };
-    duplicate.runDuplicateCheck.mockReturnValue([fixtureDuplicate]);
+    duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [fixtureDuplicate], statistics: null });
 
     await collectLocalMetrics();
 
-    expect(duplicate.runDuplicateCheck).toHaveBeenCalledWith(['src/app.js']);
+    expect(duplicate.runDuplicateAnalysis).toHaveBeenCalledWith(['src/app.js']);
 
     const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
     expect(dupCall).toBeDefined();
     const output = JSON.parse(dupCall[1]);
     expect(output.static_duplicates).toEqual([fixtureDuplicate]);
+  });
+
+  test('scans for duplicates once, not once per consumer', async () => {
+    duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
+
+    await collectLocalMetrics();
+
+    // jscpd is the expensive part of a run. Findings and statistics come from one
+    // combined call, so the findings-only wrapper must not be invoked as well.
+    expect(duplicate.runDuplicateAnalysis).toHaveBeenCalledTimes(1);
+    expect(duplicate.runDuplicateCheck).not.toHaveBeenCalled();
+  });
+
+  test('writes local_duplicate_analysis.json with statistics captured from runDuplicateAnalysis', async () => {
+    const fixtureStatistics = { clones: 2, duplicatedLines: 12, lines: 1595, sources: 11, percentage: 0.75 };
+    duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: fixtureStatistics });
+
+    await collectLocalMetrics();
+
+    expect(duplicate.runDuplicateAnalysis).toHaveBeenCalledWith(['src/app.js']);
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.statistics).toEqual(fixtureStatistics);
   });
 
   test('does not call the Claude semantic layer when no ANTHROPIC_API_KEY is set', async () => {

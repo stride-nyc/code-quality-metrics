@@ -5,13 +5,28 @@ jest.mock('fs');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
-const { runDuplicateCheck, resolveModuleNeighbors } = require('../lib/duplicate');
+const { runDuplicateCheck, runDuplicateAnalysis, resolveModuleNeighbors } = require('../lib/duplicate');
 
 const FIXTURE_DUPLICATE = {
   firstFile:  { name: 'src/lib/git.js',     start: 10, end: 25 },
   secondFile: { name: 'src/lib/metrics.js', start: 5,  end: 20 },
   lines:  15,
   tokens: 120
+};
+
+// Shape validated live against this repo's own lib/ (see beads issue
+// code-quality-metrics-549): jscpd's report.statistics.total.
+const FIXTURE_STATISTICS_TOTAL = {
+  clones: 2,
+  duplicatedLines: 12,
+  duplicatedTokens: 90,
+  lines: 1595,
+  tokens: 6196,
+  sources: 11,
+  percentage: 0.75,
+  percentageTokens: 2.07,
+  newClones: 0,
+  newDuplicatedLines: 0
 };
 
 beforeEach(() => {
@@ -47,6 +62,47 @@ describe('runDuplicateCheck', () => {
     execSync.mockImplementation(() => { throw new Error('exit code 1'); });
     const result = runDuplicateCheck(['src/lib/git.js']);
     expect(result).toEqual([]);
+  });
+});
+
+describe('runDuplicateAnalysis', () => {
+  test('returns empty findings and null statistics without calling jscpd when filePaths is empty', () => {
+    const result = runDuplicateAnalysis([]);
+    expect(result).toEqual({ findings: [], statistics: null });
+    expect(execSync).not.toHaveBeenCalled();
+  });
+
+  test('returns findings and the full statistics.total object from a real jscpd report', () => {
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      duplicates: [FIXTURE_DUPLICATE],
+      statistics: { total: FIXTURE_STATISTICS_TOTAL }
+    }));
+
+    const result = runDuplicateAnalysis(['src/lib/git.js', 'src/lib/metrics.js']);
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0].firstFile).toEqual(FIXTURE_DUPLICATE.firstFile);
+    expect(result.findings[0].secondFile).toEqual(FIXTURE_DUPLICATE.secondFile);
+    expect(result.findings[0].lines).toBe(15);
+    expect(result.findings[0].tokens).toBe(120);
+    expect(result.statistics).toEqual(FIXTURE_STATISTICS_TOTAL);
+  });
+
+  // GUARDs: these degenerate cases are already covered behaviorally by the
+  // runDuplicateCheck tests above (same underlying execSync/fs code path,
+  // extracted into runDuplicateAnalysis rather than rewritten), so they pass
+  // against the current implementation without a fresh red. Recorded here to
+  // pin the null-statistics contract on the new return shape specifically.
+  test('GUARD: returns null statistics when jscpd exits non-zero', () => {
+    execSync.mockImplementation(() => { throw new Error('exit code 1'); });
+    const result = runDuplicateAnalysis(['src/lib/git.js']);
+    expect(result).toEqual({ findings: [], statistics: null });
+  });
+
+  test('GUARD: returns null statistics when the jscpd report file does not exist', () => {
+    fs.existsSync.mockReturnValue(false);
+    const result = runDuplicateAnalysis(['src/lib/git.js']);
+    expect(result).toEqual({ findings: [], statistics: null });
   });
 });
 

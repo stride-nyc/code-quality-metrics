@@ -24,7 +24,7 @@ const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } =
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, analyzeDuplicatesWithClaude } = require('./lib/claude');
-const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
+const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, source_branch?: string }} CommitInfo
@@ -354,7 +354,9 @@ async function collectLocalMetrics(options = {}) {
   // only when ANTHROPIC_API_KEY is set. Reuses the anthropicClient already
   // resolved above rather than creating a second client.
   const prodFilePaths = [...new Set(metrics.flatMap(m => m.prod_file_paths || []))];
-  const staticDuplicates = runDuplicateCheck(prodFilePaths);
+  // One combined call: jscpd is the expensive part of a run, so findings and
+  // statistics come from the same scan rather than two passes over the same files.
+  const { findings: staticDuplicates, statistics: duplicateStatistics } = runDuplicateAnalysis(prodFilePaths);
   /** @type {any[]} */
   let semanticFindings = [];
   if (anthropicClient && prodFilePaths.length > 0) {
@@ -433,6 +435,7 @@ async function collectLocalMetrics(options = {}) {
       files_scanned: prodFilePaths.length,
       static_duplicates: staticDuplicates,
       semantic_findings: semanticFindings,
+      statistics: duplicateStatistics,
       layers_run: { static: true, semantic: Boolean(anthropicClient) }
     };
     fs.writeFileSync(

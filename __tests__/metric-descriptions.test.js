@@ -34,4 +34,28 @@ describe('METRIC_DESCRIPTIONS', () => {
       expect(description.dora.length).toBeGreaterThan(0);
     }
   });
+
+  it('has a measures and dora entry for every duplication key when duplicates data is given', () => {
+    const duplicateAnalysis = {
+      files_scanned: 11,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: {
+        clones: 2, duplicatedLines: 12, duplicatedTokens: 90, lines: 1595,
+        tokens: 6196, sources: 11, percentage: 0.75, percentageTokens: 2.07,
+        newClones: 0, newDuplicatedLines: 0
+      },
+      layers_run: { static: true, semantic: true }
+    };
+    const catalog = buildMetricCatalog(fixtureSummary(), duplicateAnalysis);
+
+    for (const entry of catalog) {
+      const description = METRIC_DESCRIPTIONS[entry.key];
+      expect(description).toBeDefined();
+      expect(typeof description.measures).toBe('string');
+      expect(description.measures.length).toBeGreaterThan(0);
+      expect(typeof description.dora).toBe('string');
+      expect(description.dora.length).toBeGreaterThan(0);
+    }
+  });
 });
