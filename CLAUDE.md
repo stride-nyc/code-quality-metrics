@@ -66,11 +66,15 @@ Three public components sharing pure-computation logic via `lib/`:
 | Commit message quality % | >60% |
 | Net additions ratio (median) | <0.50 |
 
-Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and DORA team archetype are included in the summary.
+Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
+
+**These thresholds are being recalibrated and the table above will change.** No cited source publishes a boundary number for any of them: DORA scores batch size from self-reported ordinal survey answers and never converts them to a line count, and GitClear reports trends and prevalence rather than a healthy line. Bands are being derived instead from measuring six reference projects, recorded in `calibration/observations.json` with the reservations that qualify them. See `calibration/README.md` and the Threshold Provenance section of `metrics-specification.md`. Do not cite these numbers as research-backed.
 
 ### DORA Archetype Classification
 
-The summary includes a `dora_archetype` field classifying the repository into one of four team archetypes based on large commit %, sprawling commit %, test-first %, and message quality %:
+The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape, and all five boundary values are unsourced. Do not read the field as a DORA classification.
+
+It classifies the repository based on large commit %, sprawling commit %, test-first %, and message quality %:
 
 | Archetype | Signal |
 |-----------|--------|

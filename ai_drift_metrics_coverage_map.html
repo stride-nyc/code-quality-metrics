@@ -149,10 +149,10 @@
   <div class="grid grid-3" id="git-grid"></div>
   <div id="git-detail" class="detail-panel"></div>
 
-  <div class="section-label">Thresholds needing calibration</div>
+  <div class="section-label">Calibration status</div>
   <div id="calib-list"></div>
 
-  <div class="section-label">Reproducing these figures</div>
+  <div class="section-label">How this was checked</div>
   <div class="repro" id="repro"></div>
 
   <hr class="divider">
@@ -191,7 +191,7 @@ const GIT_METRICS = [
     cite:'DORA 2025, pp. 50, 57-58',
     measured:'Share of analysed commits where additions plus deletions across <strong>production files only</strong> exceeds <code>LARGE_COMMIT_THRESHOLD</code> (100). Test files matching <code>TEST_FILE_PATTERNS</code> are excluded from the total.',
     connect:'Inference by this toolkit. DORA never reads commit history; it asks developers to estimate their batch size. We substitute an objective count for that self-report, which is arguably better evidence, but it is not the same measurement and DORA has not validated it.',
-    basis:'No source supplies either number. DORA publishes no line-count boundary anywhere, and its ordinal buckets do not convert to one. Both the 100 line unit and the 20/40 bands are the author\'s judgement.',
+    basis:'No source supplies either number. DORA publishes no line-count boundary anywhere, and its ordinal buckets do not convert to one. The 100 line unit remains the author\'s judgement. The 20/40 bands are being replaced from measurement: 12 observations across six reference repositories give p75 of 23 and a maximum of 30, supported at the extreme by both node and curl. See <code>calibration/</code>.',
     v:'unstated'
   },
   {
@@ -209,7 +209,7 @@ const GIT_METRICS = [
     thresholds:[{r:'coverage > 50%',l:'Healthy',cls:'t-ok'},{r:'coverage 30-50%',l:'Warning',cls:'t-warn'},{r:'uncovered prod > 20%',l:'Critical',cls:'t-crit'}],
     source:'None. Automated testing is <strong>not among the seven capabilities</strong> in DORA\'s AI Capabilities Model. The model names clear AI stance, healthy data ecosystems, AI-accessible internal data, strong version control practices, working in small batches, user-centric focus, and quality internal platforms.',
     cite:'DORA 2025, p. 50',
-    measured:'Each commit is classified by whether it touches test files, production files, or both. <code>test_coverage_rate</code> counts commits touching both, <code>test_isolation_rate</code> commits touching only tests, <code>uncovered_prod_rate</code> large production-only commits.',
+    measured:'Each commit is classified by whether it touches test files, production files, or both. <code>test_coverage_rate</code> counts commits touching both, <code>test_isolation_rate</code> commits touching only tests, <code>uncovered_prod_rate</code> large production-only commits. Two detection defects were found by measuring reference repositories: the directory pattern required a leading slash, so a repository-root <code>test/</code> never matched and Node classified 1 of 1514 files as a test, and git\'s suite under <code>t/</code> matched nothing, reporting 0 percent coverage for one of the most heavily tested C projects. Both fixed.',
     connect:'This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this toolkit called testing DORA\'s "single strongest predictor" of whether AI helps or hurts a team; that claim is not supported by the report and has been withdrawn. Note also that co-occurrence in one commit cannot distinguish test-first from test-after.',
     basis:'No source supplies any of these boundaries.',
     v:'unstated'
@@ -259,7 +259,7 @@ const GIT_METRICS = [
     thresholds:[{r:'> 60%',l:'Healthy',cls:'t-ok'},{r:'40-60%',l:'Warning',cls:'t-warn'},{r:'< 40%',l:'Critical',cls:'t-crit'}],
     source:'Capability #4, "Strong version control practices", is a named DORA capability, but DORA describes it in terms of commit frequency, rollback capability and branching, never message wording.',
     cite:'DORA 2025, p. 50',
-    measured:'Share of messages matching conventional commit format, or containing at least <code>MESSAGE_QUALITY_MIN_WORDS</code> (10) words.',
+    measured:'Share of messages matching conventional commit format, or containing at least <code>MESSAGE_QUALITY_MIN_WORDS</code> (10) words. Now scored against the full commit body rather than the subject alone, which the short-subject convention used by postgres, git and curl requires: on an identical 50-commit set postgres moved from 22 to 94 percent. A trailing block of <code>Key: value</code> trailers is stripped first, since a body of only <code>PR-URL:</code> and <code>Reviewed-By:</code> lines otherwise passed on reviewer count alone.',
     connect:'The weakest chain in the toolkit. No cited source discusses commit message specificity as a measured signal at all, so both the construct and its operationalisation are original.',
     basis:'The 10 word rule and the 60/40 bands are the author\'s judgement, with no qualitative principle to anchor them.',
     v:'unstated'
@@ -279,9 +279,9 @@ const GIT_METRICS = [
     thresholds:[{r:'< 3%',l:'Healthy',cls:'t-ok'},{r:'3-10%',l:'Warning',cls:'t-warn'},{r:'> 10%',l:'Critical',cls:'t-crit'}],
     source:'GitClear analysed 211 million changed lines from 2020 to 2024 and recorded an eight-fold increase in the frequency of code blocks with five or more duplicated lines during 2024. Their duplicate-block prevalence rose from 0.70% of commits in 2020 to 6.66% in 2024.',
     cite:'GitClear 2025, pp. 1, 5, 12',
-    measured:'jscpd <code>statistics.total.percentage</code>: duplicated lines as a share of lines scanned across production files from the analysed commits.',
+    measured:'jscpd <code>statistics.total.percentage</code>: duplicated lines as a share of lines scanned across production files from the analysed commits. Vendored, generated and lock-file trees are excluded by default: Node vendors dependencies in-tree, and one <code>deps/</code> sync moved its measured duplication from 5.12 to 15.09 percent with no change in practice. The ignore list was also being passed to jscpd through the wrong flag, so every configured pattern was silently inert.',
     connect:'Different denominators. GitClear reports the share of <strong>commits containing</strong> a duplicate block; this reports the share of <strong>lines that are</strong> duplicated. 6.66% and 3% are not comparable quantities, and no source publishes a share-of-lines figure. One real alignment: GitClear defines a duplicate as five or more contiguous lines, matching <code>DUPLICATE_MIN_LINES</code>.',
-    basis:'Derived by measuring two repositories, both belonging to this project\'s author: production code ranged 0.5 to 3.1%, test code reached 9.7%, generated design documents 39.4%. n=2, self-referential, and the weakest threshold here.',
+    basis:'Superseded. The original 3/10 band came from two repositories belonging to this project\'s author. A recorded dataset now holds 12 observations across nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django and curl/curl. Adoption is pending because the vendored-code exclusion above changes what is measured, so the affected windows need re-measuring first. See <code>calibration/</code>.',
     v:'measured'
   },
   {
@@ -383,6 +383,10 @@ LAYERS.forEach(l => {
 });
 
 const calibEl = document.getElementById('calib-list');
+calibEl.innerHTML = '<p class="calib-note" style="margin:0 0 8px">Bands for these are being derived from the recorded ' +
+  'observations. Adoption is staged rather than wholesale: a band is only taken once the metric it rests on is measuring the ' +
+  'right thing, since three of the seven defects found changed what a metric counts and retired every observation taken before ' +
+  'them.</p>';
 GIT_METRICS.filter(m => m.v === 'unstated' || m.v === 'measured').forEach(m => {
   calibEl.innerHTML += `<div class="calib-row">
     <span class="calib-name">${m.title}</span>
@@ -392,18 +396,30 @@ GIT_METRICS.filter(m => m.v === 'unstated' || m.v === 'measured').forEach(m => {
 });
 
 document.getElementById('repro').innerHTML =
-  '<p style="margin:0 0 8px">Every source claim above was checked against the reports themselves rather than summaries. ' +
+  '<p style="margin:0 0 8px"><strong>Source claims.</strong> Checked against the reports themselves rather than summaries. ' +
   'The PDFs were text-extracted and searched directly: DORA <em>State of AI-Assisted Software Development 2025</em>, ' +
   '<em>Accelerate State of DevOps 2024</em> and its AI addendum, the 2026 ROI report, and <em>GitClear AI Copilot Code Quality 2025</em>. ' +
-  'Verified 18 August 2026.</p>' +
-  '<p style="margin:0 0 8px"><strong>No cited source publishes a boundary number for any metric in this table.</strong> ' +
-  'DORA scores batch size from self-reported ordinal survey responses and never converts them to a line or file count. ' +
-  'GitClear reports trends and prevalence rates, never a healthy-versus-unhealthy line. Of the thirteen entries above, ' +
-  'nine have no recorded basis for their boundaries, one is self-derived from an earlier heuristic in this toolkit, ' +
-  'one is measured from two repositories, and one matches its source.</p>' +
-  '<p style="margin:0">Claims this toolkit previously attributed to DORA that its reports do not support have been ' +
-  'withdrawn in <code>measuring-ai-code-drift-using-github-metrics.md</code> and <code>metrics-specification.md</code>, ' +
-  'where each is recorded with what was removed and why. Only those bearing on a metric in this table are noted here.</p>';
+  'Verified 18 August 2026. <strong>No cited source publishes a boundary number for any metric in this table.</strong> ' +
+  'DORA scores batch size from self-reported ordinal survey answers and never converts them to a line or file count; ' +
+  'GitClear reports trends and prevalence, never a healthy-versus-unhealthy line.</p>' +
+  '<p style="margin:0 0 8px"><strong>Thresholds.</strong> Because no source supplies them, bands are being derived by measuring ' +
+  'projects worth holding up as disciplined. The dataset holds 12 observations across nodejs/node, emberjs/ember.js, git/git, ' +
+  'postgres/postgres, django/django and curl/curl, each recording the repository HEAD, the tool commit, the window and the ' +
+  'configuration in effect, so any number can be reproduced. Healthy is the 75th percentile of those observations and critical ' +
+  'is the worst one observed, so both bounds come from data. Where the worst value rests on a single repository, no critical ' +
+  'bound is claimed at all and the metric carries two bands rather than three. See <code>calibration/</code>.</p>' +
+  '<p style="margin:0 0 8px"><strong>What limits this.</strong> Ten reservations are recorded with the data, three of them ' +
+  'serious. Every window is from 2026, so the references may already have adopted AI assistance and the bands risk describing ' +
+  'drift that is already present. Every reference preserves individual commits, because a squash-merge repository yields one ' +
+  'commit per pull request, so these bands do not transfer to the many projects that squash. And the references were chosen ' +
+  'because they are considered disciplined, then healthy was defined as what they do, which supports "no worse than these six" ' +
+  'rather than "healthy".</p>' +
+  '<p style="margin:0"><strong>Seven defects were found by measuring rather than by reading the code</strong>, three of which ' +
+  'changed what a metric counts: commit size counted test lines, so adding tests could push a change over the threshold; ' +
+  'repository-root test directories were invisible; and merge commits were counted twice because a merge diffs against its ' +
+  'first parent. Claims previously attributed to DORA that its reports do not support are withdrawn in ' +
+  '<code>measuring-ai-code-drift-using-github-metrics.md</code> and <code>metrics-specification.md</code>, each recorded with ' +
+  'what was removed and why.</p>';
 
 const toolsEl = document.getElementById('tools-list');
 TOOLS.forEach(t => {

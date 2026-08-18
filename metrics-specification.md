@@ -40,6 +40,73 @@ This toolkit directly addresses two of DORA's seven AI-amplifying capabilities, 
 
 ---
 
+## Threshold Provenance and Calibration
+
+No cited source supplies a boundary number for any metric in this document. DORA scores
+"working in small batches" from three self-reported survey items, including "the
+*approximate* number of lines of code committed in the most recent change", on an ordinal
+scale from extremely low to extremely high (*State of AI-Assisted Software Development 2025*,
+pp. 50, 57-58). It never converts that to a line count. GitClear reports trends and
+prevalence rates, an eight-fold increase in duplicate blocks during 2024 and a rise from
+0.70 to 6.66 percent of commits containing one, but never a healthy-versus-unhealthy line
+(*AI Copilot Code Quality 2025*, pp. 5, 12).
+
+Bands are therefore derived by measuring projects worth holding up as disciplined. The
+observations live in `calibration/observations.json`, one record per run, each carrying the
+repository HEAD, the tool commit, the window, the merge-style evidence and the configuration
+in effect, so any number can be reproduced. `calibration/derive-bands.js` proposes bands and
+writes nothing; values are copied into `lib/thresholds.js` in a reviewed commit.
+
+### Derivation rule
+
+- **healthy** is the 75th percentile of observations.
+- **critical** is the worst value observed, meaning worse than any disciplined project
+  measured.
+
+Both bounds come from data. Where the worst value rests on a single repository, no critical
+bound is claimed and the metric carries two bands rather than three, because "outside what
+disciplined projects do" is supportable from one observation while "definitively bad" is not.
+
+### Reference set
+
+nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django and curl/curl. All
+six preserve individual commits, which is a requirement rather than a preference: this toolkit
+measures commits, and a squash-merge repository yields one commit per pull request, so its
+numbers describe pull request shape instead of working habits. Screening rejected eslint,
+prettier, vuejs/core, TypeScript, angular, webpack, babel, react, svelte, jest, express,
+python/cpython, apache/kafka and kubernetes on that basis, not on quality.
+
+### What limits this
+
+Ten reservations are recorded alongside the observations, three of them serious.
+
+- **No pre-AI baseline.** Every window is from 2026, so the references may already have
+  adopted AI assistance. A toolkit built to detect AI drift is calibrating against a
+  possibly-drifted sample.
+- **Granular history only.** The bands do not transfer to squash-merge repositories, which
+  will look worse on every size metric for reasons unrelated to practice.
+- **Circular definition.** The references were chosen because they are considered
+  disciplined, and healthy was then defined as what they do. This supports "no worse than
+  these six" rather than "healthy", and reputation is not a measured outcome.
+
+### Defects found by measuring
+
+Seven, three of which changed what a metric counts and retired every observation taken
+before them. Recorded here because they are the argument for keeping the calibration data
+rather than discarding it after use.
+
+| Defect | Effect |
+|---|---|
+| Commit size counted test lines | Adding tests could push a change over the large-commit threshold |
+| Repository-root `test/` never matched | Node classified 1 of 1514 touched files as a test |
+| git's `t/` suite never matched | git reported 0 percent test coverage |
+| Merge commits counted twice | A merge diffs against its first parent, so a merged single-commit branch was counted twice |
+| Message quality read the subject only | The short-subject convention scored near zero; postgres moved 22 to 94 percent on an identical commit set once fixed |
+| Trailer-only bodies passed | A body of `PR-URL:` and `Reviewed-By:` lines scored as quality, so projects with more reviewers scored higher |
+| Ignore patterns used the wrong jscpd flag | Every configured pattern was silently inert; vendored trees counted as duplication |
+
+---
+
 ## Metrics Reference
 
 ### Metric 1: Large Commit Percentage
@@ -116,6 +183,8 @@ uncovered_prod_rate  = (commits where test_files_count = 0 AND prod_files_count 
 ```
 
 **Data source**: `git show --numstat {sha}` (file paths matched against `TEST_FILE_PATTERNS`)
+
+**Detection defects, both fixed**: the directory pattern was `/\/tests?\//`, which requires a slash before the word. Git emits repo-relative paths with no leading slash, so a repository-root `test/` or `tests/` directory never matched, and only nested paths were detected. Measuring nodejs/node, one file out of 1514 touched across two windows was classified as a test, and commits whose subject was literally `test: enable multi-global WPTs` counted as uncovered production code. Separately, git's suite lives under `t/`, which no pattern covered, so one of the most heavily tested C projects reported 0 percent coverage. The pattern is now `(^|\/)tests?\/` plus a root-anchored `^t\/`.
 
 **CONFIG key**: `TEST_FILE_PATTERNS` (array of 8 regex patterns; covers JS/TS, Python, Go, Java, C#)
 
@@ -266,6 +335,19 @@ The 0.50 threshold maps exactly to the prior threshold of 3.0: when `additions =
 ---
 
 ### Metric 8: Commit Message Quality Score
+
+**Scored against the full commit message, not the subject line.** The original implementation
+read `%s` alone, which mismeasured the older convention of a short subject with the
+explanation in the body: postgres, git and curl scored 0 to 22 percent despite exemplary
+commit hygiene. Re-measuring an identical 50-commit postgres window after the fix moved the
+score from 22 to 94 percent with no other change, which isolates the effect cleanly.
+
+**Trailing trailer blocks are stripped before scoring.** Reading the full body opened a
+different hole: a body consisting only of `Key: value` trailers passed on word count alone.
+nodejs/node commit `a159b570` has a six word subject and a body of nothing but `PR-URL:` and
+five `Reviewed-By:` lines, and scored as quality, so a project with more reviewers scored
+higher than one with fewer. Only the final paragraph is stripped, and only when every line in
+it matches the trailer shape, so a body mixing prose with trailers still scores on its prose.
 
 **What it measures**: The proportion of commit messages that meet a minimum quality bar: following conventional commit format, or containing enough words to be considered specific. Message quality declines with AI over-reliance as developers accept AI-suggested vague descriptions ("update stuff", "fix issue", "wip").
 
