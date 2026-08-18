@@ -54,6 +54,27 @@ jobs:
               per_page: 100
             });
 
+            // Verified NOT affected by the merge double-count fixed in code-metrics.yml under
+            // code-quality-metrics-9vg (which lists commits per branch via listCommits/getCommit
+            // and can retain a two-parent merge alongside the child it duplicates). Two reasons,
+            // both structural rather than incidental:
+            //   1. pulls.listCommits lists only commits reachable from the PR head that are not
+            //      already reachable from the PR base -- the same shape as `git log base..head`.
+            //      The merge commit GitHub's "Merge pull request" button creates lands on the
+            //      base branch, and only exists once the PR merges. This workflow runs on
+            //      `opened`/`synchronize`, strictly before that merge commit exists, so it can
+            //      never appear in this PR's own commit list.
+            //   2. A merge commit can still appear here if a contributor merges another branch
+            //      (e.g. the base) into their PR branch mid-review. But getCommit diffs it
+            //      against its first parent, which is the PR's own preceding commit -- not a
+            //      sibling already present in this same commits array -- so that diff does not
+            //      reproduce any other entry already being counted. The exact-duplicate shape
+            //      the fix addresses (merge and child both present, both showing identical
+            //      stats) requires the merge's *child* to independently appear in the same
+            //      listing, which a PR's own commit history does not produce.
+            // No filtering added here as a result. If PR history ever includes a merge commit
+            // whose second parent is itself later force-included (e.g. two open PRs sharing
+            // a merge sha), re-open code-quality-metrics-9vg rather than re-deriving this.
             const commits = await github.paginate(github.rest.pulls.listCommits, {
               owner: context.repo.owner,
               repo: context.repo.repo,
