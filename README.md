@@ -272,24 +272,32 @@ p90 files changed: ≤8 good, else warning
 The summary includes a `dora_archetype` field classifying the repository into one of four
 buckets. **The names are borrowed from DORA; the method is not.** DORA derives seven archetypes
 from cluster analysis of survey responses covering burnout, friction and delivery instability.
-This derives four from commit shape instead, and all five boundary values below are this
-toolkit's own unsourced judgement, not calibrated from the six-repository benchmark and not a
-DORA classification:
+This derives four from commit shape instead. `classifyDoraArchetype` reads its boundaries
+directly from the calibrated bands in `lib/thresholds.js` rather than a hand-copied set, so four
+of the five boundary values a naive read might expect (large-commit healthy/critical, sprawling
+healthy/critical, test-coverage healthy, uncovered-prod healthy) are the same calibrated numbers
+as the "Understanding Results" section above, not a separate unsourced judgement. Only the
+*grouping* of those signals into four named archetypes is this toolkit's invention — DORA
+publishes no such grouping — and message quality plays no part in the classification at all,
+since its own band was dropped to informational:
 
 | Archetype | Signal |
 |-----------|--------|
-| `harmonious-high-achiever` | All four contributing metrics below their own warning line |
-| `legacy-bottleneck` | High sprawl (>25%) + high large commits (>30%) |
-| `foundational-challenges` | Large commits >40%, or low test discipline + elevated large commits |
-| `mixed-signals` | No clear archetype threshold breached |
+| `harmonious-high-achiever` | Large commits, sprawling commits, test coverage, and uncovered prod all on the healthy side of their own band |
+| `legacy-bottleneck` | Sprawling commits past their critical band (>20%) AND large commits past theirs (>30%) |
+| `foundational-challenges` | Large commits past their critical band (>30%) alone — uncovered prod has no critical band to add a second path |
+| `mixed-signals` | None of the above |
 
 ## Workflow Outputs
 
-The two GitHub Actions workflows below do not read `lib/thresholds.js` — neither `require`s it —
-so the percentages they print (`<20%`, `<10%`, `>50%`) are their own separate, older, hardcoded
-constants, not the benchmark-derived bands in the "Understanding Results" section above. The two
-threshold sets are not currently reconciled; that is tracked separately (`code-quality-metrics-3hx`)
-rather than done here.
+Both GitHub Actions workflows now `require('./lib/thresholds')` and read the same calibrated
+bands as the "Understanding Results" section above for large-commit %, sprawling-commit %, and
+test-coverage rate; `code-metrics.yml` additionally displays test-isolation rate and uncovered-prod
+rate. Neither workflow displays a target for `avg_lines_changed`, `p90_lines_changed`,
+`p90_files_changed`, or `duplication_pct` — those bands exist in `lib/thresholds.js` and appear in
+the local drift report, but are not surfaced in either workflow's output. (Previously neither
+workflow required `lib/thresholds.js` at all and printed separate hardcoded percentages;
+`code-quality-metrics-3hx` tracked that gap and is now closed.)
 
 ### Weekly Metrics Report (GitHub Issue)
 ```markdown

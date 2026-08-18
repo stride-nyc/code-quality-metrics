@@ -676,29 +676,31 @@ outlier      = (total_additions + total_deletions) > (mean_lines + 2 × stddev_l
 
 ### DORA Archetype Classification
 
-**What it measures**: Which of four DORA team archetypes best describes the commit patterns in the analysis window. This is a heuristic classification based on the composite of all eight metrics, intended to contextualize threshold readings rather than replace them.
+**What it measures**: Which of four DORA-named team archetypes best describes the commit patterns in the analysis window. This is a heuristic classification based on four of the eight metrics above (large commits, sprawling commits, test coverage rate, uncovered prod rate), intended to contextualize threshold readings rather than replace them. Message quality plays no part in it: its own band was demoted to informational (see Metric 8), and scoring this archetype against an un-banded metric would reinstate the exact verdict that removal rejected.
 
-**Classification logic** (evaluated in order):
+**Classification logic** (evaluated in order; `classifyDoraArchetype` in `lib/metrics.js` reads each boundary directly from `THRESHOLDS` in `lib/thresholds.js`, not a separate copy, so a recalibration of any of these bands moves this classifier's boundary too):
 
 ```
 harmonious-high-achiever:
-  large_commits_pct < 20
-  AND sprawling_commits_pct < 10
-  AND test_coverage_rate > 50
-  AND uncovered_prod_rate < 10
-  AND message_quality_pct > 60
+  large_commits_pct < LARGE_COMMITS_PCT.healthy        (currently 19)
+  AND sprawling_commits_pct < SPRAWLING_COMMITS_PCT.healthy   (currently 18)
+  AND test_coverage_rate > TEST_COVERAGE_RATE.healthy  (currently 23)
+  AND uncovered_prod_rate < UNCOVERED_PROD_RATE.healthy (currently 13)
 
 legacy-bottleneck:
-  sprawling_commits_pct > 25
-  AND large_commits_pct > 30
+  sprawling_commits_pct > SPRAWLING_COMMITS_PCT.critical (currently 20)
+  AND large_commits_pct > LARGE_COMMITS_PCT.critical      (currently 30)
 
 foundational-challenges:
-  large_commits_pct > 40
-  OR uncovered_prod_rate > 20
+  large_commits_pct > LARGE_COMMITS_PCT.critical          (currently 30)
 
 mixed-signals:
   (all other combinations)
 ```
+
+`uncovered_prod_rate` is a two-band metric with no `.critical` value (see Metric 3), so
+`foundational-challenges` has only the large-commit path above; it no longer has a second,
+test-discipline path.
 
 **Field**: `dora_archetype: "harmonious-high-achiever" | "foundational-challenges" | "legacy-bottleneck" | "mixed-signals"`
 
@@ -707,8 +709,8 @@ mixed-signals:
 | Archetype | What It Suggests |
 |-----------|-----------------|
 | `harmonious-high-achiever` | Strong foundation; AI tools likely amplifying positive outcomes |
-| `foundational-challenges` | Weak testing/batch discipline; AI tools likely accelerating debt |
-| `legacy-bottleneck` | Architectural scatter; AI making cross-cutting changes worse |
+| `foundational-challenges` | Elevated large-commit rate alone; AI tools likely accelerating debt |
+| `legacy-bottleneck` | Architectural scatter combined with large commits; AI making cross-cutting changes worse |
 | `mixed-signals` | Inconsistent patterns; investigate specific outliers |
 
 **Limitation**: This classification is based on a 30-day window of at most 50 commits. It is a directional signal, not a definitive assessment. Teams near archetype boundaries should look at individual metric thresholds, not just the archetype label.
@@ -999,8 +1001,11 @@ directory; it does not shell out to git or recompute any metric from source.
 ### Threshold Source of Truth
 
 `lib/thresholds.js` holds the healthy/warning/critical boundary for every
-metric in a single `THRESHOLDS` object, for example
-`LARGE_COMMITS_PCT: { healthy: 20, critical: 40 }`. Both `lib/metrics.js`
+metric that carries one in a single `THRESHOLDS` object, for example
+`LARGE_COMMITS_PCT: { healthy: 19, critical: 30 }`. Message quality and net
+additions ratio carry no key here at all — both were demoted to
+informational, reported without a verdict (see each one's own comment in
+`lib/thresholds.js` and Metrics 7 and 8 below). Both `lib/metrics.js`
 (which classifies individual commits and drives the console report and DORA
 archetype logic) and `lib/report.js` (which builds the drift report's metric
 catalog and gauge bands) read their boundaries from this same object. Moving

@@ -45,15 +45,16 @@ Three public components sharing pure-computation logic via `lib/`:
 1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
 
    The `lib/` directory contains the internal modules:
-   - `lib/config.js` — CONFIG object; single source of truth for all thresholds (**shared with workflows**)
+   - `lib/config.js` — CONFIG object; detector and analysis settings (large/sprawling commit cutoffs, message-quality word count, AI pre-filter and duplicate-detector tuning, test-file patterns), the single source of truth for those settings (**shared with workflows**)
+   - `lib/thresholds.js` — THRESHOLDS object; the calibrated healthy/critical verdict bands each metric is scored against, the single source of truth for those bands (**shared with workflows**)
    - `lib/statistics.js` — statistical distributions (p50/p90/p95/stddev), velocity and trend (**shared with workflows**)
    - `lib/metrics.js` — message quality scoring, DORA archetype classification, test file detection, insights generation (**shared with workflows**)
    - `lib/git.js` — git shell commands, log parsing, per-commit analysis, diff extraction (local only — workflows use REST API)
    - `lib/claude.js` — Anthropic client setup, commit pre-filtering, diff-level API analysis (local only — workflows use GitHub-managed auth)
 
-2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Requires `lib/config.js`, `lib/statistics.js`, and `lib/metrics.js` via `require()`. Outputs a JSON artifact and creates a GitHub issue with the summary.
+2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Requires `lib/config.js`, `lib/statistics.js`, `lib/metrics.js`, and `lib/thresholds.js` via `require()`. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
-3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js`, `lib/metrics.js`, `lib/duplicate.js`, and `lib/claude.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, development pattern detection, and two-layer duplicate code detection (Layer 1 jscpd always-on; Layer 2 semantic via Claude when `ANTHROPIC_API_KEY` is set).
+3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js`, `lib/thresholds.js`, `lib/metrics.js`, `lib/duplicate.js`, and `lib/claude.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, development pattern detection, and two-layer duplicate code detection (Layer 1 jscpd always-on; Layer 2 semantic via Claude when `ANTHROPIC_API_KEY` is set).
 
 ## Key Metrics and Thresholds
 
@@ -99,16 +100,16 @@ reservations. Do not cite these numbers as validated outcome thresholds.
 
 ### DORA Archetype Classification
 
-The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape, and all five boundary values are unsourced. Do not read the field as a DORA classification.
+The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape. `classifyDoraArchetype` (`lib/metrics.js`) reads its boundaries directly from the calibrated bands in `lib/thresholds.js` rather than a separate hand-copied set, so four of the five boundary values a naive read might expect (large-commit healthy/critical, sprawling-commit healthy/critical, test-coverage healthy, uncovered-prod healthy) trace to the same calibration as the Key Metrics table above. Only the *grouping* of those signals into four named archetypes is this toolkit's own invention; DORA does not publish this grouping, and message-quality no longer plays any part in it (its own band was demoted to informational — see below). Do not read the field as a DORA classification.
 
-It classifies the repository based on large commit %, sprawling commit %, test-first %, and message quality %:
+It classifies the repository based on large commit %, sprawling commit %, test coverage rate, and uncovered prod rate, evaluated in this order:
 
 | Archetype | Signal |
 |-----------|--------|
-| `harmonious-high-achiever` | All four metrics in healthy range |
-| `legacy-bottleneck` | High sprawl (>25%) + high large commits (>30%) |
-| `foundational-challenges` | Large commits >40%, or low test discipline + elevated large commits |
-| `mixed-signals` | No clear archetype threshold breached |
+| `harmonious-high-achiever` | large commits below `LARGE_COMMITS_PCT.healthy` AND sprawling commits below `SPRAWLING_COMMITS_PCT.healthy` AND test coverage above `TEST_COVERAGE_RATE.healthy` AND uncovered prod below `UNCOVERED_PROD_RATE.healthy` (currently ≤19%, ≤18%, ≥23%, ≤13%) |
+| `legacy-bottleneck` | sprawling commits above `SPRAWLING_COMMITS_PCT.critical` AND large commits above `LARGE_COMMITS_PCT.critical` (currently >20%, >30%) |
+| `foundational-challenges` | large commits above `LARGE_COMMITS_PCT.critical` (currently >30%) alone — `uncovered_prod_rate` has no critical bound to add a second path |
+| `mixed-signals` | none of the above |
 
 ### Claude API Integration (Optional)
 
@@ -122,7 +123,7 @@ The script degrades gracefully when the key is absent. No SDK install is require
 
 ## Configuration
 
-Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is the single source of truth for **all three components**. The GitHub Actions workflows `require('./lib/config')` directly — changing a value in `lib/config.js` propagates automatically to the local script and both workflows. No manual synchronization needed. Key values:
+Two files hold configuration, each the single source of truth for a different kind of value, both shared across all three components. `CONFIG` in `lib/config.js` holds detector and analysis settings: what counts as a large or sprawling commit, the message-quality word count, the AI pre-filter and duplicate-detector tuning, and test-file patterns. `THRESHOLDS` in `lib/thresholds.js` holds the calibrated healthy/critical verdict bands described in Key Metrics and Thresholds above. Both GitHub Actions workflows `require('./lib/config')` and `require('./lib/thresholds')` directly, so a change to either file propagates automatically to the local script and both workflows with no manual synchronization — but the workflows do not surface a target for every band `THRESHOLDS` holds. Between them, `code-metrics.yml` and `pr-metrics.yml` display a target for large-commit %, sprawling-commit %, test-coverage rate, test-isolation rate, and uncovered-prod rate; `avg_lines_changed`, `p90_lines_changed`, `p90_files_changed`, and `duplication_pct` are computed and included in the summary JSON but shown without a target in either workflow. Key `CONFIG` values:
 
 | Key | Default | Description |
 |-----|---------|-------------|
