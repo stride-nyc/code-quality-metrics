@@ -295,3 +295,44 @@ describe('workflow provenance', () => {
     expect([...new Set(unresolved)]).toEqual([]);
   });
 });
+
+// CLAUDE.md's Configuration table documents lib/config.js's defaults, and the band
+// gate above does not cover it: bands live in lib/thresholds.js, these are CONFIG
+// values. It went stale the way everything else here does, a derived value
+// outliving its source. DUPLICATE_IGNORE_PATTERNS was documented as an empty array
+// long after it grew nine entries, and a reader tuning duplication would have
+// concluded nothing was excluded by default.
+const CLAUDE_MD_CONFIG_ROWS = [
+  'LARGE_COMMIT_THRESHOLD', 'SPRAWLING_COMMIT_THRESHOLD', 'MESSAGE_QUALITY_MIN_WORDS',
+  'AI_ANALYSIS_MAX_COMMITS', 'AI_DIFF_MAX_CHARS', 'AI_RISK_ADDITIONS_RATIO',
+  'DUPLICATE_MIN_LINES', 'DUPLICATE_MIN_TOKENS', 'DUPLICATE_IGNORE_PATTERNS'
+];
+
+describe('configuration table provenance', () => {
+  test('the CLAUDE.md configuration table states the defaults lib/config.js holds', () => {
+    const doc = fs.readFileSync(path.join(__dirname, '..', 'CLAUDE.md'), 'utf8');
+    const lines = doc.split('\n');
+
+    const documented = {};
+    const expected = {};
+
+    for (const key of CLAUDE_MD_CONFIG_ROWS) {
+      const row = lines.find(line => line.startsWith(`| \`${key}\` |`));
+      const cell = row ? row.split('|')[2].trim() : null;
+      const actual = CONFIG[key];
+
+      // An array default is documented by its entry count rather than by restating
+      // nine globs in a table cell; a scalar is documented by its value.
+      if (Array.isArray(actual)) {
+        const stated = cell === null ? null : Number((cell.match(/\d+/) || [])[0]);
+        documented[key] = stated;
+        expected[key] = actual.length;
+      } else {
+        documented[key] = cell === null ? null : Number((cell.match(/[\d.]+/) || [])[0]);
+        expected[key] = actual;
+      }
+    }
+
+    expect(documented).toEqual(expected);
+  });
+});

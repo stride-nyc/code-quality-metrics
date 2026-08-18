@@ -143,7 +143,7 @@ Two files hold configuration, each the single source of truth for a different ki
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
 | `DUPLICATE_MIN_LINES` | 10 | Minimum lines for jscpd to flag a duplicate block |
 | `DUPLICATE_MIN_TOKENS` | 100 | Minimum tokens for jscpd to flag a duplicate block |
-| `DUPLICATE_IGNORE_PATTERNS` | `[]` | Glob patterns for jscpd to ignore (e.g. generated files) |
+| `DUPLICATE_IGNORE_PATTERNS` | 9 patterns | Globs jscpd ignores: vendored (`deps`, `vendor`, `third_party`, `node_modules`), generated, and four lock files. Per-repo additions go in the target's `.codemetrics.json`, not here (class A, so bands still apply) |
 
 Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
 
