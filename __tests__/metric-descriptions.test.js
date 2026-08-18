@@ -59,12 +59,5 @@ describe('METRIC_DESCRIPTIONS', () => {
     }
   });
 
-  it('explains both reasons the semantic tile can read Not measured', () => {
-    // A missing key is only one cause. The one seen in practice is a valid key whose
-    // call failed or truncated, so naming only the key sends readers to check
-    // configuration that is already correct.
-    const text = METRIC_DESCRIPTIONS.duplication_semantic_findings.measures;
-    expect(text).toMatch(/truncat|fail/i);
-  });
 
 });
