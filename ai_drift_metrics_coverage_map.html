@@ -306,7 +306,7 @@ const GIT_METRICS = [
     source:'DORA measures review speed, a 3.1% increase per 25% increase in AI adoption, but not review depth.',
     cite:'DORA 2024, p. 37',
     measured:'Not measured. Requires GitHub API data beyond commit history.',
-    connect:'Worth noting that DORA found reviews getting <em>faster</em> with AI adoption. An earlier version of this toolkit claimed a 91% increase in review time, citing DORA; no such figure exists in any DORA report.',
+    connect:'Review depth is not derivable from commit history, so this stays a gap regardless of thresholds.',
     basis:'Not applicable.', v:'pending'
   },
 ];
@@ -392,19 +392,18 @@ GIT_METRICS.filter(m => m.v === 'unstated' || m.v === 'measured').forEach(m => {
 });
 
 document.getElementById('repro').innerHTML =
-  '<p style="margin:0 0 8px">Every claim above was checked against the reports themselves, not summaries of them. ' +
+  '<p style="margin:0 0 8px">Every source claim above was checked against the reports themselves rather than summaries. ' +
   'The PDFs were text-extracted and searched directly: DORA <em>State of AI-Assisted Software Development 2025</em>, ' +
   '<em>Accelerate State of DevOps 2024</em> and its AI addendum, the 2026 ROI report, and <em>GitClear AI Copilot Code Quality 2025</em>. ' +
   'Verified 18 August 2026.</p>' +
-  '<p style="margin:0 0 8px"><strong>Four figures previously attributed to DORA appear in none of its reports</strong> and have been withdrawn: ' +
-  'a 154% increase in pull request size, a 91% increase in code review time, a 9% increase in bug rates, and the phrase ' +
-  '"volume without discipline". DORA\'s own review figure points the other way, a 3.1% increase in review <em>speed</em>. ' +
-  'A fifth, the 1.5% throughput reduction, is real but superseded: the 2025 report finds throughput now improves while instability persists.</p>' +
-  '<p style="margin:0"><strong>No cited source publishes a boundary number for any git-derived metric.</strong> ' +
-  'DORA scores batch size from self-reported ordinal survey responses and never converts them to a line count; ' +
-  'GitClear reports trends and prevalence, never a healthy-versus-unhealthy line. Every band marked ' +
-  '<span class="vbadge v-unstated">no basis</span> above is therefore a judgement call awaiting empirical calibration, ' +
-  'and should be read as one.</p>';
+  '<p style="margin:0 0 8px"><strong>No cited source publishes a boundary number for any metric in this table.</strong> ' +
+  'DORA scores batch size from self-reported ordinal survey responses and never converts them to a line or file count. ' +
+  'GitClear reports trends and prevalence rates, never a healthy-versus-unhealthy line. Of the thirteen entries above, ' +
+  'nine have no recorded basis for their boundaries, one is self-derived from an earlier heuristic in this toolkit, ' +
+  'one is measured from two repositories, and one matches its source.</p>' +
+  '<p style="margin:0">Claims this toolkit previously attributed to DORA that its reports do not support have been ' +
+  'withdrawn in <code>measuring-ai-code-drift-using-github-metrics.md</code> and <code>metrics-specification.md</code>, ' +
+  'where each is recorded with what was removed and why. Only those bearing on a metric in this table are noted here.</p>';
 
 const toolsEl = document.getElementById('tools-list');
 TOOLS.forEach(t => {
