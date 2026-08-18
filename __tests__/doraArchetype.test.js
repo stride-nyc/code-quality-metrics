@@ -60,6 +60,21 @@ describe('classifyDoraArchetype', () => {
     })).toBe('legacy-bottleneck');
   });
 
+  it('returns "legacy-bottleneck" once sprawling clears the calibrated critical band, not the stale duplicated one', () => {
+    const { SPRAWLING_COMMITS_PCT, LARGE_COMMITS_PCT } = THRESHOLDS;
+    const { LEGACY_BOTTLENECK } = THRESHOLDS.DORA_ARCHETYPE;
+    // Above the calibrated SPRAWLING_COMMITS_PCT.critical band but below the stale,
+    // duplicated LEGACY_BOTTLENECK.sprawling value it used to be compared against.
+    expect(LEGACY_BOTTLENECK.sprawling).toBeGreaterThan(SPRAWLING_COMMITS_PCT.critical);
+    const sprawlingValue = (LEGACY_BOTTLENECK.sprawling + SPRAWLING_COMMITS_PCT.critical) / 2;
+    expect(classifyDoraArchetype({
+      large_commits_pct: String(LARGE_COMMITS_PCT.critical + 5),
+      sprawling_commits_pct: String(sprawlingValue),
+      test_coverage_rate: '40.00',
+      uncovered_prod_rate: '5.00'
+    })).toBe('legacy-bottleneck');
+  });
+
   it('returns "foundational-challenges" when large commit rate exceeds 40%', () => {
     expect(classifyDoraArchetype({
       large_commits_pct: '45.00',
