@@ -57,15 +57,68 @@ repository HEAD, the tool commit, the window, the merge-style evidence and the c
 in effect, so any number can be reproduced. `calibration/derive-bands.js` proposes bands and
 writes nothing; values are copied into `lib/thresholds.js` in a reviewed commit.
 
+**Every "healthy", "warning" and "critical" label in this document, wherever it appears below,
+means "positioned relative to this six-repository benchmark", not "validated against a quality
+outcome".** That qualification applies uniformly and is not repeated at every table.
+
+### What a band means
+
+Deriving thresholds as quantiles of a benchmark of reference systems is itself a published
+method: Alves, Ypma and Visser, "Deriving Metric Thresholds from Benchmark Data" (ICSM 2010,
+DOI 10.1109/ICSM.2010.5609747) pool measurements across 100 Java/C# systems (roughly 12 MLOC,
+proprietary and open source) and read thresholds off percentiles of the pooled, LOC-weighted
+distribution. They are explicit that the method is outcome-agnostic: "our methodology derives
+meaningful thresholds which represent overall volume of code from a benchmark of systems"
+(§II-C), and validating thresholds against an external quality outcome is listed there as
+future work, not as something the method already establishes. That is the claim this document
+makes for every band below: a band means "unusual relative to these six peers", not "harmful" or
+"defect-prone". The scale gap is real and worth stating rather than letting the citation imply
+otherwise: Alves used 100 systems and roughly 12 million lines of code; this project uses six
+repositories and twelve calibration windows. The method transfers; the strength of the claim
+does not.
+
 ### Derivation rule
 
-- **healthy** is the 75th percentile of observations.
-- **critical** is the worst value observed, meaning worse than any disciplined project
-  measured.
+- **healthy** is the 75th percentile of observations (25th percentile for a higher-is-better
+  metric, since the unhealthy end is the low tail there).
+- **critical** is the worst value observed (best value, for higher-is-better), meaning worse
+  than any disciplined project measured -- but only reported when at least two distinct
+  reference repositories produced a value within 15% of that extreme
+  (`NEAR_EXTREME_FRACTION` in `calibration/derive-bands.js`).
 
-Both bounds come from data. Where the worst value rests on a single repository, no critical
-bound is claimed and the metric carries two bands rather than three, because "outside what
-disciplined projects do" is supportable from one observation while "definitively bad" is not.
+Both bounds come from data. Where the worst value rests on a single repository or a single
+window, with no second repository corroborating it within that 15% band, no critical bound is
+claimed and the metric carries two bands (good/warning) rather than three (good/warning/
+critical), because "outside what disciplined projects do" is supportable from one observation
+while "definitively bad" is not. This is a correction to an earlier version of this section,
+which described the two-band case as "where the worst value rests on a single repository"
+without naming the corroboration check that actually decides the tier -- see
+`code-quality-metrics-xeh` and `calibration/README.md`'s "Derivation rule" section, which
+documented an even older rule (healthy = worst observation, critical = healthy x 2) that the
+code had already stopped implementing.
+
+### External anchors
+
+Two bands, and only two, have corroboration from outside this project's own six repositories.
+Both are corroboration of a *position*, not a derivation of a *boundary*, and the unit
+mismatches are real:
+
+| Band | This toolkit | External comparison | Source |
+|---|---|---|---|
+| `P90_LINES_CHANGED.healthy` | 260 | p90 = **261 LoC/commit** over 8,705,118 commits in 11,143 projects | Kolassa, Riehle & Salim, "A Model of the Commit Size Distribution of Open Source", SOFSEM 2013, Table 1; arXiv:1408.4974 |
+| `P90_FILES_CHANGED.healthy` | 8 | ~90% of changes touch fewer than **10 files**, over ~9M changes | Sadowski et al., "Modern Code Review: A Case Study at Google", ICSE-SEIP 2018, §5.2 |
+| | | gcc p90 ≈ **8 files** (derived from published frequency table) | Alali, Kagdi & Maletic, ICPC 2008, Table 2 |
+
+The 260/261 agreement is partly coincidental rather than a clean replication: Kolassa excludes
+blank lines and includes test files; this toolkit counts production lines only via
+`git numstat`, which includes blank lines. The two biases pull in opposite directions and
+happen to land close together. Neither source proposes these as healthy lines -- both are
+descriptive percentiles of a population with no health claim attached. What they support is a
+restatement, not a stronger claim: "this repository sits above the 90th percentile of published
+open-source commit-size distributions" is citable; "this repository exceeds a review-effectiveness
+threshold" is not, for either number. `P90_FILES_CHANGED.critical` has no external support at
+all -- no source publishes a second, higher file-count boundary -- and stays a two-repo,
+single-benchmark figure.
 
 ### Reference set
 
@@ -78,16 +131,67 @@ python/cpython, apache/kafka and kubernetes on that basis, not on quality.
 
 ### What limits this
 
-Ten reservations are recorded alongside the observations, three of them serious.
+Thirteen reservations are recorded alongside the observations in
+`calibration/observations.json`, three of them high severity.
 
-- **No pre-AI baseline.** Every window is from 2026, so the references may already have
-  adopted AI assistance. A toolkit built to detect AI drift is calibrating against a
-  possibly-drifted sample.
 - **Granular history only.** The bands do not transfer to squash-merge repositories, which
   will look worse on every size metric for reasons unrelated to practice.
 - **Circular definition.** The references were chosen because they are considered
   disciplined, and healthy was then defined as what they do. This supports "no worse than
   these six" rather than "healthy", and reputation is not a measured outcome.
+- **Cross-project non-transfer.** Kamei, Fukushima, McIntosh, Yamashita, Ubayashi and Hassan
+  (EMSE 2016, DOI 10.1007/s10664-015-9400-x, Table 6) found within-project just-in-time defect
+  models score 0.74-0.83 AUC on their own project but fall as low as 0.38 AUC -- worse than
+  random -- applied cross-project to the same eleven projects. An unfitted scalar band from six
+  repositories has less claim to transfer to an unseen project than a fitted, multi-feature
+  model does, so these bands describe these six repositories rather than generalizing beyond
+  them.
+- **Context-dependence** (medium severity). Zhang, Mockus, Zou, Khomh and Hassan (ICSM 2013,
+  DOI 10.1109/ICSM.2013.46) measured 320 SourceForge systems across 39 metrics and found every
+  one of six context factors they studied (domain, language, age, lifespan, number of changes,
+  number of downloads) shifts metric distributions; language alone shifted 35 of 39. The six
+  references here are one context, not a population sample.
+- **Within-project drift of model properties** (medium severity). McIntosh and Kamei (TSE 2018,
+  DOI 10.1109/TSE.2017.2693980) found just-in-time defect models lose 11-34 percentage points of
+  AUC one year after training, with the Size family's explanatory share swinging 10-43% (Qt) and
+  3-37% (OpenStack) of period-specific importance. A frozen band is the artefact this paper warns
+  against; these bands should be re-derived periodically, not treated as a permanent constant.
+- **No pre-AI baseline (partially addressed).** Every window used to be from 2026, so the
+  references may already have adopted AI assistance. A pre-2022 (2019-2020) window has since
+  been measured for all six repositories -- twelve `era: "pre-ai"` observations alongside the
+  twelve `era: "current"` ones -- and movement between eras was modest and mixed in direction
+  rather than uniformly worse, which softens but does not retire the concern (downgraded from
+  high to medium severity for this reason).
+
+The remaining reservations (practice-not-outcome, narrow-population, two-windows-per-repo,
+fifty-commit sampling, language mix, bot traffic, measurement-changed-mid-calibration) are
+recorded in full, with their implications, in `calibration/observations.json`'s `reservations`
+array; `calibration/derive-bands.js` prints the high-severity ones on every run.
+
+### Findings that contradict this toolkit's premises
+
+Peer-reviewed AI-era measurements exist for four of the premises this document otherwise states
+without qualification. None of them supports a threshold; all of them bear on whether the
+metric's *direction* is the one this toolkit assumes.
+
+- **Duplication.** He, Miller, Agarwal, Kaestner and Vasilescu ("Speed at the Cost of Quality",
+  MSR 2026, arXiv:2511.04427v3, Table 2), 806 Cursor adopters vs. 1,380 matched controls: AI-tool
+  adoption moved duplicated line density by +7.03% (±4.79%), not statistically significant. The
+  authors write that the result "challenges simplistic narratives about AI coding degrading code
+  quality", citing GitClear directly.
+- **Test discipline.** Hora ("Are Coding Agents Generating Over-Mocked Tests?", MSR 2026,
+  arXiv:2602.00409), 1.2 million 2025 commits across 2,168 repositories: 23% of coding-agent
+  commits add or change test files, against 13% of non-agent commits. Agent commits touch tests
+  *more* often, not less; the offsetting finding is that 36% of agent commits add mocks against
+  26% of non-agent commits.
+- **Revert rates.** Khosravani and Mockus (arXiv:2606.24429, Table 7): Claude Code commits were
+  reverted 32% less often than human commits in the same projects (1.1% vs 1.6%), Aider 82% less
+  (0.17% vs 0.90%); OpenHands was the exception at 34% more (1.38% vs 1.03%).
+- **Commit-volume null results.** Stray et al. (HICSS-59 2026, arXiv:2509.20353) found no
+  statistically significant change in commit-based activity for 25 Copilot adopters at NAV IT
+  over two years. Daniotti, Wachs, Feng and Neffke (arXiv:2506.08945) found multi-file commit
+  counts rise at the same ~3.6% rate as all commits at 29% AI use, so the *share* of multi-file
+  commits does not move even though the count does.
 
 ### Defects found by measuring
 
@@ -104,6 +208,25 @@ rather than discarding it after use.
 | Message quality read the subject only | The short-subject convention scored near zero; postgres moved 22 to 94 percent on an identical commit set once fixed |
 | Trailer-only bodies passed | A body of `PR-URL:` and `Reviewed-By:` lines scored as quality, so projects with more reviewers scored higher |
 | Ignore patterns used the wrong jscpd flag | Every configured pattern was silently inert; vendored trees counted as duplication |
+
+### Provenance failures checked and not found in this project's own documents
+
+A 2026-08-18 research pass (`calibration/research-findings.md`) traced three widely repeated
+figures in the review-size literature and could not locate any of them at their stated source:
+a "200-400 LOC over 60-90 minutes should yield 70-90% defect discovery" figure attributed by
+SmartBear to its own Cisco case study (not present in that study, which states it cannot compute
+such a figure); a 200-400 line review ceiling attributed to McConnell's *Code Complete* (every
+attribution traced back to a blog citing a blog); and "Google recommends keeping pull requests
+under 200 lines" (Sadowski et al., the actual Google study, reports a median of 24 lines and no
+recommended limit). None of the three was found anywhere in this project's own documents
+(`metrics-specification.md`, `README.md`, `CLAUDE.md`, `calibration/README.md`) during that
+pass, so there is nothing to withdraw here; they are recorded so a future edit does not
+reintroduce them. A separate likely transmission vector for three of the four already-withdrawn
+DORA figures — a SonarSource blog post cited as reference [7] in
+`measuring-ai-code-drift-using-github-metrics.md:165`, which attributes "9% climb in bug rates,
+91% increase in code review time, 154% increase in PR size" to a "Google 2025 DORA Report" with
+no corpus or method of its own — was also identified (`code-quality-metrics-9ur`); fixing that
+citation is out of this document's scope and is tracked on that issue.
 
 ---
 
@@ -128,12 +251,13 @@ large_commit_pct = (commits where additions + deletions > LARGE_COMMIT_THRESHOLD
 
 **CONFIG key**: `LARGE_COMMIT_THRESHOLD` (default: 100 lines)
 
-**Thresholds**:
+**Thresholds** (`LARGE_COMMITS_PCT` in `lib/thresholds.js`; three-band, corroborated at the
+critical extreme by nodejs/node and curl/curl -- see `calibration/`):
 | Range | Signal |
 |-------|--------|
-| < 20% | Healthy: consistent with DORA "small batches" capability |
-| 20–40% | Warning: elevated AI batch-acceptance risk |
-| > 40% | Critical: strong AI drift indicators |
+| < 19% | Healthy: at or below the 75th percentile of the six-repository benchmark |
+| 19–30% | Warning: above the benchmark's typical range |
+| > 30% | Critical: at or above the worst value two reference repositories both produced |
 
 **False positives**: Legitimate large commits include data migrations, bulk refactoring, large file additions (assets, generated code), and one-time cleanup. Context from `large_commit AND additions > deletions × 3` narrows to the AI-specific pattern.
 
@@ -154,12 +278,13 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 
 **CONFIG key**: `SPRAWLING_COMMIT_THRESHOLD` (default: 5 files)
 
-**Thresholds**:
+**Thresholds** (`SPRAWLING_COMMITS_PCT`; three-band, corroborated by nodejs/node,
+django/django and curl/curl):
 | Range | Signal |
 |-------|--------|
-| < 10% | Healthy |
-| 10–25% | Warning: watch for scope creep |
-| > 25% | Critical: possible shotgun surgery |
+| < 18% | Healthy: at or below the 75th percentile of the six-repository benchmark |
+| 18–20% | Warning: above the benchmark's typical range |
+| > 20% | Critical: at or above the worst value three reference repositories all produced |
 
 **DORA connection**: DORA's 2024 research measured a 7.2% increase in software delivery instability for every 25% increase in AI adoption, and its 2025 report states that AI adoption now improves throughput but "still increases delivery instability" (2025 report, p. 4). Instability is the finding that held across both years. Sprawling commits are one commit-level mechanism that could produce instability, but this link is an inference by this toolkit: DORA does not measure files changed per commit, and publishes no figure for pull request size. Do not cite the 2024 throughput figure as current; the 2025 report reverses its direction.
 
@@ -188,17 +313,38 @@ uncovered_prod_rate  = (commits where test_files_count = 0 AND prod_files_count 
 
 **CONFIG key**: `TEST_FILE_PATTERNS` (array of 8 regex patterns; covers JS/TS, Python, Go, Java, C#)
 
-**Thresholds**:
+**Thresholds** (`TEST_COVERAGE_RATE` and `UNCOVERED_PROD_RATE` in `lib/thresholds.js`; both
+two-band -- their extremes rest on a single reference repository, emberjs/ember.js, with no
+second repository corroborating within 15%, so `lib/report.js` reports only good/warning for
+either, never critical):
 | Metric | Range | Signal |
 |--------|-------|--------|
-| `test_coverage_rate` | > 50% | Healthy: test discipline present |
-| `test_coverage_rate` | < 30% | Warning: low paired test+prod commits |
-| `test_isolation_rate` | > 10% | Positive: TDD red-phase or test-improvement commits visible |
-| `uncovered_prod_rate` | < 10% | Healthy |
-| `uncovered_prod_rate` | 10–20% | Warning: elevated AI drift risk |
-| `uncovered_prod_rate` | > 20% | Critical: "accepted AI output without writing tests" pattern |
+| `test_coverage_rate` | ≥ 23% | Healthy: at or above the 25th percentile of the benchmark |
+| `test_coverage_rate` | < 23% | Warning: below the benchmark's typical range |
+| `test_isolation_rate` | > 10% | Positive: TDD red-phase or test-improvement commits visible (informational; carries no critical bound at all, see `calibration/derive-bands.js`'s `INFORMATIONAL` list) |
+| `uncovered_prod_rate` | ≤ 13% | Healthy: at or below the 75th percentile of the benchmark |
+| `uncovered_prod_rate` | > 13% | Warning: above the benchmark's typical range |
+
+The `warning: 30` value still present in `lib/thresholds.js` for `test_coverage_rate` is not a
+second calibrated boundary; it is a pre-existing display cutoff that predates this metric having
+any observed basis, kept only because `lib/report.js` never reads it as a critical bound (it
+explicitly forces `criticalBoundary: null`). Levin and Yehudai (ICSME 2017, 61 popular Java OSS
+projects, 242,567 commits) found "In none of the projects, did the test maintenance occur in more
+than 68.5% of the commits", with per-activity-type medians below 24.7/30.4/35 percent on a
+numerator broader than this toolkit's -- an independent, much larger population landing in the
+same teens-to-thirties range as the 23% derived here.
 
 **Why `uncovered_prod_rate` matters**: A commit that is both prod-only and large is the clearest AI drift signal in this toolkit — it matches the pattern of a developer accepting a large AI-generated code block without writing any tests. `test_isolation_rate` is a positive signal: test-only commits indicate TDD red-phase work or deliberate test improvements, both of which the binary metric incorrectly classified as "bad".
+
+**The same-commit heuristic is a published-noisy proxy for what this metric reaches for.**
+`test_coverage_rate` and `test_first_indicator` measure co-occurrence in one commit, not
+sequencing. Sun et al. (TOSEM 2023) exists specifically to test whether same-commit
+co-occurrence identifies genuine test/production co-evolution and reports "the pervasive
+existence of noise". Borle et al. (EMSE 2018) make the same point in their own threats-to-validity
+section: "In a git history, test first could look like testing at the same time, or even testing
+later depending on how the git commits were formed." This does not change what the field measures
+in this release -- `test_first_indicator` still means same-commit co-occurrence, exactly as coded
+in `lib/git.js` -- but the label should not be read as evidence of test-first *sequencing*.
 
 **DORA connection**: none directly. Automated testing is not among the seven capabilities in DORA's 2025 AI Capabilities Model (*State of AI-Assisted Software Development 2025*, p. 50), which names clear AI stance, healthy data ecosystems, AI-accessible internal data, strong version control practices, working in small batches, user-centric focus, and quality internal platforms. This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this document called testing DORA's "single strongest predictor"; that claim was not supported by the report and has been removed.
 
@@ -230,12 +376,24 @@ slope < 0: "shrinking"
 
 **Risk signal**: `commit_size_trend: "growing"` combined with `velocity_trend: "accelerating"`. This is a hypothesis held by this toolkit, not a DORA finding. The phrase "volume without discipline" was previously attributed to DORA here; it appears in no DORA publication and has been removed.
 
-**Thresholds** (p90 guidance):
-| Range | Signal |
-|-------|--------|
-| p90 < 200 lines | Healthy |
-| p90 200–500 lines | Monitor |
-| p90 > 500 lines | Investigate: high review burden |
+**Thresholds** (`AVG_LINES_CHANGED` and `P90_LINES_CHANGED` in `lib/thresholds.js`):
+| Metric | Range | Signal |
+|--------|-------|--------|
+| `avg_lines_changed` | ≤ 140 | Healthy: at or below the 75th percentile of the benchmark (three-band; nodejs/node and postgres/postgres both corroborate the extreme) |
+| `avg_lines_changed` | 140–200 | Warning |
+| `avg_lines_changed` | > 200 | Critical |
+| `p90_lines_changed` | ≤ 260 | Healthy: at or below the 75th percentile of the benchmark (two-band; only nodejs/node sits near the extreme, so no critical bound is reported) |
+| `p90_lines_changed` | > 260 | Warning |
+
+**External anchor for `p90_lines_changed`**: Kolassa, Riehle and Salim (SOFSEM 2013, Table 1;
+arXiv:1408.4974), an Ohloh.net snapshot of 8,705,118 commits across 11,143 projects, report a p90
+of 261 LoC/commit -- one unit from the 260 derived here from an unrelated, six-repository dataset.
+The agreement is partly coincidental: Kolassa excludes blank lines and includes test files, this
+toolkit counts production lines only and includes blank lines, and the two biases pull in
+opposite directions. Neither source proposes 260 or 261 as a healthy line; both are descriptive
+percentiles. What is citable is a position, not a boundary: this repository sits above the 90th
+percentile of a large published open-source commit-size distribution, not that it has crossed a
+review-effectiveness threshold.
 
 ---
 
@@ -252,12 +410,22 @@ avg_files_changed   : mean (kept for backwards compatibility)
 
 **Implementation**: `simple-statistics` library: `quantile()`, `mean()`
 
-**Thresholds** (p90 guidance):
+**Thresholds** (`P90_FILES_CHANGED` in `lib/thresholds.js`; two-band -- the extreme rests on
+curl/curl's own two windows, with no second, distinct repository corroborating it, so no
+critical bound is reported):
 | Range | Signal |
 |-------|--------|
-| p90 < 8 files | Healthy |
-| p90 8–15 files | Monitor |
-| p90 > 15 files | Investigate: architectural scatter |
+| p90 ≤ 8 files | Healthy: at or below the 75th percentile of the benchmark |
+| p90 > 8 files | Warning |
+
+**External anchors**: Sadowski et al. (ICSE-SEIP 2018, §5.2), roughly 9 million Google code
+changes: "about 90% modify fewer than 10 files." Alali, Kagdi and Maletic (ICPC 2008, Table 2)
+put gcc's files-per-commit p90 at approximately 8, derived from their published size-bucket
+frequencies. The two bracket 8 from either side. As with the lines-changed anchor above, these
+are descriptive percentiles from unrelated populations, not proposed healthy lines; what they
+support is the restatement "this repository's file-scope sits above the 90th percentile of these
+published distributions", not a claim that a review-effectiveness or architectural-scatter
+threshold has been crossed.
 
 ---
 
@@ -287,7 +455,7 @@ velocity_trend            : "accelerating" | "stable" | "decelerating"
 
 **Data source**: `date` field from `git log --pretty=format:"%ai"`. Already collected in the existing analysis loop; no new git calls required.
 
-**Risk signal**: `velocity_trend: "accelerating"` combined with `commit_size_trend: "growing"`. DORA research identifies this combination as the leading indicator of team archetype drift toward "foundational challenges."
+**Risk signal**: `velocity_trend: "accelerating"` combined with `commit_size_trend: "growing"`. This is a hypothesis held by this toolkit, not a DORA finding: an earlier version of this document attributed the combination to DORA research as "the leading indicator of team archetype drift toward foundational challenges", and that attribution could not be traced to any DORA publication during a 2026-08-18 research pass (`code-quality-metrics-pw5`). It has been withdrawn. See Metric 4's risk-signal note for the same hypothesis stated without the DORA attribution.
 
 **Note**: A single-day analysis window (all commits on one day) yields `velocity_commits_per_day` but `velocity_trend: "stable"` by convention.
 
@@ -295,7 +463,7 @@ velocity_trend            : "accelerating" | "stable" | "decelerating"
 
 ### Metric 7: Net Additions Ratio Distribution
 
-**What it measures**: The median and 90th percentile of the per-commit net additions ratio — what fraction of all lines changed in a commit are net-new code. A high ratio indicates new code is being added without commensurate refactoring or removal of replaced code. This is the systematic batch-acceptance pattern DORA associates with architectural debt accumulation.
+**What it measures**: The median and 90th percentile of the per-commit net additions ratio — what fraction of all lines changed in a commit are net-new code. A high ratio indicates new code is being added without commensurate refactoring or removal of replaced code. An earlier version of this document described this as "the systematic batch-acceptance pattern DORA associates with architectural debt accumulation"; that attribution could not be traced to any DORA publication during a 2026-08-18 research pass (`code-quality-metrics-pw5`) and has been withdrawn. This is this toolkit's own hypothesis, not a DORA finding.
 
 **Formula**:
 ```
@@ -319,14 +487,13 @@ net_additions_ratio_p90     : float (90th percentile ratio; bounded [-1, +1])
 
 **Data source**: `total_additions` and `total_deletions` already collected per commit; no new git calls required
 
-**Thresholds**:
+**Thresholds** (`NET_ADDITIONS_RATIO_MEDIAN` in `lib/thresholds.js`; three-band, corroborated at
+the critical extreme by git/git and django/django):
 | Range (median) | Signal |
 |----------------|--------|
-| < 0.33 | Healthy: balanced additions and deletions |
-| 0.33–0.50 | Monitor: additions outpacing deletions |
-| > 0.50 | Warning: >50% of all churn is net-new code; systematic batch-acceptance pattern |
-
-The 0.50 threshold maps exactly to the prior threshold of 3.0: when `additions = 3 × deletions`, `(3d - d) / (3d + d) = 0.50`.
+| ≤ 0.63 | Healthy: at or below the 75th percentile of the benchmark |
+| 0.63–0.79 | Warning |
+| > 0.79 | Critical: at or above the worst value two reference repositories both produced |
 
 **Relationship to existing heuristic**: The existing `generateInsights()` function counts commits where `large_commit AND additions > deletions × 3` as "possible AI commits." This metric expresses the same pattern at the aggregate level with a distribution, so outlier commits don't distort the reading.
 
@@ -368,16 +535,86 @@ message_quality_pct  : float (percentage of quality commits)
 
 **CONFIG key**: `MESSAGE_QUALITY_MIN_WORDS` (default: 10)
 
-**Thresholds**:
+**Thresholds** (`MESSAGE_QUALITY_PCT` in `lib/thresholds.js`; two-band -- the extreme rests on a
+single reference repository, emberjs/ember.js, with no second repository corroborating within
+15%, so no critical bound is reported):
 | Range | Signal |
 |-------|--------|
-| > 60% | Healthy: good commit message discipline |
-| 40–60% | Monitor |
-| < 40% | Warning: messaging discipline issues |
+| ≥ 66% | Healthy: at or above the 25th percentile of the benchmark |
+| < 66% | Warning |
+
+**What the literature says about word count as a signal, recorded here without changing the
+scoring rule**: Li and Ahmed (ICSE 2023, 185,026 Apache commits) ran the comparison this metric's
+word-count branch depends on -- semantic What/Why quality versus commit message word count -- and
+found What/Why won at every window size with large effect sizes; their GLM coefficients differ by
+roughly two orders of magnitude (word-count volume ~0.0037; What 0.117-0.483; Why 0.088-0.833).
+Barnett et al. (MSR 2016, 342 systems) found word count significant in only 43% of systems with a
+median 4% of explanatory power, against 80% of systems and up to 72% for their content metric.
+Separately, the `MESSAGE_QUALITY_MIN_WORDS` bar of 10 sits above the population median in the
+largest published corpus available (CommitBench, 23,284,371 commits: median 11 T5 subword tokens,
+p25 = 6; T5 tokens run higher than words for the same text), so on a project that has not adopted
+Conventional Commits, the word-count branch fails for a large share of ordinary, well-explained
+commits. Neither finding changes what `message_quality_pct` computes in this release; a semantic
+scoring rule is a larger change than a threshold edit and needs its own decision
+(`code-quality-metrics-6ti`).
 
 **Design decision: why not NLP**: Conventional commit classification requires a 3-line regex. Word count requires one line. Adding a 200KB+ NLP library (`compromise`, `wink-nlp`) for these two signals is unjustified. The regex approach is zero-dependency, faster, more maintainable, and easier to test.
 
 **Limitations**: This metric cannot assess semantic quality. A message that says "feat: add user authentication for all supported OAuth providers" scores the same as "feat: a." The word-count threshold partially compensates, but it cannot detect technically-compliant messages that are still vague.
+
+---
+
+### Metric 9: Duplication Density (Two-Layer Detection)
+
+**What it measures**: The share of scanned production code that is textually duplicated,
+via `jscpd`, plus an optional second layer that asks Claude to find logic duplicated across
+files in different words. Layer 1 (jscpd) runs unconditionally; Layer 2 (semantic) runs only
+when `ANTHROPIC_API_KEY` is set.
+
+**Formula (Layer 1)**: `jscpd`'s `statistics.total.percentage` — duplicated lines as a share of
+lines scanned across the production files touched by the analysed commits, excluding files
+matched by `DUPLICATE_IGNORE_PATTERNS`.
+
+**CONFIG keys**: `DUPLICATE_MIN_LINES` (default: 5), `DUPLICATE_MIN_TOKENS` (default: 50),
+`DUPLICATE_IGNORE_PATTERNS` (default: excludes `designs/`, `deps/`, `vendor/`, `third_party/`,
+`node_modules/`, `generated/` and common lock files — added after a vendored `deps/` sync on
+nodejs/node moved measured duplication from 5.12% to 15.09% with no change in practice).
+
+**Thresholds** (`DUPLICATION_PCT` in `lib/thresholds.js`; three-band, corroborated at the
+critical extreme by nodejs/node, postgres/postgres and curl/curl):
+| Range | Signal |
+|-------|--------|
+| ≤ 6% | Healthy: at or below the 75th percentile of the benchmark |
+| 6–6.5% | Warning |
+| > 6.5% | Critical: at or above the worst value three reference repositories all produced |
+
+**The literature does not support reading duplication as a defect signal.** Rahman, Bird and
+Devanbu (MSR 2010, four C projects, 116-155 monthly snapshots each): "we find that clones may be
+less defect prone than non-cloned code… Our findings do not support the claim that clones are
+really a 'bad smell'", significant across all four projects and both parameter settings. Wagner
+et al. (SANER 2016) found clone length does not predict faultiness (ρ = 0.268, p = 0.120). What
+the harm literature actually implicates is *inconsistency between* clones over time, which
+`jscpd` does not measure. This metric is retained as a drift signal (more duplication is a
+plausible symptom of accepting AI-generated code without refactoring it), not as a validated
+defect predictor, and no defect-risk claim should be attached to it.
+
+**The 6% healthy line happens to be close to SonarQube's default quality gate (≤3.0% duplicated
+lines density, a different number under the prior, uncalibrated band), but the comparison is not
+apples-to-apples.** Sonar's default measures at a minimum of 100 duplicated tokens over at least
+10 lines, applied to new code only. This toolkit measures at `DUPLICATE_MIN_LINES: 5` and
+`DUPLICATE_MIN_TOKENS: 50` — half of Sonar's minimum in both dimensions — over the full contents
+of the production files a commit window touched. Wagner et al. quantify what halving the minimum
+clone size does on the same three systems: roughly a 3x increase in measured duplication (3.0% →
+10.1%, 5.3% → 14.8%, 3.4% → 10.5%). Whether to raise this toolkit's minimums to match Sonar's, or
+keep them and stop describing the result as Sonar-comparable, is a decision this document does
+not make (`code-quality-metrics-k1g`); it is recorded here so the resemblance is not mistaken for
+validation.
+
+**Data source (Layer 2, semantic)**: Claude reads up to `AI_DUPLICATE_MAX_FILES` (40) production
+files and returns pairs implementing the same logic in different words, each with a confidence.
+The count varies between runs on identical input, so it is reported as a finding, never as a
+confident zero: `layers_run.semantic` distinguishes "ran and found none" from "never ran" so a
+failed or skipped call cannot be read as a clean result.
 
 ---
 
