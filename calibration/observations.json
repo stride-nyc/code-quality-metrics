@@ -1,6 +1,535 @@
 {
   "schema": 1,
   "purpose": "Reference-repository measurements from which lib/thresholds.js bands are derived. Append-only: superseded observations are marked include_in_derivation false with a reason, never deleted.",
-  "tool_commit": null,
-  "observations": []
+  "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+  "observations": [
+    {
+      "repo": "nodejs/node",
+      "url": "https://github.com/nodejs/node",
+      "language": "JavaScript/C++",
+      "why_reference": "Rebase-and-land trunk workflow with PR-URL trailers; no squash, no merge commits, individual reviewed commits kept intact.",
+      "merge_style": "granular",
+      "merge_style_evidence": "0 merge commits and 0 squash signatures (`\\(#[0-9]+\\)$`) in 630 commits since 2026-07-01; committer is often the bot account 'GitHub' (471/630) or 'Node.js GitHub Bot' because node's landing process rebases and re-commits at land time, but author identity and message are preserved per commit and PR-URL/Reviewed-By trailers are present on every sampled commit.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "13fcd6f3e0541d938a5146af795f178db40601e7",
+      "window": {
+        "since": "2026-08-11",
+        "actual_span": "2026-07-18 to 2026-08-18 (author-date range of the 50 analyzed commits; wider than the --since committer-date cutoff because node's landing bot re-commits at land time, well after original authoring)"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 109,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 22,
+        "sprawling_commits_pct": 20,
+        "test_coverage_rate": 36,
+        "test_isolation_rate": 22,
+        "uncovered_prod_rate": 8,
+        "message_quality_pct": 26,
+        "avg_lines_changed": 1812.22,
+        "p90_lines_changed": 637.7,
+        "p90_files_changed": 11,
+        "net_additions_ratio_median": 0.5993328391401038,
+        "duplication_pct": 4.459854734282052
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": false,
+      "exclusion_reason": "Window dominated by two non-organic commits: 'worker: add wpt tests for Web Workers' (53,334 lines / 1,322 files, an import of the external Web Platform Tests fixture suite) and 'deps: update perfetto to 57.2' (29,781 lines / 4 files, a vendored third-party source sync). Together these two commits account for roughly 92% of the window's total line volume out of 50 analyzed commits, which makes avg_lines_changed, p90_lines_changed and p95_lines_changed describe an import/vendoring event rather than development practice. large_commits_pct, sprawling_commits_pct, test_coverage_rate, message_quality_pct and duplication_pct are comparatively less affected (they are commit-count or median-based) and are recorded for reference but the whole observation is excluded for consistency with the sibling window below.",
+      "notes": "DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in nodejs/node. duplication_pct here (4.46%) scanned 94 production files touched by the window's commits; this window's production file set was not deps/-dominated (most files came from the WPT test-fixture commit's test/ tree and ordinary src/lib changes), so no with/without-vendored recomputation was done for this window specifically -- see the 2026-06-01 window below where deps/ dominance made that comparison necessary."
+    },
+    {
+      "repo": "nodejs/node",
+      "url": "https://github.com/nodejs/node",
+      "language": "JavaScript/C++",
+      "why_reference": "Rebase-and-land trunk workflow with PR-URL trailers; no squash, no merge commits, individual reviewed commits kept intact.",
+      "merge_style": "granular",
+      "merge_style_evidence": "Same repository/practice as the window above; re-confirmed on this older branch position: 0 merges, 0 squash signatures in the 112 commits git log found for this window.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "9d2db708ca05fa315608133699eb1eefbde0f128",
+      "window": {
+        "since": "2026-06-01",
+        "actual_span": "2026-04-24 to 2026-06-15 (author-date range of the 50 analyzed commits; branch ref was moved back to 9d2db708 (2026-06-15) with `git checkout -B main 9d2db708` before running, per the README's older-window method)"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 112,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 34,
+        "sprawling_commits_pct": 30,
+        "test_coverage_rate": 46,
+        "test_isolation_rate": 10,
+        "uncovered_prod_rate": 16,
+        "message_quality_pct": 16,
+        "avg_lines_changed": 1391.88,
+        "p90_lines_changed": 3983.2,
+        "p90_files_changed": 67.1,
+        "net_additions_ratio_median": 0.5343402961396087,
+        "duplication_pct": 9.760942278813781
+      },
+      "dora_archetype": "legacy-bottleneck",
+      "include_in_derivation": false,
+      "exclusion_reason": "Window dominated by a burst of vendored third-party dependency syncs: 'deps: upgrade openssl sources to openssl-3.5.7' (18,572 lines/163 files), 'deps: update ngtcp2 to 1.23.0' (16,949/114), 'deps: upgrade npm to 11.17.0' (10,283/320), 'deps: update zlib to 1.3.2.1-motley-3246f1b' (7,823/77), 'deps: update nghttp3 to 1.16.0' (4,120/34) and 'deps: update archs files for openssl-3.5.7' (3,968/319) -- six commits totaling ~61,700 of the window's ~69,600 changed lines (about 89%). This is exactly the dependency-bot-merge-burst case the calibration method calls out: it is not organic development activity, it is a copy of upstream C library sources landing in one window. Confirmed by file provenance: 1,008 of the 1,113 production files touched in this window (90.6%) live under deps/. Excluded from derivation for the same reason as the sibling window.",
+      "notes": "DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in nodejs/node -- it is dead configuration for this repo (it targets an unrelated repository, per lib/config.js's own comment). Because this window's production file set was 90.6% vendored deps/ code, duplication_pct was computed both ways: 9.76% (percentage over all 1,113 touched files, includes deps/) and 3.43% (percentage over the 105 non-deps/ files only, re-run with the same jscpd flags). The value recorded in metrics.duplication_pct above (9.76%) is the raw with-deps/ figure the tool actually produced; the 3.43% without-deps/ figure is closer to what node's own code looks like but was not what a default run of the tool measures, so it is reported here rather than substituted. Repeated on a repo with a heavy vendoring practice, this pattern (large deps/ syncs periodically dominating a window) is structural rather than a one-off: a scan of 2026-02-01 to 2026-03-15 found 11 more commits over 1,500 changed lines, several of them deps: syncs (sqlite, simdjson, npm x3, minimatch, ada) or single huge feature/test commits (a 79,262-line 'add node:ffi module' commit, a 87,323-line simdjson vendor bump). Any ~50-commit window of node's mainline has a good chance of containing at least one such commit; this was not cherry-picked to be worse than typical."
+    },
+    {
+      "repo": "emberjs/ember.js",
+      "url": "https://github.com/emberjs/ember.js",
+      "language": "JavaScript/TypeScript",
+      "why_reference": "GitHub 'Merge pull request' workflow with true two-parent merge commits; individual commits keep their own authors and messages rather than being squashed.",
+      "merge_style": "granular",
+      "merge_style_evidence": "60 true two-parent merge commits ('Merge pull request #N from emberjs/...') and 0 squash signatures (`\\(#[0-9]+\\)$`) in 202 commits since 2026-06-01. Sampled merges preserve the underlying branch commit(s) with their own distinct authors and messages (e.g. 'Deprecate Evented and @ember/object/events per RFC 1111' merged intact under 'Merge pull request #21542').",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "26071400a790fa8c4c81c4485785d613fb8c9702",
+      "window": {
+        "since": "2026-07-20",
+        "actual_span": "2026-03-24 to 2026-08-14 (author-date range of the 50 analyzed commits; one long-lived branch, 'cleanup-7-0-barrel', authored starting in March and merged to main much later, pulls the low end of this range back well before the --since committer-date cutoff)"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 91,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 26,
+        "sprawling_commits_pct": 14,
+        "test_coverage_rate": 10,
+        "test_isolation_rate": 4,
+        "uncovered_prod_rate": 20,
+        "message_quality_pct": 16,
+        "avg_lines_changed": 230.12,
+        "p90_lines_changed": 821.4,
+        "p90_files_changed": 12.5,
+        "net_additions_ratio_median": 0.010523286882887325,
+        "duplication_pct": 5.123856952732581
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": false,
+      "exclusion_reason": "TOOL ARTIFACT, not a property of this window: lib/git.js computes each commit's stats with `git show --numstat --format=\"\" <sha>`, which for a two-parent merge diffs against the first parent by default. For a single-commit PR merged via GitHub's 'Merge pull request' button, that reproduces the exact diff of the merge's sole child commit, so the same real-world change is counted twice in the 50-commit sample as if it were two independent commits. In this window 10 of the 50 analyzed commits are such merges, and 6 of them exactly duplicate a sibling commit's (additions, deletions, files_changed) signature -- e.g. 26071400 'Merge pull request #21542' and a5936755 'Deprecate Evented...' both show (1080, 286, 30) -- so 12/50 (24%) of the sample double-counts 6 real changes. This inflates large_commits_pct/sprawling_commits_pct (a large change is flagged large twice) and skews message_quality_pct (the same change is scored once under its real message and once under the generic 'Merge pull request #N from user/branch' message, which is unlikely to pass the message-quality heuristic). Not fixed here per instructions (measurement only); flagged as a new tool defect for repos with true merge-commit history.",
+      "notes": "DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in ember.js. duplication_pct (5.12%) scanned 85 production files; ember has no vendored third-party source tree comparable to node's deps/, so no with/without recomputation was needed. test_coverage_rate (10%) and message_quality_pct (16%) look strikingly low for a project this disciplined; given the merge-commit double-counting above, at least part of that is an artifact of the same real commits being scored twice under different messages/shapes rather than ember's actual test or message discipline being this poor -- treat both numbers with suspicion, not just the size metrics."
+    },
+    {
+      "repo": "emberjs/ember.js",
+      "url": "https://github.com/emberjs/ember.js",
+      "language": "JavaScript/TypeScript",
+      "why_reference": "GitHub 'Merge pull request' workflow with true two-parent merge commits; individual commits keep their own authors and messages rather than being squashed.",
+      "merge_style": "granular",
+      "merge_style_evidence": "Same repository/practice as the window above, re-confirmed on this older branch position (139 commits found in-window, including multiple 'Merge pull request' and 'Merge branch main into <feature>' two-parent merges, 0 squash signatures).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "868e19172abaf1de640d989f2117186848df8984",
+      "window": {
+        "since": "2026-03-15",
+        "actual_span": "2026-01-16 to 2026-03-31 (author-date range of the 50 analyzed commits; branch ref moved back to 868e1917 (2026-03-31) with `git checkout -B main 868e1917` before running)"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 139,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 28,
+        "sprawling_commits_pct": 20,
+        "test_coverage_rate": 18,
+        "test_isolation_rate": 6,
+        "uncovered_prod_rate": 14,
+        "message_quality_pct": 8,
+        "avg_lines_changed": 1853.18,
+        "p90_lines_changed": 1556.6,
+        "p90_files_changed": 10.1,
+        "net_additions_ratio_median": -0.17836257309941522,
+        "duplication_pct": 3.7622078099606617
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": false,
+      "exclusion_reason": "Same merge-commit double-counting tool artifact as the sibling window above, confirmed again here: 16 of the 50 analyzed commits are two-parent merges, and 4 of them exactly duplicate a sibling commit's (additions, deletions, files_changed) signature (e.g. 33727130 'Merge pull request #21270' == 808f1042 'Fix gate workflow...' at (9,1,1); 3ea40408 'Merge pull request #21263' == b834a962 'Update ember-cli' at (388,145,2)), so 8/50 (16%) double-counts 4 real changes. A separate long-lived branch ('cleanup-7-0-barrel') contributes a merge commit (8d1f5d22, 1464 lines/11 files) whose diff sums several of its own now-separately-counted child commits (d389b552, a59a7b66, 92720f80, etc.) -- a many-to-one variant of the same defect, harder to pin to an exact duplicate signature but inflating the same way. message_quality_pct (8%) is likely partly this artifact too: several of the low-scoring entries are terse merge-commit titles standing in for a real commit that is also counted separately.",
+      "notes": "net_additions_ratio_median is negative (-0.178) in this window, meaning the median analyzed commit deleted more than it added -- consistent with the barrel-file cleanup work visible in the sample ('cleanup barrel file...', 'remove type tests for barrel file'). duplication_pct (3.76%) scanned 377 production files; DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing here either."
+    },
+    {
+      "repo": "git/git",
+      "url": "https://github.com/git/git",
+      "language": "C",
+      "why_reference": "Canonical mailing-list/maintainer-integration workflow: Junio Hamano applies and merges topic branches; commits are never squashed or rewritten by a GitHub UI.",
+      "merge_style": "granular",
+      "merge_style_evidence": "128 true two-parent merge commits ('Merge branch 'x/y'') and 0 squash signatures (`\\(#[0-9]+\\)$`) in 444 commits since 2026-07-01. 441/444 committers are 'Junio C Hamano' (the integrator), consistent with the maintainer-merges-topic-branches model; authors of the underlying commits are individual contributors, preserved with their own names and messages inside each merge.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "18e66859d87fb4b76599f73460b54f0848c76b16",
+      "window": {
+        "since": "2026-07-20",
+        "actual_span": "2026-07-30 to 2026-08-15"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 135,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 30,
+        "sprawling_commits_pct": 26,
+        "test_coverage_rate": 0,
+        "test_isolation_rate": 0,
+        "uncovered_prod_rate": 30,
+        "message_quality_pct": 0,
+        "avg_lines_changed": 163.9,
+        "p90_lines_changed": 358.3,
+        "p90_files_changed": 12.1,
+        "net_additions_ratio_median": 0.7439458689458689,
+        "duplication_pct": 1.445879911640672
+      },
+      "dora_archetype": "foundational-challenges",
+      "include_in_derivation": false,
+      "exclusion_reason": "TWO tool defects combine here, both newly found during this calibration round and neither specific to this window: (1) NEW test-file-detection blind spot -- git.git's entire test suite lives under a directory literally named `t/` (e.g. t/t2207-add-resolved.sh, t/helper/test-revision-walking.c), and CONFIG.TEST_FILE_PATTERNS' `(^|\\/)tests?\\/` pattern requires the literal word 'test' or 'tests' as a path segment, so it never matches `t/`. Every commit's test_files_count was 0 in this run (confirmed directly against local_commit_metrics.json: commits touching t/t1400-update-ref.sh etc. all show test_files_count=0, prod_files_count>0), which is why test_coverage_rate=0.00%, test_isolation_rate=0.00% and uncovered_prod_rate=30.00% -- these numbers describe the pattern's blind spot, not git's actual test discipline (git is one of the most heavily test-covered C projects there is). (2) The same merge-commit double-counting defect documented on ember.js: 36 of 50 analyzed commits are two-parent merges (`git show --numstat` on a merge diffs against first-parent by default), and several exactly duplicate a sibling commit signature, inflating large/sprawling counts. message_quality_pct=0.00% is a separate, softer concern (see notes) but compounds the unreliability of this observation.",
+      "notes": "message_quality_pct scored 0/50: CONFIG's quality heuristic requires a Conventional-Commits prefix (feat:/fix:/etc, which git.git's 'component: summary' subject style does not use, e.g. 'mailmap: map Elijah Newren's current and previous work addresses' is not conventional-commit-shaped) OR >=10 words in the subject line alone (scoreMessageQuality is only ever given the git-log '%s' subject, never the body). Git's own CONTRIBUTING documentation explicitly asks for a short subject with the explanation in the body -- exactly the style this heuristic scores as low-quality. This is a construct-validity concern with message_quality_pct itself, not a bug in this run, but it means the metric conflates 'long/conventional subject line' with 'well-explained commit,' which will systematically penalize any project (git, and likely postgres, and the Linux-kernel-style C world generally) that puts the explanation in the body instead of the subject. duplication_pct (1.45%) scanned 169 production files; DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in git.git."
+    },
+    {
+      "repo": "git/git",
+      "url": "https://github.com/git/git",
+      "language": "C",
+      "why_reference": "Canonical mailing-list/maintainer-integration workflow: Junio Hamano applies and merges topic branches; commits are never squashed or rewritten by a GitHub UI.",
+      "merge_style": "granular",
+      "merge_style_evidence": "Same repository/practice as the window above, re-confirmed on this older branch position (163 commits found in-window, dominated by 'Merge branch ...' two-parent merges and periodic l10n translation merges, 0 squash signatures).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "4a6ed9d09f9346f24c15c408b8eb005c3133fd5b",
+      "window": {
+        "since": "2026-04-01",
+        "actual_span": "2026-02-05 to 2026-04-30"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 163,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 32,
+        "sprawling_commits_pct": 6,
+        "test_coverage_rate": 0,
+        "test_isolation_rate": 0,
+        "uncovered_prod_rate": 32,
+        "message_quality_pct": 14,
+        "avg_lines_changed": 789.44,
+        "p90_lines_changed": 1460.2,
+        "p90_files_changed": 3.1,
+        "net_additions_ratio_median": 0,
+        "duplication_pct": 0.6868617809912593
+      },
+      "dora_archetype": "foundational-challenges",
+      "include_in_derivation": false,
+      "exclusion_reason": "Same t/ test-detection blind spot and merge-commit double-counting as the sibling window (15/50 commits are merges here; 10 duplicate-signature groups found, several of them the l10n merge pairs below). On top of that, this window happens to land a burst of periodic release-cycle localization-file merges: 'l10n: fr: v2.54.0' (1,244 lines), 'l10n: bg.po: Updated Bulgarian translation' (x2, 1,606 and 2,606 lines), 'l10n: tr: Update Turkish translations' (1,368 lines), 'l10n: zh_CN: updated translation' (1,444 lines), and one combined 'Merge tag l10n-2.54.0-v2' bringing in 16,492 lines/13 files -- each counted once as the l10n commit and again as its merge (the double-counting defect again). Translation-file syncs are machine-assisted, batch-generated content analogous to a dependency-vendor sync, not organic code changes, and they dominate this window's line-count metrics the same way node's deps/ syncs did.",
+      "notes": "net_additions_ratio_median is exactly 0 in this window (an even split of additions/deletions at the median commit), which is unremarkable on its own but is downstream of the same double-counted merge/child pairs. duplication_pct (0.69%) scanned only 45 production files -- the smallest file-set of any window measured, because most of this window's commits touch a single .po translation file or CI YAML file rather than source; not a meaningful duplication signal for git's own C code. DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in git.git."
+    },
+    {
+      "repo": "postgres/postgres",
+      "url": "https://github.com/postgres/postgres",
+      "language": "C",
+      "why_reference": "Mailing-list patch-review workflow: committers apply reviewed patches directly to master as individual commits. No GitHub PR mechanism at all on this repo (the GitHub mirror is push-only), so there is no squash-merge or merge-button to distort history.",
+      "merge_style": "granular",
+      "merge_style_evidence": "0 merge commits and 0 squash signatures (`\\(#[0-9]+\\)$`) in 694 commits since 2026-06-01. Committers are 10+ distinct longtime core team members (Michael Paquier 97, Peter Eisentraut 81, Fujii Masao 65, Tom Lane 61, ...), each applying their own reviewed patches with individually authored messages -- linear history, no merges to reconcile.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "92e20d4a4382810a30bdb394473d6ee891edab73",
+      "window": {
+        "since": "2026-08-01",
+        "actual_span": "2026-08-12 to 2026-08-18"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 180,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 14,
+        "sprawling_commits_pct": 10,
+        "test_coverage_rate": 24,
+        "test_isolation_rate": 6,
+        "uncovered_prod_rate": 10,
+        "message_quality_pct": 22,
+        "avg_lines_changed": 85.3,
+        "p90_lines_changed": 150.4,
+        "p90_files_changed": 5.2,
+        "net_additions_ratio_median": 0.3132867132867133,
+        "duplication_pct": 6.466043976467377
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "notes": "Clean window: 0 merges (so none of the merge-commit double-counting seen on ember.js/git.git), largest single commit is a 1,620-line/234-file safe-allocation-routine sweep (51c43a5d) which is a real, organic refactor rather than a vendored import -- checked and not excluded. postgres's own test tree is at src/test/, which the `(^|/)tests?/` pattern matches correctly (unlike git.git's `t/`), so test_coverage_rate here should be trustworthy. message_quality_pct (22%) is still low for a project this disciplined; postgres commit subjects are conventionally short ('Fix data_checksum GUC show_hook', 8 words) with explanation in the body, which the message-quality heuristic (subject-line word count or Conventional-Commits prefix) does not credit -- see the same concern raised on git.git. Treat message_quality_pct across all C/mailing-list-style repos in this dataset as measuring 'long or conventional subject line' rather than 'well-explained commit.' DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in postgres; no designs/, generated, or vendored directory dominated the 298 files scanned."
+    },
+    {
+      "repo": "postgres/postgres",
+      "url": "https://github.com/postgres/postgres",
+      "language": "C",
+      "why_reference": "Mailing-list patch-review workflow: committers apply reviewed patches directly to master as individual commits. No GitHub PR mechanism at all on this repo (the GitHub mirror is push-only), so there is no squash-merge or merge-button to distort history.",
+      "merge_style": "granular",
+      "merge_style_evidence": "Same repository/practice as the window above, re-confirmed on this older branch position (125 commits found in-window, 0 merges, 0 squash signatures).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "0916282a0606fb788634738bab5b9f0bbde2aa08",
+      "window": {
+        "since": "2026-04-15",
+        "actual_span": "2026-04-23 to 2026-05-01"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 125,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 10,
+        "sprawling_commits_pct": 10,
+        "test_coverage_rate": 28,
+        "test_isolation_rate": 12,
+        "uncovered_prod_rate": 4,
+        "message_quality_pct": 6,
+        "avg_lines_changed": 73.8,
+        "p90_lines_changed": 148.4,
+        "p90_files_changed": 5.1,
+        "net_additions_ratio_median": 0.45112781954887216,
+        "duplication_pct": 4.6811667773048535
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "notes": "Clean window: 0 merges, largest commit is an 823-line/9-file TAP-test conversion of an existing regression suite ('Convert ddlutils regression tests to TAP tests'), a real maintenance commit rather than a vendored import. message_quality_pct (6%) is even lower than the sibling window for the same reason (short-subject/long-body convention, see notes above) -- this is the lowest message_quality_pct of any included observation in this dataset and should not be read as postgres having unusually poor commit hygiene. DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing; 66 production files scanned, no vendored or generated directory involved."
+    },
+    {
+      "repo": "django/django",
+      "url": "https://github.com/django/django",
+      "language": "Python",
+      "why_reference": "Rebase-and-land trunk workflow; every commit is reviewed and landed individually with a ticket-tracked 'Fixed #NNNNN --' / 'Refs #NNNNN --' message convention. No PR-merge mechanism visible in the history at all.",
+      "merge_style": "granular",
+      "merge_style_evidence": "0 merge commits and 0 squash signatures (`\\(#[0-9]+\\)$`) in 239 commits since 2026-06-01. Individually named committers (Jacob Walls 139, Sarah Boyce 36, nessita 36, ...) apply each fix as its own commit with a distinct, ticket-referenced message.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "be6cf832293779d8aeaeddca8c47a37ba1530898",
+      "window": {
+        "since": "2026-07-01",
+        "actual_span": "2026-01-28 to 2026-08-15 (author-date range; see note below on why this looks like it overlaps the older window despite the two commit-date windows being disjoint by construction)"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 135,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 8,
+        "sprawling_commits_pct": 18,
+        "test_coverage_rate": 58,
+        "test_isolation_rate": 10,
+        "uncovered_prod_rate": 2,
+        "message_quality_pct": 52,
+        "avg_lines_changed": 158.68,
+        "p90_lines_changed": 112,
+        "p90_files_changed": 7.1,
+        "net_additions_ratio_median": 0.7445652173913043,
+        "duplication_pct": 1.1758423343543445
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": false,
+      "exclusion_reason": "One commit, '9e0655e4 Updated translations from Transifex.' (5,125 lines / 115 files), accounts for about 65% of this window's total changed lines (5,125 of 7,934 across 50 commits). Transifex-sourced translation syncs are machine-assisted batch content pulled from an external translation platform, not organic development, the same category of non-representative commit the calibration method calls out for exclusion. avg_lines_changed (158.68) is inflated roughly 2.8x by this single commit (recomputed without it: ~57.3); p90_lines_changed (112) and the count-based metrics (large_commits_pct, sprawling_commits_pct, test_coverage_rate, message_quality_pct) are comparatively unaffected since they are percentile/count-based rather than mean-based, but the whole observation is excluded for consistency with how other vendored/imported-content windows were handled in this dataset.",
+      "notes": "'actual_span' (author-date) starts 2026-01-28, before the sibling window's committer-date cutoff of 2026-03-31/2026-03-01 -- this looks like an overlap but is not: the two windows are disjoint by construction (window B's branch ref was pinned at a commit whose own commit-date, 2026-03-31, is strictly earlier than window A's --since=2026-07-01 cutoff, and git log --since filters on commit date, not author date), so no commit SHA can appear in both. The apparent overlap is purely a case of an old-authored patch landing later than most of its neighbors, the same author-vs-commit-date lag seen on node and ember. DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in django. No django/test/ (django's public testing-utilities module, not test suite) paths were touched in this window, so the `(^|/)tests?/` pattern's risk of miscounting shipped library code as a test file did not materialize here -- but it is a real risk for this repo in other windows, since django/test/ is production code that happens to sit under a path segment the heuristic treats as a test signal."
+    },
+    {
+      "repo": "django/django",
+      "url": "https://github.com/django/django",
+      "language": "Python",
+      "why_reference": "Rebase-and-land trunk workflow; every commit is reviewed and landed individually with a ticket-tracked 'Fixed #NNNNN --' / 'Refs #NNNNN --' message convention. No PR-merge mechanism visible in the history at all.",
+      "merge_style": "granular",
+      "merge_style_evidence": "Same repository/practice as the window above, re-confirmed on this older branch position (81 commits found in-window, 0 merges, 0 squash signatures).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "6be668b0cc6524c9900181c5bd8273ef2f256a34",
+      "window": {
+        "since": "2026-03-01",
+        "actual_span": "2025-11-22 to 2026-03-30"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 81,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 8,
+        "sprawling_commits_pct": 6,
+        "test_coverage_rate": 26,
+        "test_isolation_rate": 18,
+        "uncovered_prod_rate": 6,
+        "message_quality_pct": 50,
+        "avg_lines_changed": 36.32,
+        "p90_lines_changed": 113.8,
+        "p90_files_changed": 4,
+        "net_additions_ratio_median": 0.36602870813397126,
+        "duplication_pct": 1.6232857542681218
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "notes": "Clean window: 0 merges, no dominant outlier commit (largest is 258 lines/17 files, an ordinary deprecation commit). Good contrast with the sibling window's Transifex spike. message_quality_pct (50%) is much healthier than the C/mailing-list repos in this dataset (git, postgres) because django's 'Fixed #NNNNN -- <sentence>' convention routinely clears the 10-word threshold on the subject line alone, unlike the terser conventions elsewhere -- a reminder that message_quality_pct is measuring subject-line verbosity/shape, not necessarily commit explanation quality, consistently across this whole dataset. DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in django; 63 production files scanned."
+    },
+    {
+      "repo": "curl/curl",
+      "url": "https://github.com/curl/curl",
+      "language": "C",
+      "why_reference": "Rebase-and-land trunk workflow, added as a fourth independent granular-history reference beyond the task's two pre-vetted repos: maintainers (Daniel Stenberg, Viktor Szakats) commit each reviewed change individually; extremely high, steady commit velocity gives dense within-window samples.",
+      "merge_style": "granular",
+      "merge_style_evidence": "0 merge commits and 0 squash signatures (`\\(#[0-9]+\\)$`) in 311 commits since 2026-07-01. Two committers (Daniel Stenberg 151, Viktor Szakats 133) account for most volume, each an individually authored, individually messaged commit; no PR-merge or squash-merge mechanism visible.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "05ddf5511ac765c8fc4eb44507ab7c585116f665",
+      "window": {
+        "since": "2026-08-10",
+        "actual_span": "2026-06-30 to 2026-08-17"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 77,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 30,
+        "sprawling_commits_pct": 18,
+        "test_coverage_rate": 20,
+        "test_isolation_rate": 6,
+        "uncovered_prod_rate": 16,
+        "message_quality_pct": 22,
+        "avg_lines_changed": 107.5,
+        "p90_lines_changed": 285.5,
+        "p90_files_changed": 13.1,
+        "net_additions_ratio_median": 0.005263157894736842,
+        "duplication_pct": 6.318784158119338
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "notes": "Clean window: 0 merges, no dominant vendored/imported outlier -- the largest commit ('multi: timeout improvements', 1,052 lines/19 files) is an ordinary organic refactor. 30% large-commit rate is real signal for this project's practice (curl's maintainers routinely land sizeable single-purpose refactors), not an artifact. net_additions_ratio_median near 0 (0.005) means the median commit here is almost perfectly balanced between additions and deletions -- consistent with a lot of refactor/cleanup work in this particular window ('urldata: cleanups', 'curlx_inet_pton: drop setting errno'). duplication_pct (6.32%) scanned 136 production files; DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in curl."
+    },
+    {
+      "repo": "curl/curl",
+      "url": "https://github.com/curl/curl",
+      "language": "C",
+      "why_reference": "Rebase-and-land trunk workflow, added as a fourth independent granular-history reference beyond the task's two pre-vetted repos: maintainers (Daniel Stenberg, Viktor Szakats) commit each reviewed change individually; extremely high, steady commit velocity gives dense within-window samples.",
+      "merge_style": "granular",
+      "merge_style_evidence": "Same repository/practice as the window above, re-confirmed on this older branch position (155 commits found in-window, 0 merges, 0 squash signatures).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "7aedf9c000f341dfdeaa2c9c19d6cdb15795bac3",
+      "repo_head": "1b6724882c2a64e9e5aa9a30d534c7b808b403dc",
+      "window": {
+        "since": "2026-05-15",
+        "actual_span": "2026-04-27 to 2026-05-31"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 155,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "DUPLICATE_MIN_LINES": 5,
+        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 12,
+        "sprawling_commits_pct": 14,
+        "test_coverage_rate": 32,
+        "test_isolation_rate": 10,
+        "uncovered_prod_rate": 4,
+        "message_quality_pct": 16,
+        "avg_lines_changed": 240.68,
+        "p90_lines_changed": 285.6,
+        "p90_files_changed": 12.4,
+        "net_additions_ratio_median": 0.07323232323232323,
+        "duplication_pct": 6.36090885807325
+      },
+      "dora_archetype": "mixed-signals",
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "notes": "Deliberately kept in (not excluded like the node/django single-commit-dominance cases) because the dominant commit here is organic, not vendored/imported: 'e78b1b3e HTTP/3: add proxy CONNECT and MASQUE CONNECT-UDP support' (7,876 lines/66 files) is a genuine new-feature addition landed as one commit, accounting for ~65% of the window's line volume and pulling avg_lines_changed up to 240.68 (roughly 4x what the other 49 commits alone would average). Unlike a dependency-bot sync or translation import, this reflects the project's own commit-splitting practice on a big feature -- exactly the kind of variation the 'healthy = worst observed' derivation rule is meant to bound, not an artifact to strip out. Flagged here so a reader can judge for themselves rather than have the judgment call hidden; if this window is later felt to be too permissive an influence on avg_lines_changed/p90_lines_changed, it can be revisited. duplication_pct (6.36%) scanned 140 production files; DUPLICATE_IGNORE_PATTERNS (**/designs/**) matches nothing in curl. message_quality_pct (16%) again reflects curl's short-subject convention, not poor explanation (see the git.git/postgres notes)."
+    }
+  ]
 }
