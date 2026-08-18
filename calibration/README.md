@@ -212,3 +212,18 @@ A third round found two more, changing `message_quality_pct` again and
 
 Each round's pre-fix observations are marked `include_in_derivation: false` with a
 reason naming the fixes, rather than deleted.
+
+A fourth event changed `duplication_pct` again, but it is a deliberate config change rather
+than a bug fix, and it is handled differently in the data as a result: `DUPLICATE_MIN_LINES` /
+`DUPLICATE_MIN_TOKENS` were raised from 5/50 to 10/100 (code-quality-metrics-k1g) to match
+SonarQube's own duplicated-lines gate, so the toolkit's number means what the published 3-23
+percent clone-study range means. Every metric *except* `duplication_pct` in the twenty-four
+`include_in_derivation: true` observations (both eras, all six references) is unaffected by this
+change and was not re-measured. Rather than excluding those observations wholesale -- which
+would have discarded twenty-three still-valid metrics per observation to retire one stale one --
+`metrics.duplication_pct` was updated in place to the re-measured 10/100 value (the same pinned
+`repo_head` and commit window, jscpd re-run with the new minimums), and a `duplication_remeasurement`
+field on each observation preserves the superseded 5/50 value, the ratio between them, and the
+tool commit the re-measurement was taken at, so the earlier number is recoverable rather than
+lost. See the measurement task's report for the full old-value/new-value table and whether the
+threefold difference Wagner et al. found held here.

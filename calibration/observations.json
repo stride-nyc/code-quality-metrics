@@ -1148,13 +1148,38 @@
         "p90_lines_changed": 175.90000000000003,
         "p90_files_changed": 8.100000000000001,
         "net_additions_ratio_median": 0.6541425818882466,
-        "duplication_pct": 5.598431696244325
+        "duplication_pct": 1.7558332683024716
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 38.1% of window volume (2724 lines, 'deps: update libffi to 3.8.0'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 68. duplication_pct 6.1816 -> 5.5984 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 38.1% of window volume (2724 lines, 'deps: update libffi to 3.8.0'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 68. duplication_pct 6.1816 -> 5.5984 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.59843 (at 5/50) -> 1.75583 (at 10/100), a 3.19x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.598431696244325,
+        "new_value_at_10_100": 1.7558332683024716,
+        "ratio_old_over_new": 3.1884756926019824,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "cb9bb66780936138b360e61d50133fdf080998e3"
+      }
     },
     {
       "repo": "nodejs/node",
@@ -1221,13 +1246,38 @@
         "p90_lines_changed": 408.3,
         "p90_files_changed": 8.200000000000003,
         "net_additions_ratio_median": 0.6153209109730848,
-        "duplication_pct": 5.232606196319479
+        "duplication_pct": 1.8962875040141134
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 30.3% of window volume (2897 lines, 'deps: update simdjson to 4.6.4'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 98 -> 58. duplication_pct 4.9424 -> 5.2326 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 30.3% of window volume (2897 lines, 'deps: update simdjson to 4.6.4'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 98 -> 58. duplication_pct 4.9424 -> 5.2326 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.23261 (at 5/50) -> 1.89629 (at 10/100), a 2.76x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.232606196319479,
+        "new_value_at_10_100": 1.8962875040141134,
+        "ratio_old_over_new": 2.759394967927044,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "c0327d3cbb982c75cb2233e9f4ed483e39c03c73"
+      }
     },
     {
       "repo": "emberjs/ember.js",
@@ -1294,13 +1344,38 @@
         "p90_lines_changed": 250.20000000000033,
         "p90_files_changed": 5.0,
         "net_additions_ratio_median": 0.02026198774185795,
-        "duplication_pct": 4.069542820347714
+        "duplication_pct": 0.6533954785032887
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 21.4% of window volume (1366 lines, 'Deprecate Evented and @ember/object/events per RFC 1111'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 42 -> 42 (unchanged). duplication_pct 4.9912 -> 4.0695 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 21.4% of window volume (1366 lines, 'Deprecate Evented and @ember/object/events per RFC 1111'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 42 -> 42 (unchanged). duplication_pct 4.9912 -> 4.0695 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.06954 (at 5/50) -> 0.653395 (at 10/100), a 6.23x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.069542820347714,
+        "new_value_at_10_100": 0.6533954785032887,
+        "ratio_old_over_new": 6.2282996351148325,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "26071400a790fa8c4c81c4485785d613fb8c9702"
+      }
     },
     {
       "repo": "emberjs/ember.js",
@@ -1367,13 +1442,38 @@
         "p90_lines_changed": 272.40000000000043,
         "p90_files_changed": 6.200000000000003,
         "net_additions_ratio_median": 0.0,
-        "duplication_pct": 1.450625159479459
+        "duplication_pct": 0.1565066677014215
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 43.8% of window volume (2967 lines, 'Remove barrel file imports from internal code for better tree-shaking'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 20.41 -> 18.37. duplication_pct 2.3961 -> 1.4506 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 43.8% of window volume (2967 lines, 'Remove barrel file imports from internal code for better tree-shaking'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 20.41 -> 18.37. duplication_pct 2.3961 -> 1.4506 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.45063 (at 5/50) -> 0.156507 (at 10/100), a 9.27x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.450625159479459,
+        "new_value_at_10_100": 0.1565066677014215,
+        "ratio_old_over_new": 9.268775450812845,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "b7bcbe7f43da2e4e86471edf01966210fe00ea0f"
+      }
     },
     {
       "repo": "git/git",
@@ -1440,13 +1540,38 @@
         "p90_lines_changed": 152.70000000000007,
         "p90_files_changed": 4.100000000000001,
         "net_additions_ratio_median": 0.7864741641337386,
-        "duplication_pct": 0.7217560394513253
+        "duplication_pct": 0.08934358740780968
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 29.6% of window volume (937 lines, 'cat-file: add remote-object-info to batch-command'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 86 -> 84. duplication_pct 0.7218 -> 0.7218 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 29.6% of window volume (937 lines, 'cat-file: add remote-object-info to batch-command'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 86 -> 84. duplication_pct 0.7218 -> 0.7218 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 0.721756 (at 5/50) -> 0.0893436 (at 10/100), a 8.08x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 0.7217560394513253,
+        "new_value_at_10_100": 0.08934358740780968,
+        "ratio_old_over_new": 8.07843137254902,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "18e66859d87fb4b76599f73460b54f0848c76b16"
+      }
     },
     {
       "repo": "git/git",
@@ -1513,13 +1638,38 @@
         "p90_lines_changed": 106.2,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.3466666666666667,
-        "duplication_pct": 1.2150850559539168
+        "duplication_pct": 0.5345345345345346
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 12.5% of window volume (256 lines, 'promisor-remote: allow a client to store fields'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 90 -> 90 (unchanged). duplication_pct 1.2151 -> 1.2151 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 12.5% of window volume (256 lines, 'promisor-remote: allow a client to store fields'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 90 -> 90 (unchanged). duplication_pct 1.2151 -> 1.2151 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.21509 (at 5/50) -> 0.534535 (at 10/100), a 2.27x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.2150850559539168,
+        "new_value_at_10_100": 0.5345345345345346,
+        "ratio_old_over_new": 2.2731647395092938,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "2cc71917514657b93014134350864f4849edfc83"
+      }
     },
     {
       "repo": "postgres/postgres",
@@ -1586,13 +1736,38 @@
         "p90_lines_changed": 150.4,
         "p90_files_changed": 5.200000000000003,
         "net_additions_ratio_median": 0.3132867132867133,
-        "duplication_pct": 6.466043976467377
+        "duplication_pct": 2.2317177269340647
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 38.0% of window volume (1620 lines, 'Use safer allocation routines in more places of the tree'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 94 -> 92. duplication_pct 6.466 -> 6.466 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 38.0% of window volume (1620 lines, 'Use safer allocation routines in more places of the tree'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 94 -> 92. duplication_pct 6.466 -> 6.466 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 6.46604 (at 5/50) -> 2.23172 (at 10/100), a 2.90x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 6.466043976467377,
+        "new_value_at_10_100": 2.2317177269340647,
+        "ratio_old_over_new": 2.8973395239148068,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "92e20d4a4382810a30bdb394473d6ee891edab73"
+      }
     },
     {
       "repo": "postgres/postgres",
@@ -1659,13 +1834,38 @@
         "p90_lines_changed": 144.0,
         "p90_files_changed": 7.400000000000006,
         "net_additions_ratio_median": 0.3666666666666667,
-        "duplication_pct": 5.484157413972314
+        "duplication_pct": 1.7842269382473
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 57.1% of window volume (5816 lines, 'Add UPDATE/DELETE FOR PORTION OF'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 98. duplication_pct 5.4842 -> 5.4842 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 57.1% of window volume (5816 lines, 'Add UPDATE/DELETE FOR PORTION OF'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 98. duplication_pct 5.4842 -> 5.4842 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.48416 (at 5/50) -> 1.78423 (at 10/100), a 3.07x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.484157413972314,
+        "new_value_at_10_100": 1.7842269382473,
+        "ratio_old_over_new": 3.073688271604938,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "be21341e13d996b54ff8a2f1f9c8f4f1b63fc9ea"
+      }
     },
     {
       "repo": "django/django",
@@ -1732,13 +1932,38 @@
         "p90_lines_changed": 132.00000000000003,
         "p90_files_changed": 7.100000000000001,
         "net_additions_ratio_median": 0.6753246753246753,
-        "duplication_pct": 1.15120067575721
+        "duplication_pct": 0.23772173283456016
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 23.4% of window volume (699 lines, 'Fixed CVE-2026-15830 -- Mitigated potential DoS via nested geometry collections.'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 72 -> 72 (unchanged). duplication_pct 1.1512 -> 1.1512 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 23.4% of window volume (699 lines, 'Fixed CVE-2026-15830 -- Mitigated potential DoS via nested geometry collections.'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 72 -> 72 (unchanged). duplication_pct 1.1512 -> 1.1512 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.1512 (at 5/50) -> 0.237722 (at 10/100), a 4.84x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.15120067575721,
+        "new_value_at_10_100": 0.23772173283456016,
+        "ratio_old_over_new": 4.842639593908629,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "30ebe0001c1d10bebc68567f796d821f7b309f4d"
+      }
     },
     {
       "repo": "django/django",
@@ -1805,13 +2030,38 @@
         "p90_lines_changed": 113.80000000000001,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.36602870813397126,
-        "duplication_pct": 1.6232857542681218
+        "duplication_pct": 0.21568023304669334
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 14.2% of window volume (258 lines, 'Fixed #36727 -- Deprecated Field.get_placeholder in favor of get_placeholder_sql'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 76 -> 76 (unchanged). duplication_pct 1.6233 -> 1.6233 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 14.2% of window volume (258 lines, 'Fixed #36727 -- Deprecated Field.get_placeholder in favor of get_placeholder_sql'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 76 -> 76 (unchanged). duplication_pct 1.6233 -> 1.6233 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.62329 (at 5/50) -> 0.21568 (at 10/100), a 7.53x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.6232857542681218,
+        "new_value_at_10_100": 0.21568023304669334,
+        "ratio_old_over_new": 7.526353858847561,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "6be668b0cc6524c9900181c5bd8273ef2f256a34"
+      }
     },
     {
       "repo": "curl/curl",
@@ -1878,13 +2128,38 @@
         "p90_lines_changed": 285.5,
         "p90_files_changed": 13.100000000000001,
         "net_additions_ratio_median": 0.005263157894736842,
-        "duplication_pct": 6.318784158119338
+        "duplication_pct": 3.7120835171850506
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 19.6% of window volume (1052 lines, 'multi: timeout improvements'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 88 -> 88 (unchanged). duplication_pct 6.3188 -> 6.3188 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 19.6% of window volume (1052 lines, 'multi: timeout improvements'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 88 -> 88 (unchanged). duplication_pct 6.3188 -> 6.3188 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 6.31878 (at 5/50) -> 3.71208 (at 10/100), a 1.70x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 6.318784158119338,
+        "new_value_at_10_100": 3.7120835171850506,
+        "ratio_old_over_new": 1.7022203646191134,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "05ddf5511ac765c8fc4eb44507ab7c585116f665"
+      }
     },
     {
       "repo": "curl/curl",
@@ -1951,13 +2226,38 @@
         "p90_lines_changed": 151.00000000000006,
         "p90_files_changed": 12.000000000000014,
         "net_additions_ratio_median": 0.125,
-        "duplication_pct": 6.219417121435799
+        "duplication_pct": 3.3457779269264654
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 48.1% of window volume (2100 lines, 'creds: hold credentials'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 84 -> 83.67. duplication_pct 6.2194 -> 6.2194 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 48.1% of window volume (2100 lines, 'creds: hold credentials'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 84 -> 83.67. duplication_pct 6.2194 -> 6.2194 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 6.21942 (at 5/50) -> 3.34578 (at 10/100), a 1.86x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 6.219417121435799,
+        "new_value_at_10_100": 3.3457779269264654,
+        "ratio_old_over_new": 1.8588852151192077,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "614b94eeccc9e798a5592baaa784df763bd85528"
+      }
     },
     {
       "repo": "nodejs/node",
@@ -2024,13 +2324,38 @@
         "p90_lines_changed": 236.40000000000015,
         "p90_files_changed": 4.100000000000001,
         "net_additions_ratio_median": 0.0,
-        "duplication_pct": 4.157300532922487
+        "duplication_pct": 1.2620075939349547
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 14.7% of window volume (693 lines, 'benchmark,doc,lib,test: capitalize comments'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 14.7% of window volume (693 lines, 'benchmark,doc,lib,test: capitalize comments'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.1573 (at 5/50) -> 1.26201 (at 10/100), a 3.29x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.157300532922487,
+        "new_value_at_10_100": 1.2620075939349547,
+        "ratio_old_over_new": 3.2941961307538365,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "453ed053432e0c1ae34457e5c364b7091af2615e"
+      }
     },
     {
       "repo": "nodejs/node",
@@ -2097,13 +2422,38 @@
         "p90_lines_changed": 182.3,
         "p90_files_changed": 9.300000000000004,
         "net_additions_ratio_median": 0.1693141980718668,
-        "duplication_pct": 4.644713207999042
+        "duplication_pct": 1.2975210285336085
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 21.1% of window volume (977 lines, 'quic: avoid using private JS fields for now'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 21.1% of window volume (977 lines, 'quic: avoid using private JS fields for now'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.64471 (at 5/50) -> 1.29752 (at 10/100), a 3.58x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.644713207999042,
+        "new_value_at_10_100": 1.2975210285336085,
+        "ratio_old_over_new": 3.5796824142790644,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "c118304ad02d96f330ecd44c6437a1f9c677fc60"
+      }
     },
     {
       "repo": "emberjs/ember.js",
@@ -2170,13 +2520,38 @@
         "p90_lines_changed": 184.5,
         "p90_files_changed": 21.0,
         "net_additions_ratio_median": 0.41640866873065013,
-        "duplication_pct": 1.3740704817329454
+        "duplication_pct": 0.4980811627337307
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 11.7% of window volume (431 lines, 'Add `codemod` mode for @glimmer/syntax preprocess.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 11.7% of window volume (431 lines, 'Add `codemod` mode for @glimmer/syntax preprocess.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.37407 (at 5/50) -> 0.498081 (at 10/100), a 2.76x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.3740704817329454,
+        "new_value_at_10_100": 0.4980811627337307,
+        "ratio_old_over_new": 2.758728063898915,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "83a0c2fdfa8f22fd353dcab32ea41c4bcacaa379"
+      }
     },
     {
       "repo": "emberjs/ember.js",
@@ -2243,13 +2618,38 @@
         "p90_lines_changed": 575.0000000000006,
         "p90_files_changed": 23.1,
         "net_additions_ratio_median": 0.003125,
-        "duplication_pct": 7.679088018789562
+        "duplication_pct": 1.7806143265139593
       },
       "dora_archetype": "legacy-bottleneck",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 31.1% of window volume (4217 lines, 'removed module unification usages'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 31.1% of window volume (4217 lines, 'removed module unification usages'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 7.67909 (at 5/50) -> 1.78061 (at 10/100), a 4.31x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 7.679088018789562,
+        "new_value_at_10_100": 1.7806143265139593,
+        "ratio_old_over_new": 4.312605994709411,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "27d547de76b5c19b530cae6b0798075890188d18"
+      }
     },
     {
       "repo": "git/git",
@@ -2316,13 +2716,38 @@
         "p90_lines_changed": 51.1,
         "p90_files_changed": 3.1000000000000014,
         "net_additions_ratio_median": 0.4285714285714286,
-        "duplication_pct": 0.8600510244338656
+        "duplication_pct": 0.22093053838668103
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 32.6% of window volume (488 lines, 'msvc: support building Git using MS Visual C++'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 32.6% of window volume (488 lines, 'msvc: support building Git using MS Visual C++'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 0.860051 (at 5/50) -> 0.220931 (at 10/100), a 3.89x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 0.8600510244338656,
+        "new_value_at_10_100": 0.22093053838668103,
+        "ratio_old_over_new": 3.8928571428571437,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "ef60740e9efb364d8bb0fba120adecf860cc8ed0"
+      }
     },
     {
       "repo": "git/git",
@@ -2389,13 +2814,38 @@
         "p90_lines_changed": 57.90000000000003,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.279320987654321,
-        "duplication_pct": 0.5690057896892609
+        "duplication_pct": 0.13616286406960912
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 13.9% of window volume (193 lines, 'worktree: teach \"repair\" to fix outgoing links to worktrees'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 13.9% of window volume (193 lines, 'worktree: teach \"repair\" to fix outgoing links to worktrees'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 0.569006 (at 5/50) -> 0.136163 (at 10/100), a 4.18x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 0.5690057896892609,
+        "new_value_at_10_100": 0.13616286406960912,
+        "ratio_old_over_new": 4.178861788617886,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "a4f324a423ddfe3680bf6105f8c113d0e76305a0"
+      }
     },
     {
       "repo": "postgres/postgres",
@@ -2462,13 +2912,38 @@
         "p90_lines_changed": 150.9,
         "p90_files_changed": 7.100000000000001,
         "net_additions_ratio_median": 0.20855263157894738,
-        "duplication_pct": 5.570542286468944
+        "duplication_pct": 1.7521678149858209
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 39.8% of window volume (2363 lines, 'Represent Lists as expansible arrays, not chains of cons-cells.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 39.8% of window volume (2363 lines, 'Represent Lists as expansible arrays, not chains of cons-cells.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.57054 (at 5/50) -> 1.75217 (at 10/100), a 3.18x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.570542286468944,
+        "new_value_at_10_100": 1.7521678149858209,
+        "ratio_old_over_new": 3.1792287467134095,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "4c3d05d875dd173a81a995c6e14d69496b467eec"
+      }
     },
     {
       "repo": "postgres/postgres",
@@ -2535,13 +3010,38 @@
         "p90_lines_changed": 185.80000000000007,
         "p90_files_changed": 7.0,
         "net_additions_ratio_median": 0.1380952380952381,
-        "duplication_pct": 5.687213356273241
+        "duplication_pct": 2.2696423976062285
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 21.6% of window volume (860 lines, 'New contrib module, pg_surgery, with heap surgery functions.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 21.6% of window volume (860 lines, 'New contrib module, pg_surgery, with heap surgery functions.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.68721 (at 5/50) -> 2.26964 (at 10/100), a 2.51x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.687213356273241,
+        "new_value_at_10_100": 2.2696423976062285,
+        "ratio_old_over_new": 2.505775078167157,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "69bd60672af63eaa8b19cdcea175df5ff172e80e"
+      }
     },
     {
       "repo": "django/django",
@@ -2608,13 +3108,38 @@
         "p90_lines_changed": 97.10000000000002,
         "p90_files_changed": 6.100000000000001,
         "net_additions_ratio_median": 0.46179108248073764,
-        "duplication_pct": 1.1480930378259848
+        "duplication_pct": 0.1143394157725742
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 11.2% of window volume (203 lines, 'Fixed #30365 -- Fixed syntax highlighting in SQL examples.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 11.2% of window volume (203 lines, 'Fixed #30365 -- Fixed syntax highlighting in SQL examples.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.14809 (at 5/50) -> 0.114339 (at 10/100), a 10.04x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.1480930378259848,
+        "new_value_at_10_100": 0.1143394157725742,
+        "ratio_old_over_new": 10.04109589041096,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "6485a5f450b3dc60e690c31a75e0e9574a896842"
+      }
     },
     {
       "repo": "django/django",
@@ -2681,13 +3206,38 @@
         "p90_lines_changed": 87.30000000000004,
         "p90_files_changed": 5.0,
         "net_additions_ratio_median": 0.628667373630258,
-        "duplication_pct": 1.3811838718901914
+        "duplication_pct": 0.3090659340659341
       },
       "dora_archetype": "harmonious-high-achiever",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 30.0% of window volume (641 lines, 'Fixed #31789 -- Added a new headers interface to HttpResponse.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 30.0% of window volume (641 lines, 'Fixed #31789 -- Added a new headers interface to HttpResponse.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.38118 (at 5/50) -> 0.309066 (at 10/100), a 4.47x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.3811838718901914,
+        "new_value_at_10_100": 0.3090659340659341,
+        "ratio_old_over_new": 4.468897149938042,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "eaf9764d3bb25970da89de5799d8d308715628ba"
+      }
     },
     {
       "repo": "curl/curl",
@@ -2754,13 +3304,38 @@
         "p90_lines_changed": 37.60000000000001,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.0,
-        "duplication_pct": 4.442450078528158
+        "duplication_pct": 2.533243561689951
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 21.7% of window volume (153 lines, 'http: allow overriding timecond with custom header'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 21.7% of window volume (153 lines, 'http: allow overriding timecond with custom header'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.44245 (at 5/50) -> 2.53324 (at 10/100), a 1.75x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.442450078528158,
+        "new_value_at_10_100": 2.533243561689951,
+        "ratio_old_over_new": 1.7536608582415807,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "275b74a53d47174fcc29bab2fc23f599e1205f41"
+      }
     },
     {
       "repo": "curl/curl",
@@ -2827,13 +3402,38 @@
         "p90_lines_changed": 141.40000000000003,
         "p90_files_changed": 7.300000000000004,
         "net_additions_ratio_median": 0.10476190476190475,
-        "duplication_pct": 5.106756236361303
+        "duplication_pct": 2.4859869068503704
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 20.6% of window volume (605 lines, 'tests: remove pipelining tests'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 20.6% of window volume (605 lines, 'tests: remove pipelining tests'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.10676 (at 5/50) -> 2.48599 (at 10/100), a 2.05x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.106756236361303,
+        "new_value_at_10_100": 2.4859869068503704,
+        "ratio_old_over_new": 2.0542168674698793,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "0b4c4145aac87047513e30a348e63fde96da892d"
+      }
     }
   ],
   "reservations": [
