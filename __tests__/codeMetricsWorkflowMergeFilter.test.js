@@ -15,8 +15,22 @@
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const { CONFIG } = require('../lib/config');
 
 const REPO_ROOT = path.join(__dirname, '..');
+
+/**
+ * Run fn with CONFIG.ANALYSIS_IGNORE_PATTERNS temporarily set, restoring the original value
+ * afterward. The workflow's fakeRequire below resolves './lib/config' to this same real,
+ * cached module, so mutating CONFIG here is what the script under test actually sees.
+ */
+function withAnalysisIgnorePatterns(patterns, fn) {
+  const original = CONFIG.ANALYSIS_IGNORE_PATTERNS;
+  CONFIG.ANALYSIS_IGNORE_PATTERNS = patterns;
+  return Promise.resolve(fn()).finally(() => {
+    CONFIG.ANALYSIS_IGNORE_PATTERNS = original;
+  });
+}
 
 function loadStepScript(workflowFile, stepName) {
   const doc = yaml.load(fs.readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflowFile), 'utf8'));
@@ -194,5 +208,52 @@ describe('code-metrics.yml workflow script -- test/prod co-change field (code-qu
 
     const summary = JSON.parse(writes['metrics_summary.json']);
     expect(summary.test_coverage_rate).toBe('100.00');
+  });
+});
+
+describe('code-metrics.yml workflow script -- ANALYSIS_IGNORE_PATTERNS exclusion (code-quality-metrics-4fc)', () => {
+  let script;
+
+  beforeAll(() => {
+    script = loadStepScript('code-metrics.yml', 'Collect Commit Metrics');
+  });
+
+  test('excludes matched files from prod/test classification and sprawling_commit, while files_changed stays the raw count', async () => {
+    const commit = {
+      sha: 'child1',
+      parents: [{ sha: 'parentbase' }],
+      commit: {
+        message: 'feat: add feature x',
+        author: { name: 'Dev' },
+        committer: { date: '2026-08-01T00:00:00.000Z' }
+      }
+    };
+
+    // 5 ordinary files (at, not over, the sprawling threshold) plus 6 excluded bin/ files.
+    // Raw count is 11 (over threshold, would read sprawling without the fix); the
+    // non-excluded count is 5 (at the threshold, not sprawling).
+    const ordinaryFiles = Array.from({ length: 5 }, (_, i) => ({ filename: `src/f${i}.js`, additions: 10, deletions: 0 }));
+    const excludedFiles = Array.from({ length: 6 }, (_, i) => ({ filename: `bin/Debug/f${i}.dll`, additions: 500, deletions: 0 }));
+
+    await withAnalysisIgnorePatterns(['**/bin/**'], async () => {
+      const githubMock = makeGithubMock({
+        branches: [{ name: 'main' }, { name: 'feature-x' }],
+        commitsByBranch: { 'feature-x': [commit] },
+        commitDetailsBySha: {
+          child1: {
+            stats: { additions: 3050, deletions: 0 },
+            files: [...ordinaryFiles, ...excludedFiles]
+          }
+        }
+      });
+
+      const writes = await runCollectMetrics(script, githubMock);
+      const commitMetrics = JSON.parse(writes['commit_metrics.json']);
+
+      expect(commitMetrics[0].prod_files_count).toBe(5);
+      expect(commitMetrics[0].sprawling_commit).toBe(false);
+      // Raw file count stays honest even though classification excludes the matched files.
+      expect(commitMetrics[0].files_changed).toBe(11);
+    });
   });
 });
