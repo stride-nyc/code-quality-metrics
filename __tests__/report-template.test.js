@@ -291,6 +291,57 @@ describe('renderReportHtml', () => {
     expect(findingsSection).not.toContain('Semantic duplicates');
   });
 
+  // code-quality-metrics-3b6: a silent exclusion is the same defect class as the silent
+  // inclusion code-quality-metrics-y8j fixes, so the report must say what was excluded, not
+  // only the summary JSON. Both assertions below configure real, non-trivial values (not an
+  // empty pattern list) so a stub returning static markup could not satisfy them.
+  it('renders the configured ANALYSIS_IGNORE_PATTERNS exclusion: count, line share, and patterns', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/bin/**', '**/obj/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 1500,
+        excluded_lines_pct: '42.00'
+      },
+      vendored_generated_share: {
+        patterns: ['**/deps/**'],
+        files_count: 0,
+        lines_count: 0,
+        lines_pct: '0.00'
+      }
+    }));
+
+    expect(html).toContain('3');
+    expect(html).toContain('42.00');
+    expect(html).toContain('**/bin/**');
+  });
+
+  // The higher-value half (code-quality-metrics-3b6): visible even when nothing is
+  // configured -- analysis_exclusions.patterns is empty here, but vendored_generated_share
+  // still has to show up because its own patterns (CONFIG.DUPLICATE_IGNORE_PATTERNS) are
+  // never empty by default.
+  it('renders the vendored/generated default share even when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: {
+        patterns: ['**/deps/**', '**/vendor/**'],
+        files_count: 12,
+        lines_count: 8000,
+        lines_pct: '61.50'
+      }
+    }));
+
+    expect(html).toContain('12');
+    expect(html).toContain('61.50');
+    expect(html).toContain('**/vendor/**');
+  });
+
+  it('omits the exclusion section entirely, without throwing, when the summary predates this feature (both fields absent)', () => {
+    expect(() => renderReportHtml(fixtureArgs())).not.toThrow();
+    const html = renderReportHtml(fixtureArgs());
+    expect(html).not.toContain('Analysis Scope');
+  });
+
   it('renders a footer', () => {
     const html = renderReportHtml(fixtureArgs());
 
