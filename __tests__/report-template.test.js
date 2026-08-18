@@ -199,6 +199,26 @@ describe('renderReportHtml', () => {
     expect(html).toContain('<li>Large commits: 40 (critical)</li>');
   });
 
+  // Confirms lib/report-template.js's fallbackFindings (status === 'critical'
+  // || 'warning' only) already keeps an unmeasured tile out of the Findings
+  // prose with no extra code, even though it sorts last in the catalog
+  // rather than participating in concern ranking. See code-quality-metrics-oxn.
+  it('never surfaces the unmeasured duplication tile in fallback findings prose', () => {
+    const summary = fixtureSummary({ large_commits_pct: '40.00' });
+    const duplicateAnalysis = {
+      files_scanned: 5,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: null,
+      layers_run: { static: true, semantic: false }
+    };
+    const catalog = buildMetricCatalog(summary, duplicateAnalysis);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates: duplicateAnalysis });
+
+    const findingsSection = html.slice(html.indexOf('<section class="findings">'), html.indexOf('</section>', html.indexOf('<section class="findings">')));
+    expect(findingsSection).not.toContain('Semantic duplicates');
+  });
+
   it('renders a footer', () => {
     const html = renderReportHtml(fixtureArgs());
 
@@ -318,5 +338,34 @@ describe('renderReportHtml', () => {
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
     const html = renderReportHtml(fixtureArgs());
     expect(html).not.toContain('Duplicate Code');
+  });
+
+  it('includes an explicit CSS rule for the unmeasured status, not just critical/warning/good', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const styleBlock = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+
+    const pattern = /\.metric-card\[data-status="unmeasured"\]\s*(,[^{]*)?\{[^}]+\}/;
+    expect(styleBlock).toMatch(pattern);
+  });
+
+  it('renders "Not measured" text and data-status="unmeasured" for a duplication tile that never ran, never a bare 0', () => {
+    const duplicateAnalysis = {
+      files_scanned: 5,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: { clones: 2, duplicatedLines: 12, duplicatedTokens: 90, lines: 1595, tokens: 6196, sources: 11, percentage: 0.75, percentageTokens: 2.07, newClones: 0, newDuplicatedLines: 0 },
+      layers_run: { static: true, semantic: false }
+    };
+    const summary = fixtureSummary();
+    const catalog = buildMetricCatalog(summary, duplicateAnalysis);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates: duplicateAnalysis });
+
+    const cards = html.split('<article class="metric-card"').slice(1);
+    const semanticCard = cards.find(card => card.includes('>Semantic duplicates</p>'));
+
+    expect(semanticCard).toBeDefined();
+    expect(semanticCard).toMatch(/^ data-status="unmeasured"/);
+    expect(semanticCard).toContain('Not measured');
+    expect(semanticCard).not.toMatch(/class="metric-value">0</);
   });
 });
