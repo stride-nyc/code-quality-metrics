@@ -62,4 +62,13 @@ describe('scoreMessageQuality', () => {
     const body = `${subject}\n\nPR-URL: https://github.com/nodejs/node/pull/12345\nReviewed-By: Foo Bar <foo@example.com>\nReviewed-By: Baz Qux <baz@example.com>\nReviewed-By: A B <a@example.com>\nReviewed-By: C D <c@example.com>\nReviewed-By: E F <e@example.com>`;
     expect(scoreMessageQuality(subject, body)).toBe(false);
   });
+
+  it('strips unfamiliar Key: value trailers too, not just the enumerated names', () => {
+    // Same shape as the nodejs/node case, but with trailer keys that appear nowhere in an
+    // enumerated allowlist, to prove the fix matches git's generic trailer convention rather
+    // than a fixed list of known names.
+    const subject = 'lib: fix typo idenity => identity';
+    const body = `${subject}\n\nChange-Id: I1234567890abcdef1234567890abcdef12345678\nSee-Also: https://example.com/discussion/1234\nApproved-By: someone else entirely`;
+    expect(scoreMessageQuality(subject, body)).toBe(false);
+  });
 });
