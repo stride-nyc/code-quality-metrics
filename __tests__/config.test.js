@@ -17,9 +17,11 @@ describe('CONFIG duplicate detection defaults', () => {
     expect(Array.isArray(CONFIG.DUPLICATE_IGNORE_PATTERNS)).toBe(true);
   });
 
-  test('CONFIG.DUPLICATE_SCAN_PATHS is an array', () => {
-    expect(Array.isArray(CONFIG.DUPLICATE_SCAN_PATHS)).toBe(true);
-  });
+  // DUPLICATE_SCAN_PATHS removed (code-quality-metrics-ksv): documented and shape-tested
+  // but never read by lib/duplicate.js, local-code-metrics.js, or pr-metrics.yml. Both
+  // callers already pass an explicit changed-file list to jscpd rather than asking it to
+  // scan a tree, so there was no real semantics for it to implement without inventing an
+  // unrequested feature; removed rather than wired up to something no caller needed.
 
   test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
     expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
