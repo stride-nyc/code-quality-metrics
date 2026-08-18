@@ -24,7 +24,7 @@ jobs:
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
             const { THRESHOLDS } = require('./lib/thresholds');
-            const { scoreMessageQuality, classifyDoraArchetype, isTestFile } = require('./lib/metrics');
+            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath } = require('./lib/metrics');
             const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
             const { getAnthropicClient, analyzeDuplicatesWithClaude } = require('./lib/claude');
 
@@ -84,8 +84,13 @@ jobs:
 
             console.log(`Analyzing ${commits.length} commits and ${files.length} files in PR`);
 
-            const testFiles = files.filter(f => isTestFile(f.filename));
-            const prodFiles = files.filter(f => !isTestFile(f.filename));
+            // A path matching ANALYSIS_IGNORE_PATTERNS counts as neither test nor production
+            // (code-quality-metrics-4fc, mirroring lib/git.js's analyzeCommit under
+            // code-quality-metrics-1tp): excluded from classification and from the file
+            // count sprawling_commit is judged against below.
+            const countableFiles = files.filter(f => !isExcludedPath(f.filename));
+            const testFiles = countableFiles.filter(f => isTestFile(f.filename));
+            const prodFiles = countableFiles.filter(f => !isTestFile(f.filename));
 
             // ---------------------------------------------------------------
             // Per-commit analysis
@@ -100,8 +105,12 @@ jobs:
                   ref: commit.sha
                 });
 
-                const commitTestFiles = detail.data.files?.filter(f => isTestFile(f.filename)) || [];
-                const commitProdFiles = detail.data.files?.filter(f => !isTestFile(f.filename)) || [];
+                // Same exclusion as the PR-level countableFiles above (code-quality-metrics-4fc):
+                // files_changed below stays the raw, honest count.
+                const commitAllFiles = detail.data.files || [];
+                const commitCountableFiles = commitAllFiles.filter(f => !isExcludedPath(f.filename));
+                const commitTestFiles = commitCountableFiles.filter(f => isTestFile(f.filename));
+                const commitProdFiles = commitCountableFiles.filter(f => !isTestFile(f.filename));
 
                 const prodChanges = commitProdFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0);
                 const testChanges = commitTestFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0);
@@ -115,14 +124,14 @@ jobs:
                   message,
                   author: commit.commit.author.name,
                   date: new Date(commit.commit.author.date).toLocaleDateString(),
-                  files_changed: detail.data.files?.length || 0,
+                  files_changed: commitAllFiles.length,
                   prod_files: commitProdFiles.length,
                   test_files: commitTestFiles.length,
                   prod_changes: prodChanges,
                   test_changes: testChanges,
                   total_changes: detail.data.stats.additions + detail.data.stats.deletions,
                   large_commit: prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
-                  sprawling_commit: (detail.data.files?.length || 0) > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
+                  sprawling_commit: commitCountableFiles.length > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
                   // Same-commit co-occurrence, not an ordering claim -- see
                   // code-quality-metrics-36d and lib/git.js's analyzeCommit for the
                   // citations (Sun et al. TOSEM 2023, Borle et al. EMSE 2018,

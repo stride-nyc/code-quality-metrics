@@ -16,8 +16,22 @@
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const { CONFIG } = require('../lib/config');
 
 const REPO_ROOT = path.join(__dirname, '..');
+
+/**
+ * Run fn with CONFIG.ANALYSIS_IGNORE_PATTERNS temporarily set, restoring the original value
+ * afterward. The workflow's fakeRequire below resolves './lib/config' to this same real,
+ * cached module, so mutating CONFIG here is what the script under test actually sees.
+ */
+function withAnalysisIgnorePatterns(patterns, fn) {
+  const original = CONFIG.ANALYSIS_IGNORE_PATTERNS;
+  CONFIG.ANALYSIS_IGNORE_PATTERNS = patterns;
+  return Promise.resolve(fn()).finally(() => {
+    CONFIG.ANALYSIS_IGNORE_PATTERNS = original;
+  });
+}
 
 function loadStepScript(workflowFile, stepName) {
   const doc = yaml.load(fs.readFileSync(path.join(REPO_ROOT, '.github', 'workflows', workflowFile), 'utf8'));
@@ -188,5 +202,52 @@ describe('pr-metrics.yml workflow script -- test/prod co-change field (code-qual
     expect(body).toMatch(/5\/5 \(100%\)/);
     expect(body).toMatch(/co-change/i);
     expect(body).not.toMatch(/test-first/i);
+  });
+});
+
+describe('pr-metrics.yml workflow script -- ANALYSIS_IGNORE_PATTERNS exclusion (code-quality-metrics-4fc)', () => {
+  let script;
+
+  beforeAll(() => {
+    script = loadStepScript('pr-metrics.yml', 'Enhanced PR Analysis');
+  });
+
+  test('excludes matched files from the Production Code breakdown and from a commit’s sprawling flag', async () => {
+    // 5 ordinary files (at, not over, the sprawling threshold) plus 6 excluded bin/ files.
+    // Raw count is 11 (over threshold, would flag sprawling without the fix); the
+    // non-excluded count is 5 (at the threshold, not sprawling).
+    const ordinaryFiles = Array.from({ length: 5 }, (_, i) => ({ filename: `src/f${i}.js`, additions: 10, deletions: 0 }));
+    const excludedFiles = Array.from({ length: 6 }, (_, i) => ({ filename: `bin/Debug/f${i}.dll`, additions: 500, deletions: 0 }));
+    const allFiles = [...ordinaryFiles, ...excludedFiles];
+
+    const commit = {
+      sha: 'e1',
+      commit: { message: 'feat: add a change', author: { name: 'Dev', date: '2026-08-01T00:00:00.000Z' } }
+    };
+    const commitDetailsBySha = { e1: { stats: { additions: 3050, deletions: 0 }, files: allFiles } };
+
+    await withAnalysisIgnorePatterns(['**/bin/**'], async () => {
+      const { githubMock, createCommentCalls } = makeGithubMock({ files: allFiles, commits: [commit], commitDetailsBySha });
+      const context = {
+        payload: { pull_request: { additions: 3050, deletions: 0, changed_files: 11 } },
+        repo: { owner: 'acme', repo: 'widgets' },
+        issue: { number: 50 }
+      };
+
+      await runPrAnalysis(script, githubMock, context);
+
+      expect(createCommentCalls).toHaveLength(1);
+      const body = createCommentCalls[0].body;
+      // 5 non-excluded production files, not 11 raw files.
+      expect(body).toMatch(/Production Code:\*\* 50 lines \(5 files\)/);
+      // The Commit Details row's own flag bracket must not carry [sprawling] once excluded
+      // files are removed from the count it is judged against (files_changed itself stays
+      // the raw 11, so the flag -- not the raw count -- is what proves the exclusion).
+      expect(body).toMatch(/50 prod lines, 11 files\n/);
+      expect(body).not.toMatch(/files \[.*sprawling.*\]/);
+      // The DORA/Commit Analysis tables' own rate rows report 0/1, confirming the aggregate
+      // sprawling_commit flag itself (not just its display) came back false.
+      expect(body).toMatch(/Sprawling commits \(>5 files\) \| 0\/1 \(0%\)/);
+    });
   });
 });

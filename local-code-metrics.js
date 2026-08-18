@@ -41,12 +41,13 @@ const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
   DUPLICATE_IGNORE_PATTERNS: [...CONFIG.DUPLICATE_IGNORE_PATTERNS],
   TEST_FILE_PATTERNS: [...CONFIG.TEST_FILE_PATTERNS],
   DUPLICATE_MIN_LINES: CONFIG.DUPLICATE_MIN_LINES,
-  DUPLICATE_MIN_TOKENS: CONFIG.DUPLICATE_MIN_TOKENS
+  DUPLICATE_MIN_TOKENS: CONFIG.DUPLICATE_MIN_TOKENS,
+  ANALYSIS_IGNORE_PATTERNS: [...CONFIG.ANALYSIS_IGNORE_PATTERNS]
 });
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -448,6 +449,34 @@ async function collectLocalMetrics(options = {}) {
     semanticLayerStatus = semanticResult.status === 'unmeasured' ? 'unmeasured' : true;
   }
 
+  // Excluded volume (code-quality-metrics-3b6): a silent exclusion is the same defect class
+  // as the silent inclusion code-quality-metrics-y8j fixes, so this reports what
+  // ANALYSIS_IGNORE_PATTERNS actually removed from the scored metrics -- count, lines, and
+  // share of the total lines analyzed -- following the config_sources precedent for
+  // surfacing something that changes the headline numbers by a lot.
+  const totalLinesAnalyzed = metrics.reduce((sum, m) => sum + m.total_additions + m.total_deletions, 0);
+  const excludedFilesCount = metrics.reduce((sum, m) => sum + (m.excluded_files_count || 0), 0);
+  const excludedLinesCount = metrics.reduce((sum, m) => sum + (m.excluded_additions || 0) + (m.excluded_deletions || 0), 0);
+  const analysis_exclusions = {
+    patterns: CONFIG.ANALYSIS_IGNORE_PATTERNS,
+    excluded_files_count: excludedFilesCount,
+    excluded_lines_count: excludedLinesCount,
+    excluded_lines_pct: totalLinesAnalyzed > 0 ? ((excludedLinesCount / totalLinesAnalyzed) * 100).toFixed(2) : '0.00'
+  };
+
+  // Vendored/generated default share (code-quality-metrics-3b6, the higher-value half):
+  // computed from CONFIG.DUPLICATE_IGNORE_PATTERNS's existing, non-empty defaults
+  // regardless of whether ANALYSIS_IGNORE_PATTERNS is configured, so this is visible on
+  // every repository by default, not only one whose owner has already found the problem.
+  const vendoredFilesCount = metrics.reduce((sum, m) => sum + (m.vendored_default_files_count || 0), 0);
+  const vendoredLinesCount = metrics.reduce((sum, m) => sum + (m.vendored_default_additions || 0) + (m.vendored_default_deletions || 0), 0);
+  const vendored_generated_share = {
+    patterns: CONFIG.DUPLICATE_IGNORE_PATTERNS,
+    files_count: vendoredFilesCount,
+    lines_count: vendoredLinesCount,
+    lines_pct: totalLinesAnalyzed > 0 ? ((vendoredLinesCount / totalLinesAnalyzed) * 100).toFixed(2) : '0.00'
+  };
+
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
   const large_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const sprawling_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
@@ -468,6 +497,8 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
     config_sources,
+    analysis_exclusions,
+    vendored_generated_share,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,

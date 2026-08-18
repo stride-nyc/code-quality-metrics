@@ -119,13 +119,27 @@ control — a code-execution hazard for no benefit. JSON also needs no new depen
 GitHub workflows could read the same file unchanged if they chose to (neither does today; only
 `local-code-metrics.js` calls `resolveConfigOverrides`).
 
-**Only four keys are overridable, in two classes with different consequences:**
+**Only five keys are overridable, in two classes with different consequences:**
 
-- Class A — `DUPLICATE_IGNORE_PATTERNS`, `TEST_FILE_PATTERNS`. These correct what a measurement
-  counts, not how sensitive detection is. Bands still apply. Array values **union** with the
-  defaults rather than replacing them: a team adding one vendored directory should not have to
-  restate the ten default patterns to keep them, since forgetting one would silently inflate its
-  own duplication number. There is no removal syntax; nobody has asked for one.
+- Class A — `DUPLICATE_IGNORE_PATTERNS`, `TEST_FILE_PATTERNS`, `ANALYSIS_IGNORE_PATTERNS`. These
+  correct what a measurement counts, not how sensitive detection is. Bands still apply. Array
+  values **union** with the defaults rather than replacing them: a team adding one vendored
+  directory should not have to restate the ten default patterns to keep them, since forgetting
+  one would silently inflate its own duplication number. There is no removal syntax; nobody has
+  asked for one.
+  `ANALYSIS_IGNORE_PATTERNS` (code-quality-metrics-3yd, fixing code-quality-metrics-y8j) is class
+  A for the same reason as the other two: excluding a path from `large_commit`,
+  `sprawling_commit`, the line-count distributions, prod/test classification, and
+  `uncovered_prod_rate` changes what those metrics count, not how sensitively any detector runs,
+  so the calibrated bands still apply to a run that configures it. Its own default is empty
+  (unlike `DUPLICATE_IGNORE_PATTERNS`'s nine vendored/generated patterns): seeding it would change
+  every existing measurement, including the 34 calibration observations the provenance gate in
+  `__tests__/thresholdProvenance.test.js` checks against `CONFIG`, so an empty default keeps the
+  introduction of this key provably behaviour-preserving. A matched path counts as neither test
+  nor production; it stays in the raw totals (`total_additions`, `total_deletions`,
+  `files_changed`) so a reader comparing the report to `git log` still sees the real commit, but
+  it is excluded from every scored metric and from the file count `sprawling_commit` is judged
+  against.
 - Class B — `DUPLICATE_MIN_LINES`, `DUPLICATE_MIN_TOKENS`. These are detector sensitivity, and
   overriding either one **invalidates the duplication band**: Wagner et al. (SANER 2016) measured
   roughly a threefold difference in reported duplication on the same systems at different
@@ -147,7 +161,14 @@ other unrecognized key outright rather than silently ignoring it.
 alongside `history_granularity` — the file(s) that contributed an override, the effective value
 of every overridden key, and whether a class B override is in effect. An override that changes
 the headline number by an order of magnitude has to be visible in the output, not only in a file
-the reader may not have.
+the reader may not have. `ANALYSIS_IGNORE_PATTERNS` follows the same precedent through two more
+fields (code-quality-metrics-3b6): `analysis_exclusions` reports what the configured patterns
+actually removed (count, line share, the effective pattern list), and `vendored_generated_share`
+reports the same shape of number against `DUPLICATE_IGNORE_PATTERNS`'s own existing
+vendored/generated defaults — computed always, whether or not `ANALYSIS_IGNORE_PATTERNS` is
+configured, because that is the half of this feature that helps a repo owner who has not yet
+found the problem. Both render in `local_drift_report.html`'s Analysis Scope section too, not
+only in the JSON.
 
 **Example.** `stride-nyc/flight-info-spike` has a `designs/` directory that is not a convention
 this tool's shared defaults should carry for every repo it analyzes (it previously measured 16.50

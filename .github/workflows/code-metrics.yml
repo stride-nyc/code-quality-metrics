@@ -33,7 +33,7 @@ jobs:
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
             const { computeStatistics, computeVelocity } = require('./lib/statistics');
-            const { scoreMessageQuality, classifyDoraArchetype, isTestFile } = require('./lib/metrics');
+            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath } = require('./lib/metrics');
 
             // ---------------------------------------------------------------
             // Main collection
@@ -155,8 +155,15 @@ jobs:
                       ref: commit.sha
                     });
 
-                    const testFiles = detail.data.files?.filter(f => isTestFile(f.filename)) || [];
-                    const prodFiles = detail.data.files?.filter(f => !isTestFile(f.filename)) || [];
+                    // A path matching ANALYSIS_IGNORE_PATTERNS counts as neither test nor
+                    // production (code-quality-metrics-4fc, mirroring lib/git.js's
+                    // analyzeCommit under code-quality-metrics-1tp): excluded from
+                    // classification and from the file count sprawling_commit is judged
+                    // against, but files_changed below stays the raw, honest count.
+                    const allFiles = detail.data.files || [];
+                    const countableFiles = allFiles.filter(f => !isExcludedPath(f.filename));
+                    const testFiles = countableFiles.filter(f => isTestFile(f.filename));
+                    const prodFiles = countableFiles.filter(f => !isTestFile(f.filename));
 
                     const message = commit.commit.message.split('\n')[0];
 
@@ -168,7 +175,7 @@ jobs:
                       source_branch: commit.source_branch,
                       total_additions: detail.data.stats.additions,
                       total_deletions: detail.data.stats.deletions,
-                      files_changed: detail.data.files?.length || 0,
+                      files_changed: allFiles.length,
                       test_files_count: testFiles.length,
                       prod_files_count: prodFiles.length,
                       // Same-commit co-occurrence, not an ordering claim -- see
@@ -182,7 +189,7 @@ jobs:
                       prod_additions: prodFiles.reduce((sum, f) => sum + f.additions, 0),
                       prod_deletions: prodFiles.reduce((sum, f) => sum + f.deletions, 0),
                       large_commit: (prodFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0)) > CONFIG.LARGE_COMMIT_THRESHOLD,
-                      sprawling_commit: (detail.data.files?.length || 0) > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
+                      sprawling_commit: countableFiles.length > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
                       message_quality: scoreMessageQuality(message),
                       commit_type: "feature_branch"
                     });
