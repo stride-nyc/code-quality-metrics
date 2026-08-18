@@ -104,6 +104,26 @@ describe('renderReportHtml', () => {
     expect(bottleneck).toContain('legacy-bottleneck');
   });
 
+  // The four dora_archetype values are boundaries this toolkit invented from
+  // commit shape, not a DORA-validated classification (DORA derives its own
+  // archetypes from survey data). foundational-challenges is the archetype a
+  // naive good/warning/critical mapping would color red; it must not, since
+  // that would assert a confidence the classification does not support.
+  it('never renders the foundational-challenges verdict as critical (red)', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'foundational-challenges' }));
+    expect(html).toMatch(/class="verdict" data-status="[^"]+"/);
+    expect(html).not.toContain('class="verdict" data-status="critical"');
+    expect(html).toContain('data-status="warning"');
+  });
+
+  it('renders harmonious-high-achiever as good and mixed-signals as neutral, distinct from foundational-challenges', () => {
+    const good = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
+    expect(good).toContain('class="verdict" data-status="good"');
+
+    const neutral = renderReportHtml(fixtureArgs({ dora_archetype: 'mixed-signals' }));
+    expect(neutral).toContain('class="verdict" data-status="neutral"');
+  });
+
   it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
