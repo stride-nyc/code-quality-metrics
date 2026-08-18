@@ -1059,5 +1059,68 @@
       "exclusion_reason": null,
       "notes": "Top commit is 48.0% of volume (\"creds: hold credentials\", a real organic credentials-handling refactor across the codebase, not vendored) -- included as genuine large-but-organic development, same judgment as the postgres and ember sibling large-refactor commits in this dataset. test_isolation_rate is 0.00% in this window (no test-only commits captured), a real reading given curl's tests are typically added alongside the feature they cover rather than as separate commits."
     }
-  ]
+  ],
+  "reservations": [
+    {
+      "id": "no-pre-ai-baseline",
+      "severity": "high",
+      "concern": "Every window was measured in 2026, so these projects may already have adopted AI assistance. This toolkit exists to detect AI drift, and calibrating to a contemporary sample risks defining healthy as whatever drift is already present.",
+      "implication": "Bands describe what these projects do now, not what they did before AI. A pre-2022 window for the same repositories would be a genuinely stronger baseline and is the single most valuable addition to this dataset."
+    },
+    {
+      "id": "granular-history-only",
+      "severity": "high",
+      "concern": "All six reference repositories preserve individual commits. They had to: the tool measures commits, and a squash-merge repository yields one commit per pull request, so its numbers describe pull request shape instead of working habits. Most projects on GitHub squash, including eslint, prettier, vuejs/core, TypeScript, angular, webpack, babel, react and svelte, all screened and rejected on that basis.",
+      "implication": "These bands are valid for granular-history repositories. Applied to a squash-merge repository the unit of measurement differs, so a squashed repo will look worse on every size metric for reasons unrelated to practice. Squash repositories need their own reference set and their own bands."
+    },
+    {
+      "id": "circular-definition",
+      "severity": "high",
+      "concern": "The repositories were chosen because they are considered disciplined, and healthy is then defined as what they do. There is no external anchor. If the field as a whole has drifted, the bands calibrate to that drift.",
+      "implication": "The bands say a project is no worse than these six, which is a weaker claim than a project is healthy. Nothing here validates the reference choice itself, and reputation is not a measured outcome."
+    },
+    {
+      "id": "practice-not-outcome",
+      "severity": "medium",
+      "concern": "No defect rate, delivery stability, incident frequency or review depth was measured for any reference repository. The selection rests on reputation and visible commit discipline.",
+      "implication": "These bands calibrate to projects believed to work well, not to projects measured to work well. The link from commit shape to delivery outcome remains an inference, and DORA's own outcome data is survey-derived rather than commit-derived."
+    },
+    {
+      "id": "narrow-population",
+      "severity": "medium",
+      "concern": "All six are mature open-source infrastructure projects with heavy public review cultures, long histories and many contributors. None is a commercial product team, a small team, a greenfield project or a codebase under deadline pressure.",
+      "implication": "The population this tool is aimed at, ordinary product teams adopting AI, is not represented. Practice norms in a project like postgres are not obviously the right target for a five person team shipping weekly."
+    },
+    {
+      "id": "two-windows-per-repo",
+      "severity": "medium",
+      "concern": "Two windows cannot establish stability, and within-repository variance is often as large as between-repository variance. nodejs/node measured 5.12 percent and 15.09 percent duplication across its own two windows; git measured 0 percent then 21 of 50 commits touching tests once the t/ pattern was fixed.",
+      "implication": "A band whose extreme comes from one window is not evidence, which is why the tiering scheme withholds a critical bound in those cases. More windows per repository would firm this up more cheaply than more repositories."
+    },
+    {
+      "id": "fifty-commit-sampling",
+      "severity": "medium",
+      "concern": "MAX_COMMITS is 50, so each observation samples 50 commits. A single vendored dependency sync, translation import or bulk test import can dominate that window, and several were excluded for exactly that reason.",
+      "implication": "Excluding unrepresentative windows is a judgement call that narrows the observed range and therefore tightens bands. The exclusions are recorded per observation so the effect is auditable, but they are not neutral."
+    },
+    {
+      "id": "language-mix",
+      "severity": "medium",
+      "concern": "The set spans C (git, postgres, curl), C++ and JavaScript (node), JavaScript (ember) and Python (django). Duplication in particular is language sensitive, and DUPLICATE_MIN_LINES 5 with DUPLICATE_MIN_TOKENS 50 are jscpd's stock defaults rather than values chosen for any language here.",
+      "implication": "Duplication bands mix populations that may not be comparable. The 5 line minimum does match GitClear's own definition of a duplicate block, which is the one parameter in this toolkit with a primary source behind it."
+    },
+    {
+      "id": "bot-traffic",
+      "severity": "low",
+      "concern": "Dependency bots contribute real commits with terse generated messages. An ember window with 8 of 49 commits from Renovate set the observed floor for message quality.",
+      "implication": "Bot volume varies enormously between projects and is not a property of human practice. Metrics that read commit messages or commit counts are distorted by it, and no filtering is applied."
+    },
+    {
+      "id": "measurement-changed-mid-calibration",
+      "severity": "low",
+      "concern": "Six tool defects were found by measuring rather than by inspection, three of which changed what a metric counts: production-only line counting, repository-root test directory detection, and merge commit exclusion. The first 12 observations are retired for that reason.",
+      "implication": "Observations are only valid for the tool commit that produced them, which is recorded per record. Any future fix that changes what a metric counts retires the affected observations again."
+    }
+  ],
+  "reservations_note": "These reservations qualify every band derived from this file. They are recorded here rather than in lib/thresholds.js so that the caveats travel with the evidence, and so that adding reference repositories forces a reader to reconsider which reservations still apply."
 }

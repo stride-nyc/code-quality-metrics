@@ -119,6 +119,16 @@ function main() {
     console.log('\nExcluded from derivation:');
     excluded.forEach(o => console.log(`  ${o.repo} ${o.window.since}: ${o.exclusion_reason}`));
   }
+
+  // Printed every run on purpose. These bands are only as good as the sample behind
+  // them, and the high-severity reservations in particular qualify how far any of
+  // these numbers can be carried.
+  const high = (data.reservations || []).filter(r => r.severity === 'high');
+  if (high.length) {
+    console.log(`\nReservations qualifying every band above (${(data.reservations || []).length} recorded, ${high.length} high severity):`);
+    high.forEach(r => console.log(`  [${r.id}] ${r.concern.split('. ')[0]}.`));
+    console.log('  Full text with implications: calibration/observations.json, "reservations".');
+  }
 }
 
 if (require.main === module) main();

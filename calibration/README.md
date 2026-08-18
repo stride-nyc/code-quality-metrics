@@ -29,6 +29,29 @@ Run `node calibration/derive-bands.js` for a table, or `--json` for machine outp
 The script never edits `lib/thresholds.js`. Copy numbers across in a reviewed
 commit, so a threshold change is always deliberate.
 
+## Reservations
+
+`observations.json` carries a `reservations` array: ten recorded concerns about
+using this sample to set thresholds, three of them high severity. They are kept
+with the evidence rather than in `lib/thresholds.js` so the caveats travel with
+the data, and so adding a reference repository forces a reader to reconsider
+which still apply. `derive-bands.js` prints the high severity ones on every run.
+
+The three that most limit how far these bands can be carried:
+
+- **No pre-AI baseline.** Every window is from 2026, so the references may already
+  have adopted AI assistance. A toolkit built to detect AI drift is calibrating
+  to a contemporary sample, which risks defining healthy as whatever drift is
+  already present. A pre-2022 window for the same repositories is the single most
+  valuable addition to this dataset.
+- **Granular history only.** The bands are valid for repositories that preserve
+  individual commits. A squash-merge repository yields one commit per pull
+  request, so it will look worse on every size metric for reasons that have
+  nothing to do with practice. Squash repositories need their own reference set.
+- **Circular definition.** The references were chosen because they are considered
+  disciplined, and healthy is then defined as what they do. The bands support
+  "no worse than these six", which is weaker than "healthy".
+
 ## Choosing a reference repository
 
 Two requirements, and the first is easy to get wrong.
