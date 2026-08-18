@@ -283,12 +283,16 @@ describe('renderReportHtml', () => {
   it('renders a threshold description for each metric card describing its healthy and critical boundaries', () => {
     const html = renderReportHtml(fixtureArgs());
 
-    // large_commits_pct: higher-is-worse, healthy 23, critical 30 (from lib/thresholds.js)
-    expect(html).toContain('Healthy below 23, critical above 30');
+    // large_commits_pct: higher-is-worse. Read from THRESHOLDS rather than
+    // restating the numbers, so a recalibration that moves this band doesn't
+    // break this test for no reason (it already broke once, hardcoded at 23).
+    const band = THRESHOLDS.LARGE_COMMITS_PCT;
+    expect(html).toContain(`Healthy below ${band.healthy}, critical above ${band.critical}`);
   });
 
   it('describes a two-band metric honestly: a healthy bound but no fabricated critical bound', () => {
-    // test_coverage_rate is two-band (healthy 50, critical null): the low extreme
+    // test_coverage_rate is two-band (critical: null, per lib/thresholds.js's own
+    // comment for the current healthy value and its provenance): the low extreme
     // rests on a single reference repo. The card must say so, never state a
     // numeric critical boundary that does not exist.
     const html = renderReportHtml(fixtureArgs());
