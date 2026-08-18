@@ -27,13 +27,12 @@ Teams with high AI adoption reported measurable individual productivity gains:
 
 But when DORA looked at team-level delivery metrics (the ones that actually reflect whether software is reaching users reliably), the picture reversed:
 
-- **154% increase in pull request size**: AI-generated code arrives in larger batches
-- **91% increase in code review time**: reviewers struggle with the volume and size of AI-generated changes
-- **9% increase in bug rates**: more code, reviewed faster, with higher confidence in AI output, means more defects escape
-- **7.2% reduction in delivery stability**: change failure rates increased initially with high AI adoption
-- **1.5% decrease in overall delivery throughput**: despite individual productivity gains, teams delivered less
+- **7.2% increase in delivery instability** for every 25% increase in AI adoption (2024 report). The 2025 report confirms this persists: AI adoption "now improves software delivery throughput... However, it still increases delivery instability" (2025 report, p. 4).
 
-More code is being produced and merged more quickly, reviewed more slowly, and breaking more often.
+**Correction.** Earlier versions of this article listed three further figures here, a 154% increase in pull request size, a 91% increase in code review time, and a 9% increase in bug rates, attributed to DORA. None of them appear in any DORA report. All four DORA publications were searched directly: the 2025 report, the 2024 report and its AI addendum, and the 2026 ROI report. DORA does not discuss pull request size as a metric, publishes no bug or defect rate percentage tied to AI adoption, and its only review figure points the other way, a **3.1% increase in code review speed** per 25% increase in AI adoption (2024 report). The three figures have been withdrawn. Readers who relied on them should discount that section of the earlier version.
+
+Note also that the 2024 throughput finding, a 1.5% reduction per 25% increase in AI adoption, has since been superseded: the 2025 report finds throughput now improves. Instability is the finding that held across both years.
+The summary that followed, "more code is being produced and merged more quickly, reviewed more slowly, and breaking more often", rested on the withdrawn figures. What the reports actually support is narrower: delivery instability rises with AI adoption, and that finding held from 2024 into 2025. Review speed and defect rates are not evidence for it, and throughput now points the other way.
 
 ### The AI Amplifier Effect
 

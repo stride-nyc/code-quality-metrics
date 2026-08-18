@@ -94,7 +94,7 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 | 10–25% | Warning: watch for scope creep |
 | > 25% | Critical: possible shotgun surgery |
 
-**DORA connection**: DORA's 2024 research measured a 7.2% reduction in delivery stability and a 1.5% reduction in throughput for every 25% increase in AI adoption (*Accelerate State of DevOps 2024*, pp. 39-40). Sprawling commits are one commit-level mechanism that could produce that outcome, but this link is an inference by this toolkit: DORA does not measure files changed per commit, and publishes no figure for pull request size.
+**DORA connection**: DORA's 2024 research measured a 7.2% increase in software delivery instability for every 25% increase in AI adoption, and its 2025 report states that AI adoption now improves throughput but "still increases delivery instability" (2025 report, p. 4). Instability is the finding that held across both years. Sprawling commits are one commit-level mechanism that could produce instability, but this link is an inference by this toolkit: DORA does not measure files changed per commit, and publishes no figure for pull request size. Do not cite the 2024 throughput figure as current; the 2025 report reverses its direction.
 
 ---
 
