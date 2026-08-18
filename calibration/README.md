@@ -124,6 +124,42 @@ recommendation, not a code change -- `derive-bands.js`'s default behaviour, and
 `lib/thresholds.js` itself, are both unchanged by this decision until someone acts
 on it in its own reviewed commit.
 
+## Populations
+
+Every observation implicitly belongs to a `population`: `"granular"` (one commit is an
+individual commit -- the default, and the only kind that existed before
+code-quality-metrics-7sk) or `"squash-merge"` (one commit is a whole pull request). An
+observation with no `population` field at all is granular; only the squash-merge
+reference set below sets the field explicitly. `derive-bands.js`'s `selectByPopulation`
+defaults to `"granular"` -- unlike `selectByEra`, which pools every era by default --
+because the two populations describe different units and **must never be pooled**: a
+squash-merged commit routinely spans what would have been several granular commits, so
+every size-shaped metric (large/sprawling percentages, p90 lines/files, and duplication_pct
+via the wider file set a "commit" now touches) means something structurally different
+between the two, independent of whether either team's actual practice is any better or
+worse. Pass `--population squash-merge` to derive bands from the squash-merge reference
+set instead; passing no flag reproduces exactly what `derive-bands.js` computed before
+this option existed, since no pre-existing observation carries the field.
+
+The squash-merge reference set exists so that a squash-merging repository -- the more
+common workflow, and one this tool otherwise withholds every commit-unit verdict for
+(`history_granularity: "squashed"`) -- has *some* answer available rather than none.
+It is a separate, smaller population, not a substitute for the granular one: **do not
+compare a squash-merge band to a granular one as if they measured the same thing.**
+
+**Confirming the detector, not just the screening.** `detectHistoryGranularity` (`lib/git.js`)
+now classifies history automatically and is printed in every run's summary
+(`history_granularity_detected`, `_confidence`, `_signals`). Run it on every candidate before
+trusting a manual screening: it agreed with the "already screened as squashing" candidate
+list for apache/kafka, microsoft/playwright (substituted for microsoft/TypeScript -- see
+observations.json), facebook/react and TanStack/query at high confidence, and agreed with
+python/cpython too but only at *low* confidence, which traced to a real detector gap:
+`PR_REFERENCE_PATTERN` (`/\(#\d+\)$/`) does not match GitHub's alternate `(GH-N)`
+backport-reference suffix, which about half of cpython's sampled commits use instead of
+`(#N)`. This undercounts `pr_reference_share` and should be fixed in `lib/git.js` in its own
+change; it did not flip cpython's verdict here, but a repository that used *only* the GH-N
+form and nothing else plausibly could.
+
 ## Choosing a reference repository
 
 Two requirements, and the first is easy to get wrong.
