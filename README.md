@@ -115,7 +115,7 @@ against a defect or delivery outcome."
 | **Test Coverage Rate** (test+prod co-occurrence, not sequencing) | ≥23% | Same-commit test/production overlap |
 | **Message Quality %** | reported, no target | Conventional commits or descriptive messages |
 | **Net Additions Ratio (median)** | reported, no target | Flags batch-acceptance pattern (bounded -1–1: 1.0 = entirely net-new code) |
-| **Duplication Density %** | ≤6% | Share of scanned production code textually duplicated |
+| **Duplication Density %** | ≤2% | Share of scanned production code textually duplicated |
 | **Avg Files Changed (p90)** | ≤8 | Measures development granularity |
 
 ## Real-World Example
@@ -235,37 +235,47 @@ good/warning verdicts are ever reported for them.
 ```
 Large commits: ≤19%
 Sprawling commits: ≤18%
-Net additions ratio (median): ≤0.63
-Avg lines changed: ≤140
-Duplication density: ≤6%
 ```
 
 ### Warning (above the benchmark's typical range)
 ```
 Large commits: 19-30%
 Sprawling commits: 18-20%
-Net additions ratio (median): 0.63-0.79
-Avg lines changed: 140-200
-Duplication density: 6-6.5%
 ```
 
 ### Critical (at or beyond the worst value two or more reference repositories both produced)
 ```
 Large commits: >30%
 Sprawling commits: >20%
-Net additions ratio (median): >0.79
-Avg lines changed: >200
-Duplication density: >6.5%
 ```
 
 ### Two-band metrics (no corroborated critical line; good/warning only)
 ```
 Test coverage rate (test+prod co-occurrence): ≥23% good, else warning
 Uncovered prod rate: ≤13% good, else warning
-Message quality: ≥66% good, else warning
 p90 lines changed: ≤260 good, else warning
 p90 files changed: ≤8 good, else warning
+Duplication density: ≤2% good, else warning
 ```
+
+### Informational (measured and reported, no verdict)
+```
+Message quality
+Net additions ratio (median)
+Avg lines changed
+```
+
+Each of these three lost its band on evidence rather than for want of data, and each is still
+computed and reported. Message quality was found to score Conventional Commits adoption rather
+than informativeness. Net additions ratio rests on a churn denominator the source literature
+discards. Avg lines changed has no finite mean to band: three independent published fits put
+commit size on a heavy-tailed distribution, and a generalized Pareto with shape above 1 has no
+finite mean at all.
+
+Duplication density is two-band, not three-band, since its re-derivation at the current detector
+settings (`DUPLICATE_MIN_LINES` 10, `DUPLICATE_MIN_TOKENS` 100): only one reference repository
+sits near the extreme, so no critical line is corroborated. A duplication band is comparable only
+at the detector settings it was derived at.
 
 ## DORA Archetype Classification
 
@@ -273,9 +283,9 @@ The summary includes a `dora_archetype` field classifying the repository into on
 buckets. **The names are borrowed from DORA; the method is not.** DORA derives seven archetypes
 from cluster analysis of survey responses covering burnout, friction and delivery instability.
 This derives four from commit shape instead. `classifyDoraArchetype` reads its boundaries
-directly from the calibrated bands in `lib/thresholds.js` rather than a hand-copied set, so four
-of the five boundary values a naive read might expect (large-commit healthy/critical, sprawling
-healthy/critical, test-coverage healthy, uncovered-prod healthy) are the same calibrated numbers
+directly from the calibrated bands in `lib/thresholds.js` rather than a hand-copied set, so every
+boundary value it compares against (large-commit healthy/critical, sprawling healthy/critical,
+test-coverage healthy, uncovered-prod healthy) is the same calibrated number
 as the "Understanding Results" section above, not a separate unsourced judgement. Only the
 *grouping* of those signals into four named archetypes is this toolkit's invention — DORA
 publishes no such grouping — and message quality plays no part in the classification at all,

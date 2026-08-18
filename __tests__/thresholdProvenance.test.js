@@ -10,6 +10,8 @@
 // was visible to a test that only checks code against code.
 const { THRESHOLDS } = require('../lib/thresholds');
 const { CONFIG } = require('../lib/config');
+const fs = require('fs');
+const path = require('path');
 const {
   deriveBand, selectByEra, selectByPopulation, INFORMATIONAL
 } = require('../calibration/derive-bands');
@@ -102,5 +104,49 @@ describe('observation provenance', () => {
         .map(key => `${o.repo} ${o.window?.since ?? o.window} ${key}: recorded ${JSON.stringify(o.config?.[key])}, current ${JSON.stringify(CONFIG[key])}`));
 
     expect(drifted).toEqual([]);
+  });
+});
+
+// CLAUDE.md's Key Metrics table is the first place a reader looks for a band, and
+// it is invisible to every other test in this suite. It has gone stale twice: once
+// when message_quality_pct, net_additions_ratio_median and avg_lines_changed lost
+// their bands, and again the moment duplication_pct was re-derived at 10/100.
+// Row label in that table -> key in lib/thresholds.js.
+const CLAUDE_MD_ROW_LABELS = {
+  'Large commit % (>100 prod lines)': 'LARGE_COMMITS_PCT',
+  'Sprawling commit % (>5 files)': 'SPRAWLING_COMMITS_PCT',
+  'Test coverage rate (test+prod co-occurrence)': 'TEST_COVERAGE_RATE',
+  'Uncovered prod rate': 'UNCOVERED_PROD_RATE',
+  'p90 lines changed': 'P90_LINES_CHANGED',
+  'p90 files changed': 'P90_FILES_CHANGED',
+  'Duplication density %': 'DUPLICATION_PCT'
+};
+
+describe('documentation provenance', () => {
+  test('the CLAUDE.md threshold table states the bands lib/thresholds.js holds', () => {
+    const doc = fs.readFileSync(path.join(__dirname, '..', 'CLAUDE.md'), 'utf8');
+
+    /** Numbers only: the table writes boundaries as "<=19%" / ">30%" / "260". */
+    const numbersIn = cell => (cell.match(/[\d.]+/g) || []).map(Number);
+
+    const documented = {};
+    const expected = {};
+
+    for (const [label, key] of Object.entries(CLAUDE_MD_ROW_LABELS)) {
+      const band = THRESHOLDS[key];
+      const row = doc.split('\n').find(line => line.startsWith(`| ${label} |`));
+      const cells = row ? row.split('|').map(s => s.trim()) : [];
+
+      documented[label] = row
+        ? { healthy: numbersIn(cells[2])[0], critical: numbersIn(cells[3])[0] ?? null, tier: cells[4] }
+        : 'no row found in CLAUDE.md';
+      expected[label] = {
+        healthy: band.healthy,
+        critical: band.critical ?? null,
+        tier: band.critical == null ? 'two-band' : 'three-band'
+      };
+    }
+
+    expect(documented).toEqual(expected);
   });
 });

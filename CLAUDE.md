@@ -82,7 +82,7 @@ enforces this at runtime — never reads a `null` critical bound as zero).
 | p90 lines changed | ≤260 | — | two-band |
 | p90 files changed | ≤8 | — | two-band |
 | Net additions ratio (median) | — | — | informational |
-| Duplication density % | ≤6% | >6.5% | three-band |
+| Duplication density % | ≤2% | — | two-band |
 
 Three rows read informational because their bands were withdrawn on evidence, not because
 they are unmeasured: each value is still computed and reported, with no verdict attached.
