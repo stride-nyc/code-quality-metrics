@@ -42,7 +42,7 @@ describe('deriveBand', () => {
   it('marks a higher-is-worse metric two-band when only one repo sits near the max', () => {
     // repoA supplies both windows near the max (100, 92); repoB is far below (10, 12).
     // Only repoA is within 15% of the max (100), so the critical bound rests on one repo.
-    const result = deriveBand('avg_lines_changed', obs([
+    const result = deriveBand('p90_lines_changed', obs([
       ['repoA', 100], ['repoA', 92], ['repoB', 10], ['repoB', 12]
     ]));
     expect(result.tier).toBe('two-band');
@@ -52,7 +52,7 @@ describe('deriveBand', () => {
 
   it('marks a higher-is-worse metric three-band when two distinct repos sit near the max', () => {
     // repoA's max is 100; repoB's max is 90, which is within 15% of 100 (>= 85).
-    const result = deriveBand('avg_lines_changed', obs([
+    const result = deriveBand('p90_lines_changed', obs([
       ['repoA', 100], ['repoA', 20], ['repoB', 90], ['repoB', 30]
     ]));
     expect(result.tier).toBe('three-band');
@@ -64,9 +64,24 @@ describe('deriveBand', () => {
     // 12 values, sorted: 10,20,30,40,50,60,70,80,90,100,110,120
     // p75 (linear interpolation, index 0.75*11=8.25): 90 + 0.25*(100-90) = 92.5 -> round(92.5*2)/2? no, round rule: >=10 -> Math.round -> 93 (since 92.5>=10, round(92.5) per project's `round` fn used in this file... verified against implementation below)
     const pairs = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120].map((v, i) => [`repo${i % 3}`, v]);
-    const result = deriveBand('avg_lines_changed', obs(pairs));
+    const result = deriveBand('p90_lines_changed', obs(pairs));
     expect(result.healthy).toBe(round(92.5));
     expect(result.critical).toBe(round(120));
+  });
+
+  // code-quality-metrics-k1g (coordination follow-up): lib/thresholds.js dropped
+  // AVG_LINES_CHANGED entirely because three independent published fits put commit size on a
+  // heavy-tailed distribution (a generalized Pareto with shape 1.4617 has no finite mean), so a
+  // band on the mean was unsound at any boundary. derive-bands.js must stop proposing a band for
+  // avg_lines_changed too, the same way it already treats message_quality_pct and
+  // net_additions_ratio_median once their scored bands were dropped.
+  it('marks avg_lines_changed informational now that its scored band is dropped', () => {
+    const result = deriveBand('avg_lines_changed', obs([
+      ['repoA', 100], ['repoA', 92], ['repoB', 10], ['repoB', 12]
+    ]));
+    expect(result.tier).toBe('informational');
+    expect(result.healthy).toBeNull();
+    expect(result.critical).toBeNull();
   });
 
   it('computes healthy as p25 and critical as min for a higher-is-better metric', () => {

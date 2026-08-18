@@ -49,7 +49,7 @@ const NEAR_EXTREME_FRACTION = 0.15;
 /** Metrics where a higher value is worse. */
 const HIGHER_IS_WORSE = [
   'large_commits_pct', 'sprawling_commits_pct', 'uncovered_prod_rate',
-  'avg_lines_changed', 'p90_lines_changed', 'p90_files_changed',
+  'p90_lines_changed', 'p90_files_changed',
   'duplication_pct'
 ];
 
@@ -76,8 +76,17 @@ const HIGHER_IS_BETTER = ['test_coverage_rate'];
  * adoption in a way that makes a band meaningless -- the number mostly
  * answers whether the project uses the format, not whether messages are
  * good.
+ *
+ * avg_lines_changed (code-quality-metrics-k1g): lib/thresholds.js dropped this
+ * band entirely -- three independent published fits put commit size on a
+ * heavy-tailed distribution, and a generalized Pareto fit with shape 1.4617 has
+ * no finite mean, so a band on the mean was unsound at any boundary. p90 and
+ * p95 remain scored since a percentile of a heavy-tailed distribution is still
+ * well defined; only the mean was withdrawn.
  */
-const INFORMATIONAL = ['test_isolation_rate', 'net_additions_ratio_median', 'message_quality_pct'];
+const INFORMATIONAL = [
+  'test_isolation_rate', 'net_additions_ratio_median', 'message_quality_pct', 'avg_lines_changed'
+];
 
 function round(n) {
   if (n >= 100) return Math.round(n / 10) * 10;
