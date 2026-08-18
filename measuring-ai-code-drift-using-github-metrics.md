@@ -16,14 +16,20 @@ The fix is instrumentation at the right moment: capturing commit-level metrics f
 
 ## What DORA 2025 Research Found
 
-The DORA (DevOps Research and Assessment) program, now part of Google Cloud, has tracked software delivery performance across thousands of organizations since 2014. Their 2025 AI Capabilities Model report [1] analyzed nearly 5,000 technology professionals and produced findings that challenge the prevailing narrative about AI coding tools.
+The DORA (DevOps Research and Assessment) program, now part of Google Cloud, has tracked software delivery performance across thousands of organizations since 2014. Their 2025 AI Capabilities Model report [1] analyzed nearly 5,000 technology professionals and produced findings that challenge the prevailing narrative about AI coding tools. Note that several figures below come from the 2024 report rather than 2025; each is cited to its own report and page, because the two disagree in one important respect. The 2024 report measured AI adoption reducing delivery throughput; the 2025 report finds throughput now improves while delivery instability persists.
 
 ### The Productivity Paradox
 
-Teams with high AI adoption reported measurable individual productivity gains:
-- 98% more pull requests merged per developer
-- 21% more tasks completed
-- Reported improvements in documentation quality, code quality, and review speed
+Teams with high AI adoption reported measurable individual gains. Per 25% increase in AI adoption, DORA measured:
+- **7.5% increase in documentation quality**
+- **3.4% increase in code quality**
+- **3.1% increase in code review speed**
+
+(*Accelerate State of DevOps 2024*, p. 37. These are 2024 figures; the 2025 report does not restate them.)
+
+**Correction.** Earlier versions listed two further gains here, "98% more pull requests merged per developer" and "21% more tasks completed", presented as DORA findings. Neither appears in any DORA report, and neither could be traced to any of the primary studies consulted, including the GitHub Copilot trial (Peng et al., arXiv:2302.06590), the METR randomised trial (arXiv:2507.09089), or the NBER telemetry study (Working Paper 35275). They are withdrawn as unsourced.
+
+Worth noting what those studies do find, since they complicate the productivity framing rather than supporting it. METR's randomised trial of 16 experienced open-source developers across 246 tasks reported that "allowing AI actually increases completion time by 19%", a slowdown, not a gain. The Copilot trial found a 55.8% speedup, but on a single scripted task with freelance developers, which is a much narrower claim than a productivity gain in ongoing work.
 
 But when DORA looked at team-level delivery metrics (the ones that actually reflect whether software is reaching users reliably), the picture reversed:
 
