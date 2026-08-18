@@ -64,6 +64,20 @@ describe('runDuplicateCheck', () => {
     const result = runDuplicateCheck(['src/lib/git.js']);
     expect(result).toEqual([]);
   });
+
+  test('excludes vendored dependency trees by default', () => {
+    // No CONFIG override here: this exercises the actual shipped default, the
+    // same one pr-metrics.yml relies on. nodejs/node vendors npm in-tree under
+    // deps/, which had no matching ignore pattern and inflated duplication
+    // from 5.12 percent to 15.09 percent on a pure vendored dependency sync.
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('**/deps/**');
+    expect(command).toContain('**/vendor/**');
+    expect(command).toContain('**/third_party/**');
+    expect(command).toContain('**/node_modules/**');
+  });
 });
 
 describe('runDuplicateAnalysis', () => {
