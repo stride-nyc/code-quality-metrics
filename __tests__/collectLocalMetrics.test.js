@@ -51,6 +51,11 @@ function mockExecSequence(...values) {
     // still runs (as granular) without every prior test needing a positional value.
     if (typeof command === 'string' && command.includes('--merges')) return '';
     if (typeof command === 'string' && command.includes('%cn')) return '';
+    // Tests predating the merge-commit double-count guard supply no value for
+    // analyzeCommit's own parent-count check (`git show --no-patch --format=%P`).
+    // Answer it out of band too, with a single parent -- i.e. "not a merge" --
+    // so every commit under test is still analyzed rather than skipped.
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     const val = values[i] ?? '';
     i++;
     return val;
@@ -67,6 +72,11 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     if (typeof command === 'string' && command.includes('--merged')) return mergedOutput;
     if (typeof command === 'string' && command.includes('--merges')) return '';
     if (typeof command === 'string' && command.includes('%cn')) return '';
+    // Tests predating the merge-commit double-count guard supply no value for
+    // analyzeCommit's own parent-count check (`git show --no-patch --format=%P`).
+    // Answer it out of band too, with a single parent -- i.e. "not a merge" --
+    // so every commit under test is still analyzed rather than skipped.
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     const val = values[i] ?? '';
     i++;
     return val;
@@ -84,6 +94,7 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     if (typeof command === 'string' && command.includes('--merged')) return '';
     if (typeof command === 'string' && command.includes('--merges')) return mergesOutput;
     if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     const val = values[i] ?? '';
     i++;
     return val;
