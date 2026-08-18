@@ -132,16 +132,17 @@ Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is th
 | `AI_ANALYSIS_MAX_COMMITS` | 5 | Max commits sent to Claude per run |
 | `AI_DIFF_MAX_CHARS` | 4000 | Diff truncation limit for Claude API calls |
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
-| `DUPLICATE_MIN_LINES` | 5 | Minimum lines for jscpd to flag a duplicate block |
-| `DUPLICATE_MIN_TOKENS` | 50 | Minimum tokens for jscpd to flag a duplicate block |
+| `DUPLICATE_MIN_LINES` | 10 | Minimum lines for jscpd to flag a duplicate block |
+| `DUPLICATE_MIN_TOKENS` | 100 | Minimum tokens for jscpd to flag a duplicate block |
 | `DUPLICATE_IGNORE_PATTERNS` | `[]` | Glob patterns for jscpd to ignore (e.g. generated files) |
-| `DUPLICATE_SCAN_PATHS` | `[]` | Paths jscpd scans; empty means all provided file paths |
 
 Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
 
 ### Duplicate Detection Tuning
 
-The defaults (`DUPLICATE_MIN_LINES: 5`, `DUPLICATE_MIN_TOKENS: 50`) are calibrated for JavaScript. Other languages typically need higher thresholds to suppress boilerplate false positives:
+The defaults (`DUPLICATE_MIN_LINES: 10`, `DUPLICATE_MIN_TOKENS: 100`) match what SonarQube uses for its own duplicated-lines gate, so the measured percentage is comparable to the roughly 3 to 23 percent range published across clone studies with stated methods. They were previously 5 and 50, half of Sonar's minimum in both dimensions; Wagner et al. measured the same three systems at both settings and found roughly a threefold difference, so position in that published range depends more on detector settings than on the codebase. Raising them lost the one alignment this toolkit had with a primary source, since 5 lines matched GitClear's definition of a duplicate block. The trade is deliberate: GitClear's floor is for detecting a clone, Sonar's is for calling one a quality problem, and this toolkit reports a rate rather than a clone list.
+
+The examples below predate the change and one is now moot: the Java row recommends exactly the new global default. Other languages may still need higher values to suppress boilerplate:
 
 ```js
 // Java — longer method signatures and boilerplate
