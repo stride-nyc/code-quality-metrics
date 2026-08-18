@@ -96,6 +96,30 @@ describe('renderReportHtml', () => {
     expect(html).toContain('30');
   });
 
+  it('renders the detected history granularity and confidence in the masthead', () => {
+    const html = renderReportHtml(fixtureArgs({
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'high',
+      history_granularity_override: null
+    }));
+
+    expect(html).toContain('granular');
+    expect(html).toContain('high confidence');
+  });
+
+  it('records that a human overrode the heuristic, and what the heuristic itself found, in the masthead', () => {
+    const html = renderReportHtml(fixtureArgs({
+      history_granularity: 'granular',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
+      history_granularity_override: 'granular'
+    }));
+
+    expect(html).toContain('overridden');
+    expect(html).toContain('squashed');
+  });
+
   it('renders a verdict line derived from summary.dora_archetype', () => {
     const harmonious = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(harmonious).toMatch(/class="verdict"/);
