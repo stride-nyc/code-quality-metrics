@@ -90,11 +90,25 @@ jobs:
                   }
                 }
 
-                const uniqueCommits = allCommits.filter((commit, index, self) =>
+                const dedupedCommits = allCommits.filter((commit, index, self) =>
                   index === self.findIndex(c => c.sha === commit.sha)
                 );
 
-                console.log(`Found ${allCommits.length} total commits, ${uniqueCommits.length} unique commits`);
+                // github.rest.repos.getCommit (below) diffs a merge commit against its first
+                // parent only, so for a conflict-free two-parent merge -- e.g. GitHub's "Merge
+                // pull request" button on a single-commit PR, or a feature branch that merged
+                // another branch into itself -- that reproduces one of the merged children's
+                // diff exactly, and the same real change would be counted twice: once under the
+                // merge sha, once under the child's own sha. Excluding any commit with more
+                // than one parent here matches the rule chosen for the local pipeline in
+                // lib/git.js's analyzeCommit (cd8e52f): skip the merge entirely rather than diff
+                // it against every parent. Cost, same as there: a genuine merge that carries its
+                // own conflict-resolution edits goes uncounted rather than double-counted. The
+                // REST commit objects returned by listCommits already carry a `parents` array,
+                // so no extra API call is needed. See code-quality-metrics-9vg.
+                const uniqueCommits = dedupedCommits.filter(commit => (commit.parents?.length ?? 1) <= 1);
+
+                console.log(`Found ${allCommits.length} total commits, ${dedupedCommits.length} unique commits, ${uniqueCommits.length} after excluding merge commits`);
                 console.log('Commits per branch:', branchCommitCounts);
 
                 if (uniqueCommits.length === 0) {
