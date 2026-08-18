@@ -47,10 +47,13 @@ describe('generateFindingsNarrative: client provided', () => {
     return { messages: { create: mockCreate } };
   }
 
+  // Golden path (test list item a): every number cited below (55, 40) appears in the fixture
+  // catalog at that exact precision, so validateNarrative must let this prose through
+  // unchanged rather than rejecting it.
   test("returns grouped bullets parsed from Claude's structured JSON response", async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
-      positive_findings: ['Test coverage sits at 55.00, comfortably healthy.'],
+      positive_findings: ['Test coverage sits at 55, comfortably healthy.'],
       concerns: ['Large commits are at 40, which is critical.'],
       recommended_actions: ['Split large commits into smaller reviewable units.']
     });
@@ -58,7 +61,7 @@ describe('generateFindingsNarrative: client provided', () => {
     const result = await generateFindingsNarrative(client, catalog, []);
 
     expect(result).toEqual([
-      'Positive: Test coverage sits at 55.00, comfortably healthy.',
+      'Positive: Test coverage sits at 55, comfortably healthy.',
       'Concern: Large commits are at 40, which is critical.',
       'Recommended action: Split large commits into smaller reviewable units.'
     ]);
@@ -79,6 +82,25 @@ describe('generateFindingsNarrative: client provided', () => {
 
     logSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  test('falls back to fallbackFindings, with a visible rejection notice, when the narrative fails validation', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const client = makeClient({
+      positive_findings: [],
+      concerns: ['Large commits sit at 999%, which is critical.'],
+      recommended_actions: []
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(result[0]).toMatch(/narrative rejected/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0][0]).toMatch(/999/);
+
+    logSpy.mockRestore();
   });
 
   // GUARD, not a called-shot RED: written after the try/catch already added
