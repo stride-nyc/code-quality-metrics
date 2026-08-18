@@ -367,8 +367,8 @@ in `lib/git.js` -- but the label should not be read as evidence of test-first *s
 p50_lines_changed    : median commit size (lines)
 p90_lines_changed    : 90th percentile commit size
 p95_lines_changed    : 95th percentile commit size
-stddev_lines_changed : standard deviation
-avg_lines_changed    : mean (kept for backwards compatibility)
+stddev_lines_changed : standard deviation (informational only -- see below; not a scored metric)
+avg_lines_changed    : mean (informational only -- see below; kept for backwards compatibility)
 commit_size_trend    : "growing" | "stable" | "shrinking"
 ```
 
@@ -384,12 +384,30 @@ slope < 0: "shrinking"
 
 **Risk signal**: `commit_size_trend: "growing"` combined with `velocity_trend: "accelerating"`. This is a hypothesis held by this toolkit, not a DORA finding. The phrase "volume without discipline" was previously attributed to DORA here; it appears in no DORA publication and has been removed.
 
-**Thresholds** (`AVG_LINES_CHANGED` and `P90_LINES_CHANGED` in `lib/thresholds.js`):
+**No band for `avg_lines_changed` (`code-quality-metrics-6dg`)**: `avg_lines_changed` and
+`stddev_lines_changed` are reported descriptively, with no healthy/critical boundary and no
+gauge -- `AVG_LINES_CHANGED` no longer has a key in `lib/thresholds.js` at all, and it is not
+merely re-tiered. Three independent published fits agree the per-commit line-count population is
+heavy-tailed with no finite mean: Kolassa, Riehle and Salim (SOFSEM 2013, Table 2; arXiv:1408.4974)
+fit a Generalized Pareto Distribution to 8.7 million commits with shape ξ = 1.4617 (a GPD has a
+finite mean only when ξ < 1 and finite variance only when ξ < 0.5 -- this population has neither);
+Arafat and Riehle (HICSS 2009, Table 4) independently fit a power law with exponent −1.8612 on the
+same underlying database; Hattori and Lanza (EVOL 2008, §3) confirm a Pareto fit by Q-Q plot for
+files per commit across nine projects. Kolassa's own empirical table (Table 1) shows the practical
+consequence directly: mean 465.72 sits above the reported 90th percentile (261) of the same
+distribution, against a median of 16 -- the mean is not a stable center of this population, and
+the standard deviation built on that mean is not a meaningful dispersion measure for a
+distribution whose variance is itself undefined. This toolkit's own calibration data independently
+rediscovered the same failure mode: `calibration/observations.json` records windows excluded
+because a single vendored import or translation sync destroyed the mean while the percentile and
+count metrics in the same window survived unaffected. The average and standard deviation are still
+reported for reference -- removing the fields would be a breaking change to `local_metrics_
+summary.json`'s schema for both GitHub Actions workflows and any other consumer -- but neither
+carries a verdict; the percentiles below carry the load this band used to carry.
+
+**Thresholds** (`P90_LINES_CHANGED` in `lib/thresholds.js`):
 | Metric | Range | Signal |
 |--------|-------|--------|
-| `avg_lines_changed` | ≤ 140 | Healthy: at or below the 75th percentile of the benchmark (three-band; nodejs/node and postgres/postgres both corroborate the extreme) |
-| `avg_lines_changed` | 140–200 | Warning |
-| `avg_lines_changed` | > 200 | Critical |
 | `p90_lines_changed` | ≤ 260 | Healthy: at or below the 75th percentile of the benchmark (two-band; only nodejs/node sits near the extreme, so no critical bound is reported) |
 | `p90_lines_changed` | > 260 | Warning |
 
@@ -402,6 +420,30 @@ opposite directions. Neither source proposes 260 or 261 as a healthy line; both 
 percentiles. What is citable is a position, not a boundary: this repository sits above the 90th
 percentile of a large published open-source commit-size distribution, not that it has crossed a
 review-effectiveness threshold.
+
+**Limitation: sampling variance of a high quantile from a heavy-tailed distribution
+(`code-quality-metrics-6dg`)**: No source reviewed by this project estimates the sampling
+variance of a percentile computed on a heavy-tailed distribution, and this is a genuine gap in
+the literature, not merely an omission here. This toolkit computes `p90_lines_changed` over
+windows as small as 50 commits, where the empirical p90 is the 45th order statistic of that
+window -- a single-sample estimate whose own variance is unknown and, given the tail shape above,
+plausibly large. `calibration/derive-bands.js` compounds this by taking the 75th percentile of
+twelve such per-repo p90 values to set the `healthy` bound: a percentile of a percentile, with no
+published method to say how stable that second-order statistic is either. Hattori and Lanza make
+a direct, related objection to splitting Pareto-distributed commit populations into quantiles at
+all:
+
+> "Since commits follow a Pareto distribution, it does not make sense to split them into
+> quartiles, for example, because the number of commits with only one file is around the 50th
+> percentile in most cases. Although we could use the approximate distribution function found for
+> each project to calculate an exact division, this is not a generalized approach that could be
+> directly applied to other open source projects." (EVOL 2008, §3, p. 4)
+
+No published method reviewed here resolves either problem, and this toolkit does not attempt to
+invent one. State the limitation plainly: `p90_lines_changed` and the calibrated band built on it
+should be read as a rough position, not a precisely estimated boundary, and a project's own p90
+can plausibly move a large amount between two 50-commit windows for reasons that have nothing to
+do with a change in practice.
 
 ---
 
@@ -434,6 +476,19 @@ are descriptive percentiles from unrelated populations, not proposed healthy lin
 support is the restatement "this repository's file-scope sits above the 90th percentile of these
 published distributions", not a claim that a review-effectiveness or architectural-scatter
 threshold has been crossed.
+
+**Limitation: sampling variance of a high quantile from a heavy-tailed distribution
+(`code-quality-metrics-6dg`)**: The same gap documented in Metric 4 applies here, and this is the
+metric Hattori and Lanza measured directly: they count commit size in files, the exact unit of
+this metric, over 72,351 commits across nine projects, and found "almost all q-q plots
+approximate a straight line, which confirms that they follow a Pareto distribution" (EVOL 2008,
+§3) before objecting explicitly to splitting such a population into quantiles at all (quoted in
+full in Metric 4). `p90_files_changed` is computed over windows as small as 50 commits (the 45th
+order statistic of that window), and `calibration/derive-bands.js` then takes the 75th percentile
+of twelve such per-repo p90 values to set the `healthy` bound above -- a percentile of a
+percentile, with no published method available to estimate how stable either statistic is on a
+population this shaped. Read the resulting bound as a rough position, not a precisely estimated
+boundary.
 
 ---
 
