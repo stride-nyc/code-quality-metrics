@@ -68,6 +68,36 @@ describe('runDuplicateCheck', () => {
     expect(result).toEqual([]);
   });
 
+  test('removes the temporary output directory even when jscpd exits non-zero', () => {
+    // A naive cleanup call placed after the success path would never run here,
+    // since this path returns early. Forces try/finally rather than a trailing
+    // statement.
+    execSync.mockImplementation(() => { throw new Error('exit code 1'); });
+    runDuplicateCheck(['src/lib/git.js']);
+    expect(fs.rmSync).toHaveBeenCalledWith('/tmp/jscpd-output-mock', { recursive: true, force: true });
+  });
+
+  // GUARDs: these pass against the try/finally added for the non-zero-exit case
+  // above without a fresh red, since all early-return paths and the success
+  // path share that one finally block. Recorded here to pin cleanup on the
+  // remaining paths specifically.
+  test('GUARD: removes the temporary output directory when the report file is missing', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/lib/git.js']);
+    expect(fs.rmSync).toHaveBeenCalledWith('/tmp/jscpd-output-mock', { recursive: true, force: true });
+  });
+
+  test('GUARD: removes the temporary output directory after a successful run', () => {
+    runDuplicateCheck(['src/lib/git.js']);
+    expect(fs.rmSync).toHaveBeenCalledWith('/tmp/jscpd-output-mock', { recursive: true, force: true });
+  });
+
+  test('GUARD: does not create or remove any directory when filePaths is empty', () => {
+    runDuplicateCheck([]);
+    expect(fs.mkdtempSync).not.toHaveBeenCalled();
+    expect(fs.rmSync).not.toHaveBeenCalled();
+  });
+
   test('creates a unique output directory per run via fs.mkdtempSync instead of a shared fixed path', () => {
     // Regression guard for code-quality-metrics-ddv: a fixed shared tmp path meant
     // two concurrent runs on one machine wrote and read back each other's report.
