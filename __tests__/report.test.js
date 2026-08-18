@@ -137,6 +137,104 @@ describe('buildMetricCatalog', () => {
   });
 });
 
+function fullDuplicates(overrides) {
+  return Object.assign({
+    analyzed_at: '2026-08-17T00:00:00.000Z',
+    files_scanned: 11,
+    static_duplicates: [
+      { firstFile: { name: 'lib/git.js', start: 10, end: 25 }, secondFile: { name: 'lib/metrics.js', start: 5, end: 20 }, lines: 12, tokens: 90 }
+    ],
+    semantic_findings: [],
+    statistics: {
+      clones: 2,
+      duplicatedLines: 12,
+      duplicatedTokens: 90,
+      lines: 1595,
+      tokens: 6196,
+      sources: 11,
+      percentage: 0.75,
+      percentageTokens: 2.07,
+      newClones: 0,
+      newDuplicatedLines: 0
+    },
+    layers_run: { static: true, semantic: false }
+  }, overrides);
+}
+
+describe('buildMetricCatalog with duplicates', () => {
+  it('marks the semantic duplication tile as unmeasured, not zero, when layers_run.semantic is false', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    const semantic = entries.find(e => e.key === 'duplication_semantic_findings');
+    expect(semantic.status).toBe('unmeasured');
+    expect(semantic.value).not.toBe(0);
+  });
+
+  it('marks the semantic duplication tile neutral with a real finding count when the layer ran and found some', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      layers_run: { static: true, semantic: true },
+      semantic_findings: [{ file1: 'a.js', file2: 'b.js', similarity: 'high', confidence: 0.9 }]
+    }));
+    const semantic = entries.find(e => e.key === 'duplication_semantic_findings');
+    expect(semantic.status).toBe('neutral');
+    expect(semantic.value).toBe(1);
+  });
+
+  it('marks the semantic duplication tile neutral with value 0 when the layer ran and found nothing (distinct from unmeasured)', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      layers_run: { static: true, semantic: true },
+      semantic_findings: []
+    }));
+    const semantic = entries.find(e => e.key === 'duplication_semantic_findings');
+    expect(semantic.status).toBe('neutral');
+    expect(semantic.value).toBe(0);
+  });
+
+  it('renders the static duplication density tile as a gauge computed from statistics.percentage', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+    expect(density.hasGauge).toBe(true);
+    expect(density.value).toBe(0.75);
+    expect(density.status).toBe('good');
+  });
+
+  it('computes concern = 1 (critical) for duplication density at its critical boundary', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: 10, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
+    }));
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+    expect(density.concern).toBe(1);
+    expect(density.status).toBe('critical');
+  });
+
+  it('renders duplicated-lines-out-of-total and clone-count as informational stat cards', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    const lines = entries.find(e => e.key === 'duplication_lines');
+    const clones = entries.find(e => e.key === 'duplication_clones');
+    expect(lines.hasGauge).toBe(false);
+    expect(lines.value).toBe('12 / 1595');
+    expect(clones.hasGauge).toBe(false);
+    expect(clones.value).toBe(2);
+  });
+
+  it('omits the three static tiles, but still renders the semantic tile, when duplicates.statistics is null', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({ statistics: null }));
+    expect(entries.find(e => e.key === 'duplication_density_pct')).toBeUndefined();
+    expect(entries.find(e => e.key === 'duplication_lines')).toBeUndefined();
+    expect(entries.find(e => e.key === 'duplication_clones')).toBeUndefined();
+    expect(entries.find(e => e.key === 'duplication_semantic_findings')).toBeDefined();
+  });
+
+  it('sorts the unmeasured semantic tile after every other entry, since concern is meaningless for it', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    expect(entries[entries.length - 1].key).toBe('duplication_semantic_findings');
+  });
+
+  it('adds no duplication entries at all when duplicates is not supplied (existing callers unaffected)', () => {
+    const entries = buildMetricCatalog(fullSummary());
+    expect(entries.some(e => e.key.startsWith('duplication_'))).toBe(false);
+  });
+});
+
 describe('buildGaugeSvgParts', () => {
   const oracleArgs = {
     value: 51.11,

@@ -16,6 +16,7 @@ describe('THRESHOLDS', () => {
       P90_LINES_CHANGED: { healthy: 200, critical: 500 },
       P90_FILES_CHANGED: { healthy: 8, critical: 15 },
       NET_ADDITIONS_RATIO_MEDIAN: { healthy: 0.33, critical: 0.50 },
+      DUPLICATION_PCT: { healthy: 3, critical: 10 },
       DORA_ARCHETYPE: {
         HARMONIOUS: { large: 20, sprawling: 10, testCoverage: 50, uncoveredProd: 10, messageQuality: 60 },
         LEGACY_BOTTLENECK: { sprawling: 25, large: 30 },
