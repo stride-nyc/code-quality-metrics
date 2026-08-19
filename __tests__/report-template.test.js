@@ -1023,6 +1023,52 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/truncat|fail/i);
   });
 
+  // code-quality-metrics-g39: Analysis Scope answers "what was measured", which matters once a
+  // reader questions a number, not before they have seen one. It moves to the end of the
+  // content (still above the footer), after Findings rather than right after the masthead.
+  it('renders Analysis Scope after Findings, as the final content section before the footer', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: ['**/bin/**'], excluded_files_count: 1, excluded_lines_count: 10, excluded_lines_pct: '1.00' }
+    }));
+
+    const findingsPosition = html.indexOf('<section class="findings">');
+    const scopePosition = html.indexOf('<section class="analysis-scope">');
+    const footerPosition = html.indexOf('<footer>');
+
+    expect(findingsPosition).toBeGreaterThanOrEqual(0);
+    expect(scopePosition).toBeGreaterThan(findingsPosition);
+    expect(footerPosition).toBeGreaterThan(scopePosition);
+  });
+
+  // code-quality-metrics-g39 full rendered order, top to bottom: masthead, the new top summary,
+  // the metric groups, the archetype (under development), Flight Log, Duplicate Code, Findings,
+  // then Analysis Scope last, before the footer. Asserts relative position, not just presence --
+  // a heading existing somewhere on the page proves nothing about where it sits.
+  it('renders every top-level section in the documented order', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: ['**/bin/**'], excluded_files_count: 1, excluded_lines_count: 10, excluded_lines_pct: '1.00' }
+    }));
+
+    const positions = {
+      masthead: html.indexOf('<header class="masthead">'),
+      summary: html.indexOf('<section class="report-summary">'),
+      metricGrid: html.indexOf('<h2 class="metric-category-heading">'),
+      archetype: html.indexOf('<section class="archetype-note">'),
+      flightLog: html.indexOf('<h2>Flight Log</h2>'),
+      findings: html.indexOf('<section class="findings">'),
+      analysisScope: html.indexOf('<section class="analysis-scope">'),
+      footer: html.indexOf('<footer>')
+    };
+
+    for (const position of Object.values(positions)) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    const order = ['masthead', 'summary', 'metricGrid', 'archetype', 'flightLog', 'findings', 'analysisScope', 'footer'];
+    const orderedPositions = order.map(name => positions[name]);
+    const sorted = [...orderedPositions].sort((a, b) => a - b);
+    expect(orderedPositions).toEqual(sorted);
+  });
+
 });
 
 // code-quality-metrics-yte: the flat, single concern-sorted grid becomes five headed groups.
