@@ -411,6 +411,82 @@ but also the point a reader asks what the report is still for. `lib/report-templ
 from a screen of ungraded tiles: "This report shows shape and trend for those tiles, not a
 grade."
 
+**Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71).** The rule above has a
+second failure mode besides the false negative already described: a root commit that is itself a
+scaffold, not the start of the build. Measured case, stride-nyc/73V: root commit `ec1026c4`
+(2022-01-26) adds only `LICENSE` and `README.md`, then nothing for three years, then 2,928
+commits from 2025-01-24 onward. `windowIncludesRepositoryRoot` checked against the literal root
+sha never includes it — the analyzed window is HEAD-anchored and the real build sits three years
+after that commit — so this repository classified `established` permanently, no matter how the
+window was widened, and every band above was applied to a genuine greenfield project.
+
+`findEffectiveRootSha` (`lib/git.js`) fixes this without a tuned age/commit-count threshold,
+extending the tool's existing test/production/excluded classification with one further,
+purely structural check: `commitIntroducesProductionFiles` asks whether a commit's changed
+files are all either a test file (`isTestFile`), an excluded path
+(`isExcludedPath`/`CONFIG.ANALYSIS_IGNORE_PATTERNS`), or **repo furniture**
+(`isRepoFurniture`/`CONFIG.REPO_FURNITURE_PATTERNS`, `lib/metrics.js` and `lib/config.js`). Repo
+furniture is a named, explicit list — not a tuned number — of conventional repo-scaffolding
+filenames: `LICENSE`/`LICENCE`/`COPYING` (any extension), `README` (any extension),
+`.gitignore`, `.gitattributes`, `CODE_OF_CONDUCT`, `CONTRIBUTING`, `SECURITY`, `CHANGELOG`
+(each, any extension), and anything under a repo-root `.github/` directory, matched
+case-insensitively at any depth (the same `(^|\/)...$` anchoring `TEST_FILE_PATTERNS` already
+uses, so a nested copy in a monorepo package is still caught). This check is scoped to scaffold
+detection only — `isRepoFurniture` is not folded into `analyzeCommit`'s own `prodFiles`
+classification, so `large_commit`, `sprawling_commit`, `uncovered_prod_rate` and duplication
+scanning are unaffected by it; a `LICENSE` change in an ordinary (non-root) commit still counts
+exactly as it always has for every other metric.
+
+A root commit that introduces zero production files by this extended rule is a scaffold;
+`findEffectiveRootSha` walks forward — oldest-first, across the whole repository's history via
+`git log --all --reverse`, the same "whole repository" scope `findRepositoryRootShas` already
+uses — to the first later commit that does introduce one, and `local-code-metrics.js` checks
+the analyzed window against that effective root instead of the raw one.
+`project_lifecycle_signals.scaffold_root_detected` reports whether this substitution happened,
+alongside the existing three signals. stride-nyc/73V's own root commit (`LICENSE` + `README.md`,
+nothing else) is caught under bare default configuration — no `ANALYSIS_IGNORE_PATTERNS` entry,
+no `.codemetrics.json` at all, required — since `REPO_FURNITURE_PATTERNS` classifies both files
+as furniture regardless of what (if anything) a target repository has configured.
+
+**Caveat: this does not widen the analyzed window itself.** `scaffold_root_detected: true`
+means the *effective root* was found correctly; whether `project_lifecycle` actually flips to
+`initial-build` still depends on whether that effective root's sha falls inside the commits
+this run put through detailed analysis (`analyzed_span_start`/`analyzed_span_end`,
+`CONFIG.MAX_COMMITS`-capped regardless of `--since`/`--days` — see "Analysis Window" in
+CLAUDE.md). On a very active repository this can still miss: measured directly on
+stride-nyc/73V, `findEffectiveRootSha` correctly resolves the effective root to
+`2858c02e` (2025-01-28, four days after the LICENSE-only scaffold's own follow-up commit), but
+`node local-code-metrics.js --since 2025-01-01` against that repository's real history still
+analyzes only the newest 50 commits (spanning 2026-05-27 to 2026-06-12 at time of writing, since
+73V logged 2,928+ commits in 2025 alone), so that particular invocation still reports
+`project_lifecycle: established` even with `scaffold_root_detected: true`. This is failure mode
+1 from the issue that opened this work (window narrower than the repository's history), a
+distinct, pre-existing limitation scaffold detection does not touch — the `--lifecycle` override
+below remains the general answer for a repository whose real analyzed window cannot reach its
+own effective start.
+
+**Operator override: `--lifecycle` (code-quality-metrics-zkhq, GitHub #71 part 1).** Direct
+precedent: `--history` already lets an operator override squash-merge detection when the
+heuristic is wrong, with `history_granularity_detected` and `history_granularity_override`
+reported separately from the effective `history_granularity` so the raw detection stays visible
+even when overridden. `--lifecycle initial-build|established` (plus a matching `lifecycle` key in
+`.codemetrics.json`) follows the identical shape: `project_lifecycle` is the effective value (the
+override when one is given, the structural detection otherwise), `project_lifecycle_detected` is
+always the raw structural result regardless of any override, and `project_lifecycle_override` is
+the override itself or `null`. CLI takes precedence over the `.codemetrics.json` key, matching
+every other CLI-flag-plus-config-key pair in this tool. The `lifecycle` key is recognized by
+`lib/repoConfig.js` as a META key: it is not a `CONFIG` value, so unlike `DUPLICATE_IGNORE_PATTERNS`
+or `DUPLICATE_MIN_LINES` it is never merged into the `effective` object `resolveConfigOverrides`
+builds — it is only recorded in `sources` (and, once merged, `config_sources.overrides.lifecycle`)
+so `local-code-metrics.js` can read it back out, letting it coexist with a real `CONFIG` override
+in the same file without tripping the "not a recognized override key" guard.
+
+This is the general answer for any repository the structural detection still gets wrong —
+including a repository whose effective root, even correctly identified, still falls outside
+the analyzed window (the caveat above) — while scaffold root commit detection is now the
+automatic answer for a bare LICENSE/README-only root under bare default configuration, with no
+operator configuration required.
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -1387,16 +1463,34 @@ Single summary object for the analysis run:
   history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
 
   // Project lifecycle (code-quality-metrics-31w): see "Project Lifecycle and Change-Size
-  // Withholding" above. A purely structural detection -- no confidence axis and no override,
-  // unlike history_granularity above, since there is no raw guess to resolve or overrule.
+  // Withholding" above. project_lifecycle is the effective value used for banding decisions;
+  // project_lifecycle_detected is always the raw structural result (windowIncludesRepositoryRoot
+  // against the effective root sha(s)) regardless of any override -- the same
+  // detected/effective/override shape history_granularity above already follows
+  // (code-quality-metrics-zkhq, GitHub #71 part 1).
   // "undetermined" (code-quality-metrics-dqri) is a third, distinct value: the repository-root
   // query itself failed, so neither "initial-build" nor "established" was ever confirmed.
   project_lifecycle: "initial-build" | "established" | "undetermined",
+  project_lifecycle_detected: "initial-build" | "established" | "undetermined",  // unaffected by project_lifecycle_override
+  project_lifecycle_override: "initial-build" | "established" | null,  // the --lifecycle CLI flag, or a .codemetrics.json `lifecycle` key, if either was given (CLI wins over the config-file key)
   project_lifecycle_signals: {
-    window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict
+    window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict,
+                                                 // checked against the effective root sha(s)
+                                                 // (see scaffold_root_detected below), not the
+                                                 // raw rev-list output
     repository_root_commit_count: number,      // `git rev-list --max-parents=0 --all`'s count
-    root_commit_detection_failed: boolean       // true when that command itself failed, not
+    root_commit_detection_failed: boolean,      // true when that command itself failed, not
                                                  // when it succeeded and simply found none
+    // Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71): true when at
+    // least one raw root commit introduced zero production files -- including a bare
+    // LICENSE/README-only root under default configuration, since REPO_FURNITURE_PATTERNS
+    // (lib/config.js) classifies both as furniture regardless of ANALYSIS_IGNORE_PATTERNS --
+    // and was replaced by the first later commit that does (findEffectiveRootSha, lib/git.js),
+    // before the check above ran. true here does not by itself guarantee project_lifecycle
+    // reads "initial-build": see "Project Lifecycle and Change-Size Withholding" above for the
+    // mechanism and the caveat that the effective root can still fall outside the analyzed
+    // window on a very active repository.
+    scaffold_root_detected: boolean
   },
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion

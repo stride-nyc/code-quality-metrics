@@ -68,6 +68,12 @@ function mockExecSequence(...values) {
     // band too, defaulting to "no root commit found" (project_lifecycle: established) so
     // every prior test's positional values still line up.
     if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
+    // Tests predating scaffold-root detection (code-quality-metrics-fex3) supply no value
+    // for its two queries (per-commit --name-only, whole-history --reverse log). Answer them
+    // out of band too: a production file present by default, so findEffectiveRootSha's walk
+    // never fires and every prior test's positional values still line up.
+    if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
+    if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -90,6 +96,12 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // so every commit under test is still analyzed rather than skipped.
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
+    // Tests predating scaffold-root detection (code-quality-metrics-fex3) supply no value
+    // for its two queries (per-commit --name-only, whole-history --reverse log). Answer them
+    // out of band too: a production file present by default, so findEffectiveRootSha's walk
+    // never fires and every prior test's positional values still line up.
+    if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
+    if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -109,6 +121,12 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
+    // Tests predating scaffold-root detection (code-quality-metrics-fex3) supply no value
+    // for its two queries (per-commit --name-only, whole-history --reverse log). Answer them
+    // out of band too: a production file present by default, so findEffectiveRootSha's walk
+    // never fires and every prior test's positional values still line up.
+    if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
+    if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -128,6 +146,11 @@ function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
     if (typeof command === 'string' && command.includes('%cn')) return '';
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     if (typeof command === 'string' && command.includes('--max-parents=0')) return rootCommitsOutput;
+    // Answered out of band, defaulting to a production file present, so findEffectiveRootSha's
+    // walk-forward never fires unless a test overrides execSync itself for a scaffold scenario
+    // (code-quality-metrics-fex3).
+    if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
+    if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -150,6 +173,8 @@ function mockExecSequenceWithRootCommitFailure(...values) {
     if (typeof command === 'string' && command.includes('--max-parents=0')) {
       throw new Error('fatal: unable to read tree');
     }
+    if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
+    if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -621,7 +646,8 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.project_lifecycle_signals).toEqual({
       window_includes_repository_root: false,
       repository_root_commit_count: 0,
-      root_commit_detection_failed: false
+      root_commit_detection_failed: false,
+      scaffold_root_detected: false
     });
   });
 
@@ -651,8 +677,134 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.project_lifecycle_signals).toEqual({
       window_includes_repository_root: false,
       repository_root_commit_count: 0,
-      root_commit_detection_failed: true
+      root_commit_detection_failed: true,
+      scaffold_root_detected: false
     });
+  });
+
+  // Real case (code-quality-metrics-fex3, GitHub #71): stride-nyc/73V's root commit ec1026c4
+  // (2022-01-26) adds only LICENSE and README, then nothing for three years, then 2,928
+  // commits in 2025. That root commit is a GitHub repo-reservation scaffold, not the start of
+  // the build: windowIncludesRepositoryRoot must be checked against the first commit that DOES
+  // introduce a production file, not the literal (scaffold) root sha, or this repository
+  // classifies established forever and is graded against maintenance-era bands it never earned.
+  //
+  // DEFAULT configuration throughout -- no .codemetrics.json, no ANALYSIS_IGNORE_PATTERNS
+  // override. LICENSE and README.md are repo furniture (isRepoFurniture,
+  // CONFIG.REPO_FURNITURE_PATTERNS in lib/config.js), matched structurally regardless of any
+  // operator configuration, so this is the common case caught automatically.
+  test('classifies project_lifecycle as initial-build when the repository\'s root commit is a scaffold, using the first production-bearing commit as the effective start of history (code-quality-metrics-fex3, GitHub #71)', async () => {
+    const ROOT_SHA = 'c'.repeat(40); // stands in for 73V's ec1026c4 (LICENSE + README only)
+
+    execSync.mockImplementation(command => {
+      if (typeof command !== 'string') return '';
+      if (command.includes('--merged')) return '';
+      if (command.includes('--merges')) return '';
+      if (command.includes('%cn')) return '';
+      if (command.includes('%P')) return 'p'.repeat(40);
+      if (command.includes('--max-parents=0')) return ROOT_SHA;
+      if (command.includes('--name-only')) {
+        if (command.includes(ROOT_SHA)) return 'LICENSE\nREADME.md';
+        if (command.includes(SHA)) return 'src/app.js\nsrc/app.test.js';
+        throw new Error(`unexpected sha in --name-only query: ${command}`);
+      }
+      if (command.includes('--reverse') && command.includes('%H')) {
+        return `${ROOT_SHA}\n${SHA}`;
+      }
+      if (command.includes('rev-parse')) return FAKE_ROOT;
+      if (command.includes('remote get-url')) return FAKE_REMOTE;
+      if (command === 'git branch -a') return '  feature/x';
+      if (command.includes('git log --no-merges') && command.includes('feature/x')) {
+        return `${SHA}|2025-01-24T10:00:00Z|Dev|feat: add thing`;
+      }
+      if (command.includes('--numstat')) return NUMSTAT;
+      return '';
+    });
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_signals.scaffold_root_detected).toBe(true);
+  });
+
+  // [guard] proves the scaffold walk-forward path does not fire, and existing behavior is
+  // unchanged, when the repository's root commit already carries a production file itself.
+  test('[guard] does not report a scaffold root when the root commit already carries a production file', async () => {
+    mockExecSequenceWithRootCommits(
+      SHA,
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_signals.scaffold_root_detected).toBe(false);
+  });
+
+  // code-quality-metrics-zkhq, GitHub #71 part 1: mirrors the --history override test above
+  // exactly. Detection alone would say established (default fixture: no root commit found);
+  // the override forces initial-build for this invocation without changing what detection
+  // itself reported.
+  test('a --lifecycle override forces project_lifecycle, recording both the override and what detection actually found', async () => {
+    const summary = await collectLocalMetrics({ lifecycle: 'initial-build' }).then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_detected).toBe('established');
+    expect(summary.project_lifecycle_override).toBe('initial-build');
+  });
+
+  test('a repo-local .codemetrics.json lifecycle key overrides project_lifecycle when no CLI flag is given', async () => {
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ lifecycle: 'initial-build' }));
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_detected).toBe('established');
+    expect(summary.project_lifecycle_override).toBe('initial-build');
+  });
+
+  // [guard] proves CLI wins over the config-file key rather than the file silently taking
+  // precedence, mirroring the CLI-over-config-file precedence every other override in this
+  // tool already follows.
+  test('[guard] a --lifecycle CLI flag takes precedence over a conflicting .codemetrics.json lifecycle key', async () => {
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ lifecycle: 'established' }));
+
+    const summary = await collectLocalMetrics({ lifecycle: 'initial-build' }).then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_override).toBe('initial-build');
+  });
+
+  // [guard] proves the no-override case still reports project_lifecycle_detected equal to
+  // project_lifecycle and a null override, matching history_granularity's own shape.
+  test('[guard] reports project_lifecycle_override as null and project_lifecycle_detected equal to project_lifecycle when no override is given', async () => {
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('established');
+    expect(summary.project_lifecycle_detected).toBe('established');
+    expect(summary.project_lifecycle_override).toBeNull();
   });
 
   test('writes local_metrics_summary.json with history_granularity detected as granular when no squash signals are present', () => {

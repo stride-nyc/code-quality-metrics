@@ -252,7 +252,8 @@ control — a code-execution hazard for no benefit. JSON also needs no new depen
 GitHub workflows could read the same file unchanged if they chose to (neither does today; only
 `local-code-metrics.js` calls `resolveConfigOverrides`).
 
-**Only five keys are overridable, in two classes with different consequences:**
+**Six keys are overridable: five `CONFIG` keys in two classes, plus one meta key that is not a
+`CONFIG` value at all:**
 
 - Class A — `DUPLICATE_IGNORE_PATTERNS`, `TEST_FILE_PATTERNS`, `ANALYSIS_IGNORE_PATTERNS`. These
   correct what a measurement counts, not how sensitive detection is. Bands still apply. Array
@@ -281,6 +282,15 @@ GitHub workflows could read the same file unchanged if they chose to (neither do
   `lib/report.js`'s `buildMetricCatalog` withholds the `duplication_density_pct` verdict whenever
   `summary.config_sources.class_b_overridden` is true, the same way squashed history withholds the
   commit-unit verdicts.
+- Meta — `lifecycle` (code-quality-metrics-zkhq, GitHub #71 part 1): the `project_lifecycle`
+  operator override, mirroring the existing `--history` CLI flag's shape. Recognized by
+  `lib/repoConfig.js`'s `META_KEYS` so it does not trip the "not a recognized override key" guard
+  when it coexists with a real `CONFIG` override in the same file, but never merged into
+  `effective` — it is not a `CONFIG` value, so `resolveConfigOverrides`'s `effective` object is
+  untouched by it. `local-code-metrics.js` reads the value back out of `sources` (surfaced as
+  `config_sources.overrides.lifecycle`) and applies it with the same CLI-over-config-file
+  precedence every other override here follows: a `--lifecycle` CLI flag wins over a `lifecycle`
+  key set in `.codemetrics.json`.
 
 `LARGE_COMMIT_THRESHOLD` and `SPRAWLING_COMMIT_THRESHOLD` are **never overridable**: they are the
 bars the six-repository reference set was measured against (`lib/thresholds.js`), and a repo
