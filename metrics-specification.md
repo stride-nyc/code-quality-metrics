@@ -346,6 +346,21 @@ an unmerged branch is still detected. `local-code-metrics.js` resolves this to
 `project_lifecycle_signals` (`window_includes_repository_root`, `repository_root_commit_count`)
 for audit.
 
+**This detection depends on the root commit surviving analysis at all (code-quality-metrics-p4c).**
+`windowIncludesRepositoryRoot` can only see a root commit's sha in `analyzedShas`, which is
+built from `analyzeCommit`'s results; a root commit `analyzeCommit` drops never reaches the
+check. django's actual root commit is an empty SVN-import artifact with a zero-byte
+`git show --numstat` diff, and `analyzeCommit` used to treat that the same as a failed git
+invocation — both produced empty stdout through `runGitCommand` — so it returned `null` and
+the commit disappeared from `metrics` entirely. A window that structurally reached the
+repository's own first commit then read as `established`, issuing band verdicts against a
+greenfield window rather than withholding them, the exact failure this section exists to
+prevent. `analyzeCommit` now asks whether `git show --numstat` itself succeeded (via a direct
+`execSync` call, distinct from whether its output is empty) rather than treating empty
+output as failure, so a genuinely empty commit is counted with zero additions, deletions and
+files instead of dropped. See Metric 1's data-source note below for the corresponding
+denominator decision.
+
 **Why this rule over the other three candidates.** Repository age from first commit, total
 commit count, and the ratio of the window's span to the repository's whole history were all
 considered and rejected: each needs an invented age, count, or ratio boundary with no natural
@@ -394,6 +409,22 @@ large_commit_pct = (commits where additions + deletions > LARGE_COMMIT_THRESHOLD
 **Why production lines only**: counting test lines meant that adding tests could push a change over the threshold. A 90 line production change shipped with 30 lines of tests scored 120 and was flagged large, while the same change with no tests was not, so the metric penalised the practice this toolkit identifies as the strongest protection against drift. `uncovered_prod_rate` already covers the untested case as a separate signal.
 
 **Note**: `total_additions` and `total_deletions` in the output remain whole-diff, including test lines, because the size distributions describe how much a reviewer actually reads. `prod_additions` and `prod_deletions` carry the production-only totals that drive this flag.
+
+**A genuinely empty commit counts in `total_commits` (code-quality-metrics-p4c)**: a
+`git commit --allow-empty` commit, or a root commit that is itself an empty artifact (see
+Project Lifecycle above), is a real commit the team or a migration tool made, which is
+information rather than an error, so `analyzeCommit` reports it with `total_additions: 0`,
+`total_deletions: 0`, `files_changed: 0`, `large_commit: false`, `sprawling_commit: false`
+rather than dropping it. It therefore counts in the denominator of every commit-shape rate
+in this file (large/sprawling commit %, the three-way test-coverage rates, and the
+lines/files-changed distributions), which pulls those rates down slightly rather than
+leaving them unaffected. That is the deliberate choice: excluding it would silently shrink
+every rate's denominator the same way a dropped merge commit or a failed git invocation
+does, and unlike those two cases an empty commit is not an error to exclude, it is a
+zero-sized unit of work like any other. A merge commit (skipped to avoid double-counting
+against its first parent, see the code comment in `analyzeCommit`) and a commit whose
+`git show --numstat` invocation itself fails are the only cases still dropped from
+`total_commits` entirely.
 
 **CONFIG key**: `LARGE_COMMIT_THRESHOLD` (default: 100 lines)
 
