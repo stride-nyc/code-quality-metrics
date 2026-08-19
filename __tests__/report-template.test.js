@@ -584,6 +584,19 @@ describe('renderReportHtml', () => {
     }
   });
 
+  // code-quality-metrics-4er: test_coverage_rate's description called co-changing tests and
+  // production "what healthy work usually looks like". That penalises landing a failing test
+  // and its implementation as two atomic commits -- the discipline this project's own working
+  // agreement requires -- and Sun et al. (TOSEM 2023) report pervasive noise in exactly this
+  // heuristic. The description should say what the metric counts and that it cannot tell
+  // test-first from test-after, not call one pattern healthy.
+  it('describes test-coverage co-change plainly, without calling it what healthy work looks like', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('a team that deliberately lands a failing test and its implementation as two separate commits looks identical, by this count, to a team that never wrote the test');
+    expect(html).not.toContain('what healthy work usually looks like');
+  });
+
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
     const duplicates = {
       files_scanned: 3,
