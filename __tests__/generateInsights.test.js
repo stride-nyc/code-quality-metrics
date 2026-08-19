@@ -227,6 +227,24 @@ describe('generateInsights', () => {
     expect(warnings.some(w => w.includes('starts') && w.includes('after'))).toBe(false);
   });
 
+  test('emits a warning when the analyzed span collapses to a single day', () => {
+    const { warnings } = generateInsights(makeSummary({
+      window_requested_since: '2026-08-01',
+      window_widened: false,
+      analyzed_span_start: '2026-08-09',
+      analyzed_span_end: '2026-08-09'
+    }), []);
+    expect(warnings.some(w => w.includes('single day'))).toBe(true);
+  });
+
+  test('does not warn about a single-day span when window_requested_since is absent (HEAD-anchored run)', () => {
+    const { warnings } = generateInsights(makeSummary({
+      analyzed_span_start: '2026-08-09',
+      analyzed_span_end: '2026-08-09'
+    }), []);
+    expect(warnings.some(w => w.includes('single day'))).toBe(false);
+  });
+
   test('does not emit AI pattern warning when fewer than 30% of commits are addition-heavy large commits', () => {
     const metrics = [
       makeMetric({ large_commit: true, total_additions: 300, total_deletions: 10 }),
