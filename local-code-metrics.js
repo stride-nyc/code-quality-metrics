@@ -48,6 +48,8 @@ const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
 
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
+ * date is committer date (git %ci), not author date -- see fetchBranchCommits' own comment
+ * (code-quality-metrics-75 / mbiw) for why: it matches --since's own filtering semantics.
  * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
@@ -99,6 +101,20 @@ function parseBranchList(output) {
  * before its own global slice (code-quality-metrics-g10). --since alone would not achieve this:
  * with no --since and no --max-count, git returns the whole history of the ref.
  *
+ * The log format captures %ci (committer date), not %ai (author date). git's own --since above
+ * filters on committer date, and CommitInfo.date drives the global newest-MAX_COMMITS sort
+ * (below), analyzed_span_start/end, and the velocity/trend statistics -- all of which claim to
+ * describe the same window --since names. Sourcing that field from author date instead made the
+ * sort key and the filter disagree: on a rebase-and-land or cherry-pick workflow a commit's
+ * author date can sit well before its committer date, so the "newest 50" by author date is not
+ * the same 50 commits --since would call newest, and the two silently diverge (code-quality-
+ * metrics-75 / mbiw). Measured: reproducing the recorded nodejs/node observation at its recorded
+ * tool_commit gives large_commits_pct 14, matching; re-sorting the same window by author date at
+ * current HEAD gave 18. Committer date is also the more defensible choice on its own terms: it
+ * is when the work landed, which is what a calendar window is asking about, whereas author date
+ * can be rewritten arbitrarily far into the past by a rebase. The `author` field (commit.author,
+ * from %an) still carries authorship identity; only the point-in-time value changed.
+ *
  * --no-merges: git show --numstat diffs a merge against its first parent, so merging a
  * single-commit branch reproduces that commit's diff and the same change is counted twice. A
  * merge commit's content belongs to the commits it merges.
@@ -109,7 +125,7 @@ function parseBranchList(output) {
 function fetchBranchCommits(ref, sinceStr) {
   const boundsArg = sinceStr ? `--since="${sinceStr}"` : `--max-count=${CONFIG.MAX_COMMITS}`;
   const logOutput = runGitCommand(
-    `git log --no-merges ${boundsArg} --pretty=format:"%H|%ai|%an|%B%x1e" ${ref}`
+    `git log --no-merges ${boundsArg} --pretty=format:"%H|%ci|%an|%B%x1e" ${ref}`
   );
   return parseGitLog(logOutput);
 }
@@ -479,6 +495,10 @@ async function collectLocalMetrics(options = {}) {
   // before use: computeStatistics's trend calculation (lib/statistics.js) assumes its
   // `timestamps` argument arrives oldest-first and does not re-sort internally, unlike
   // computeVelocity, which does.
+  //
+  // "newest" here means newest by commit.date, which is committer date (fetchBranchCommits'
+  // own comment, code-quality-metrics-75 / mbiw) -- the same clock --since filters on, so an
+  // explicit window and the HEAD-anchored default both select the commit set they claim to.
   const commitsToAnalyze = [...uniqueCommits]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, CONFIG.MAX_COMMITS)
@@ -526,7 +546,10 @@ async function collectLocalMetrics(options = {}) {
     return;
   }
 
-  // Statistical distributions
+  // Statistical distributions. timestamps is built from m.date, which is committer date
+  // (code-quality-metrics-75 / mbiw) -- so the trend regression inside computeStatistics
+  // orders commits, and analyzedSpanStart/End below reports a span, on the same clock
+  // --since itself filters by.
   const lineSizes = metrics.map(m => m.total_additions + m.total_deletions);
   const fileCounts = metrics.map(m => m.files_changed);
   const timestamps = metrics.map(m => new Date(m.date).getTime());
@@ -538,7 +561,9 @@ async function collectLocalMetrics(options = {}) {
   // is never presentable as covering recent activity when it does not. Reported unconditionally
   // -- both for an explicit --since/--days window and for the HEAD-anchored default -- since a
   // requested window can itself be wider than what was actually found (e.g. --days 365 on a
-  // repository whose commits all land in the last 40 of those days).
+  // repository whose commits all land in the last 40 of those days). This is a committer-date
+  // span, matching timestamps above and --since's own semantics (code-quality-metrics-75 / mbiw):
+  // on a rebase-and-land workflow a commit's author date can fall well outside it.
   const analyzedSpanStart = new Date(Math.min(...timestamps)).toISOString().split('T')[0];
   const analyzedSpanEnd = new Date(Math.max(...timestamps)).toISOString().split('T')[0];
 
@@ -553,7 +578,9 @@ async function collectLocalMetrics(options = {}) {
   // in `local_metrics_summary.json` as the statistics that can support a claim on this
   // distribution; `large_commit` remains as the absolute, non-window-relative size flag.
   //
-  // Velocity
+  // Velocity. Also committer-date-ordered (m.date; code-quality-metrics-75 / mbiw), so "commits
+  // per day" and the accelerating/decelerating trend describe the rate work actually landed at,
+  // not the rate it was originally authored at.
   const dates = metrics.map(m => m.date);
   const velocity = computeVelocity(dates);
 

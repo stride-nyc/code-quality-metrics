@@ -745,7 +745,7 @@ velocity_commits_per_day  : float
 velocity_trend            : "accelerating" | "stable" | "decelerating"
 ```
 
-**Data source**: `date` field from `git log --pretty=format:"%ai"`. Already collected in the existing analysis loop; no new git calls required.
+**Data source**: `date` field from `git log --pretty=format:"%ci"` (committer date, not author date -- code-quality-metrics-75/mbiw). Already collected in the existing analysis loop; no new git calls required.
 
 **Risk signal**: `velocity_trend: "accelerating"` combined with `commit_size_trend: "growing"`. This is a hypothesis held by this toolkit, not a DORA finding: an earlier version of this document attributed the combination to DORA research as "the leading indicator of team archetype drift toward foundational challenges", and that attribution could not be traced to any DORA publication during a 2026-08-18 research pass (`code-quality-metrics-pw5`). It has been withdrawn. See Metric 4's risk-signal note for the same hypothesis stated without the DORA attribution.
 
@@ -1289,7 +1289,9 @@ Array of `CommitMetric` objects, one per analyzed commit:
   // Identity (from git log)
   sha: string,              // 8-character short SHA
   full_sha: string,         // full 40-character SHA
-  date: string,             // ISO 8601 timestamp
+  date: string,             // committer date (git %ci), not author date -- matches --since's
+                            // own filtering semantics and drives commit selection, velocity,
+                            // trend, and analyzed_span_start/end (code-quality-metrics-75/mbiw)
   author: string,           // author name
   message: string,          // commit subject line
   source_branch: string,    // branch this commit was found on
@@ -1352,8 +1354,10 @@ Single summary object for the analysis run:
   // (backward-compatible with pre-g10 behavior); window_widened true means an explicit
   // --since/--days window returned zero commits and was widened to the newest MAX_COMMITS,
   // ignoring the requested boundary. See CLAUDE.md's "Analysis Window" section.
-  analyzed_span_start: string,      // "YYYY-MM-DD", the oldest analyzed commit's date
-  analyzed_span_end: string,        // "YYYY-MM-DD", the newest analyzed commit's date
+  analyzed_span_start: string,      // "YYYY-MM-DD", the oldest analyzed commit's committer date
+  analyzed_span_end: string,        // "YYYY-MM-DD", the newest analyzed commit's committer date
+                                     // (not author date -- code-quality-metrics-75/mbiw; matches
+                                     // --since's own filtering semantics)
   window_requested_since: string | null,
   window_widened: boolean,
 

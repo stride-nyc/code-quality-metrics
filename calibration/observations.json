@@ -4994,6 +4994,12 @@
       "implication": "Observations are only valid for the tool commit that produced them, which is recorded per record. Any future fix that changes what a metric counts retires the affected observations again."
     },
     {
+      "id": "commit-selection-changed-to-committer-date",
+      "severity": "high",
+      "concern": "Every observation in this file was measured by a tool build whose commit selection sorted the newest-MAX_COMMITS pick by author date (git %ai), while --since already filters commits by committer date. On a rebase-and-land or cherry-pick workflow the two diverge -- a commit's author date can sit well before its committer date -- so the 'newest 50' the sort picked was not reliably the 50 commits --since would itself call newest. Measured directly: reproducing the recorded nodejs/node observation below (repo_head cb9bb667, since 2026-08-01, tool_commit fcc40d93) gives large_commits_pct 14, matching the recorded value; re-sorting the identical window by author date against current HEAD gave 18 -- a different set of 50 commits selected under the same nominal window (code-quality-metrics-75 / mbiw). The fix (this same change) sources commit.date from %ci (committer date) instead, so selection, analyzed_span_start/end, velocity and trend all key off the same clock --since filters by.",
+      "implication": "Every observation recorded before this fix's tool_commit selected commits under author-date sorting and is retired for the same reason measurement-changed-mid-calibration retires the first 12: the commit set a window claims to cover is not reliably the commit set that was actually analyzed. Re-measurement is bundled into the same pass as code-quality-metrics-69 and -62 per issue #75's own notes, rather than run as a separate calibration pass."
+    },
+    {
       "id": "context-dependence",
       "severity": "medium",
       "concern": "Zhang, Mockus, Zou, Khomh and Hassan ('How Does Context Affect the Distribution of Software Maintainability Metrics?', ICSM 2013, DOI 10.1109/ICSM.2013.46) measured 320 SourceForge systems across 39 metrics and found that every one of six studied context factors (domain, language, age, lifespan, number of changes, number of downloads) shifts metric distributions; language alone shifted 35 of the 39 metrics. The six repositories behind these bands are one context (mature, granular-history, C/C++/JS/Python infrastructure projects with heavy public review cultures), not a population sample.",
