@@ -176,12 +176,57 @@ because it is wrong for every other repo the tool is pointed at. Those facts bel
 **Precedence, highest first:**
 
 1. CLI flags — the existing `--since` and `--days` on `local-code-metrics.js`.
-2. `.codemetrics.json` in the analysis target, resolved from `process.cwd()`.
-3. `lib/config.js`'s own defaults.
+2. An explicit `--config <path>` (code-quality-metrics-ap7).
+3. `.codemetrics.json` in the analysis target, resolved from `process.cwd()`.
+4. `lib/config.js`'s own defaults.
 
-Three tiers, not `lib/env.js`'s four: `loadEnv` needs a tool-local `.env` tier because a secret
-has to live somewhere outside the repo under analysis; configuration does not, because
-`lib/config.js` already is that tier.
+Three tiers when `--config` is not passed, matching `lib/env.js`'s reasoning: `loadEnv` needs a
+tool-local `.env` tier because a secret has to live somewhere outside the repo under analysis;
+configuration does not, because `lib/config.js` already is that tier. Four tiers when `--config`
+is passed — see below for why that tier exists and how it composes with tier 3.
+
+**`--config <path>` (code-quality-metrics-ap7): an override from outside the analysis target.**
+Tier 2's own `.codemetrics.json` mechanism covers a repository the operator owns — it can be
+committed there. It does not cover running this tool in a scripted way against a repository the
+operator does not control, where committing a file into someone else's repo is not an option and
+writing one into every fresh clone before each run does not scale. `--config` supplies the same
+override shape from a path the operator does control, independent of the target's own tree.
+`resolveConfigOverrides(defaults, targetDir, explicitConfigPath)` takes this as its third
+parameter — the same function tier 3 already used, not a new module.
+
+- **A repo-keyed section inside `lib/config.js` was considered and rejected**, the same way it was
+  for tier 3 (code-quality-metrics-wcj): a per-target fact living in config shared by the local
+  script and both workflows is the defect this whole mechanism exists to avoid, not a fix for it.
+  `--config` was rejected once already, during `wcj`'s own design, on the grounds that "the caller
+  must remember it on every invocation." That objection is about a *human* caller; a script that
+  invokes this tool does not forget a flag, so the objection does not hold for the scripted case
+  this issue was filed for.
+- **Missing or non-file path fails loudly.** A `--config` path that does not exist, or that names a
+  directory rather than a file, throws immediately (`--config path not found: <path>` /
+  `--config path is a directory, not a file: <path>`) rather than silently falling back to the
+  target's own `.codemetrics.json` or to defaults. A scripted run has nobody watching it in real
+  time, so a typo'd path must be loud, not swallowed into an unnoticed default run. This is
+  deliberately different from a missing tier-3 `.codemetrics.json`, which is the ordinary
+  unconfigured case and stays silent.
+- **Composes with tier 3, rather than replacing it.** Both a target-local `.codemetrics.json` and
+  an explicit `--config` file are applied, in precedence order (target file first, `--config`
+  second), rather than `--config` displacing the target file entirely. The existing array-union
+  semantics (see Class A below) already establish the norm this follows: an operator adding an
+  override must never be the reason a target repo's own already-committed conventions silently
+  stop applying. A class A array key unions across all three tiers that can contribute a value —
+  defaults, target file, `--config` file. A class B scalar key from `--config` wins over the same
+  key from the target file, since `--config` is the higher tier, but still leaves
+  `classBOverridden` (and therefore `config_sources.class_b_overridden`) true exactly as a
+  target-file-only override would.
+- **Format is JSON for this tier too**, for the same reason as tier 3 below.
+- **`config_sources.files` names whichever file actually contributed an override**, `--config`'s
+  path included, alongside the target file's own path when both contribute. `lib/report.js`'s
+  `buildMetricCatalog` reads only `config_sources.class_b_overridden`, never which route produced
+  it, so a class B override withholds the `duplication_density_pct` verdict identically whichever
+  tier supplied it.
+- Neither GitHub workflow gains a `--config` flag: they run inside the target repository's own
+  checkout, where the tier-3 `.codemetrics.json` resolution from `process.cwd()` already works,
+  so they have no scripted-external-repo case to cover.
 
 **Format is JSON, not JS.** A `.js` config file would mean `require()`-ing arbitrary code from
 the repository under analysis, and this tool is routinely pointed at repos the operator does not
