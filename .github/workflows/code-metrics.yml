@@ -63,6 +63,25 @@ jobs:
                 console.log(`Found ${branches.length} total branches`);
                 console.log(`Analyzing ${featureBranches.length} feature branches: ${featureBranches.map(b => b.name).join(', ')}`);
 
+                // github.rest.repos.getCommit (below) diffs a merge commit against its first
+                // parent only, so for a conflict-free two-parent merge -- e.g. GitHub's "Merge
+                // pull request" button on a single-commit PR, or a feature branch that merged
+                // another branch into itself -- that reproduces one of the merged children's
+                // diff exactly, and the same real change would be counted twice: once under the
+                // merge sha, once under the child's own sha. Excluding any commit with more
+                // than one parent here matches the rule chosen for the local pipeline in
+                // lib/git.js's analyzeCommit (cd8e52f): skip the merge entirely rather than diff
+                // it against every parent. Cost, same as there: a genuine merge that carries its
+                // own conflict-resolution edits goes uncounted rather than double-counted. The
+                // REST commit objects returned by listCommits already carry a `parents` array,
+                // so no extra API call is needed. See code-quality-metrics-9vg.
+                function dedupeAndFilterMerges(commits) {
+                  const deduped = commits.filter((commit, index, self) =>
+                    index === self.findIndex(c => c.sha === commit.sha)
+                  );
+                  return deduped.filter(commit => (commit.parents?.length ?? 1) <= 1);
+                }
+
                 let allCommits = [];
                 let branchCommitCounts = {};
 
@@ -90,34 +109,77 @@ jobs:
                   }
                 }
 
-                const dedupedCommits = allCommits.filter((commit, index, self) =>
-                  index === self.findIndex(c => c.sha === commit.sha)
-                );
+                let uniqueCommits = dedupeAndFilterMerges(allCommits);
 
-                // github.rest.repos.getCommit (below) diffs a merge commit against its first
-                // parent only, so for a conflict-free two-parent merge -- e.g. GitHub's "Merge
-                // pull request" button on a single-commit PR, or a feature branch that merged
-                // another branch into itself -- that reproduces one of the merged children's
-                // diff exactly, and the same real change would be counted twice: once under the
-                // merge sha, once under the child's own sha. Excluding any commit with more
-                // than one parent here matches the rule chosen for the local pipeline in
-                // lib/git.js's analyzeCommit (cd8e52f): skip the merge entirely rather than diff
-                // it against every parent. Cost, same as there: a genuine merge that carries its
-                // own conflict-resolution edits goes uncounted rather than double-counted. The
-                // REST commit objects returned by listCommits already carry a `parents` array,
-                // so no extra API call is needed. See code-quality-metrics-9vg.
-                const uniqueCommits = dedupedCommits.filter(commit => (commit.parents?.length ?? 1) <= 1);
-
-                console.log(`Found ${allCommits.length} total commits, ${dedupedCommits.length} unique commits, ${uniqueCommits.length} after excluding merge commits`);
+                console.log(`Found ${allCommits.length} total commits, ${uniqueCommits.length} after deduping and excluding merge commits`);
                 console.log('Commits per branch:', branchCommitCounts);
 
+                // A repository with bursty feature-branch activity (sprints separated by gaps
+                // longer than CONFIG.ANALYSIS_DAYS) would otherwise produce a recurring
+                // "no activity" issue every time the schedule fires between bursts, defeating
+                // the workflow's purpose (code-quality-metrics-3s0). The since-filtered fetch
+                // above stays the primary path -- it is cheap (bounded by `since`) and honest
+                // about recency -- and only on a zero result do we pay for a second, still
+                // bounded fetch of the newest commits regardless of date.
+                let windowWidened = false;
+                if (uniqueCommits.length === 0 && featureBranches.length > 0) {
+                  console.log(`No commits found since ${since} across any feature branch. Widening to the newest commits on each branch, ignoring the requested date boundary.`);
+                  windowWidened = true;
+                  allCommits = [];
+                  branchCommitCounts = {};
+
+                  for (const branch of featureBranches) {
+                    try {
+                      console.log(`Fetching newest commits from branch (widened): ${branch.name}`);
+                      // A single capped page, not github.paginate: `since` no longer bounds
+                      // this query, so paginating here would walk a branch's entire history
+                      // one page at a time on every zero-commit week. listCommits without
+                      // `since` already returns newest-first, so one page of
+                      // CONFIG.MAX_COMMITS is exactly the newest commits available on this
+                      // branch, at a cost independent of how long its history is.
+                      const { data: branchCommits } = await github.rest.repos.listCommits({
+                        owner,
+                        repo,
+                        sha: branch.name,
+                        per_page: CONFIG.MAX_COMMITS
+                      });
+
+                      branchCommitCounts[branch.name] = branchCommits.length;
+                      allCommits = allCommits.concat(branchCommits.map(commit => ({
+                        ...commit,
+                        source_branch: branch.name
+                      })));
+
+                      await new Promise(resolve => setTimeout(resolve, 200));
+                    } catch (error) {
+                      console.log(`Error fetching commits from branch ${branch.name}: ${error.message}`);
+                      branchCommitCounts[branch.name] = 0;
+                    }
+                  }
+
+                  uniqueCommits = dedupeAndFilterMerges(allCommits);
+                  // Each branch's page is independently newest-first, but interleaving
+                  // branches in fetch order is not; sort globally before the MAX_COMMITS
+                  // slice below so that slice keeps the actual newest commits.
+                  uniqueCommits.sort((a, b) => new Date(b.commit.committer.date) - new Date(a.commit.committer.date));
+                  console.log(`Widened fetch found ${uniqueCommits.length} commits across ${featureBranches.length} feature branches.`);
+                }
+
                 if (uniqueCommits.length === 0) {
-                  console.log('No commits found in feature branches in the last 30 days.');
+                  console.log('No commits found in feature branches, even after widening past the requested window.');
                   const emptyMetrics = [];
                   const summary = {
                     total_commits: 0,
                     branches_analyzed: featureBranches.map(b => b.name),
                     branch_commit_counts: branchCommitCounts,
+                    // The actual span covered is never reported here because there is none --
+                    // no commits were found even after widening. window_requested_since and
+                    // window_widened are still reported so the issue body can say honestly
+                    // what was tried (code-quality-metrics-3s0).
+                    analyzed_span_start: null,
+                    analyzed_span_end: null,
+                    window_requested_since: since,
+                    window_widened: windowWidened,
                     large_commits_pct: "0.00",
                     sprawling_commits_pct: "0.00",
                     test_coverage_rate: "0.00",
@@ -215,6 +277,14 @@ jobs:
                 const ratioStats = computeStatistics(ratios, timestamps);
                 const velocity = computeVelocity(metrics.map(m => m.date));
 
+                // The actual span the analyzed commits cover, never the requested window or
+                // "today" -- mirrors local-code-metrics.js's analyzed_span_start/end
+                // (code-quality-metrics-g10) so a widened run states honestly what it found
+                // rather than repeating the requested boundary (code-quality-metrics-3s0).
+                const sortedDates = metrics.map(m => m.date).slice().sort();
+                const analyzedSpanStart = sortedDates[0];
+                const analyzedSpanEnd = sortedDates[sortedDates.length - 1];
+
                 const qualityCount = metrics.filter(m => m.message_quality).length;
                 const msgQualityPct = metrics.length > 0
                   ? ((qualityCount / metrics.length) * 100).toFixed(2)
@@ -229,6 +299,10 @@ jobs:
                 const summary = {
                   total_commits: metrics.length,
                   filtered_from: uniqueCommits.length,
+                  analyzed_span_start: analyzedSpanStart,
+                  analyzed_span_end: analyzedSpanEnd,
+                  window_requested_since: since,
+                  window_widened: windowWidened,
                   branches_analyzed: featureBranches.map(b => b.name),
                   branch_commit_counts: branchCommitCounts,
                   large_commits_pct: largePct.toFixed(2),
@@ -323,10 +397,20 @@ jobs:
             const archetype = summary.dora_archetype || 'mixed-signals';
             const archetypeDesc = archetypeDescriptions[archetype] || '';
 
+            // States the span actually covered, never the requested "last N days" boundary
+            // (code-quality-metrics-3s0): a weekly issue claiming a fixed lookback while
+            // reporting commits from months outside it would be worse than the recurring
+            // no-activity issue this widening replaces.
+            const periodLine = summary.analyzed_span_start
+              ? (summary.window_widened
+                  ? `**Period:** ${summary.analyzed_span_start} to ${summary.analyzed_span_end} (requested since ${summary.window_requested_since} returned no commits; widened to the newest commits available instead)`
+                  : `**Period:** ${summary.analyzed_span_start} to ${summary.analyzed_span_end} (requested since ${summary.window_requested_since})`)
+              : `**Period:** No commits found since ${summary.window_requested_since}, even after widening to the newest commits available`;
+
             const bodyLines = [
               '## Weekly Code Metrics Report',
               '',
-              `**Period:** Last 30 days`,
+              periodLine,
               `**Commits Analyzed:** ${summary.total_commits}`,
               `**Branches Analyzed:** ${summary.branches_analyzed?.join(', ') || 'N/A'}`,
               '',
