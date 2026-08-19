@@ -4261,6 +4261,627 @@
       "era": "current",
       "population": "squash-merge",
       "notes": "Kept rather than deleted per this file's append-only convention."
+    },
+    {
+      "repo": "emberjs/ember.js",
+      "url": "https://github.com/emberjs/ember.js",
+      "language": "JavaScript",
+      "why_reference": "Same reference as the existing granular observations of this repo: GitHub 'Merge pull request' workflow with true two-parent merge commits; individual commits keep their own authors and messages rather than being squashed. Measured here during its own initial-build phase instead of a maintenance-era window (code-quality-metrics-4cv).",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "7102ef02a0821da106aebeb2de772babab36087c",
+      "window": {
+        "since": null,
+        "actual_span": "2011-04-30 to 2011-05-04 (HEAD-anchored newest-50 fetch after `git checkout -B main 7102ef0`, pinned so the pin's total rev-list --count is exactly 50, guaranteeing the fetch reaches the repository's own root)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 36.0,
+        "sprawling_commits_pct": 18.0,
+        "test_coverage_rate": 26.0,
+        "test_isolation_rate": 8.0,
+        "uncovered_prod_rate": 22.0,
+        "message_quality_pct": 34.0,
+        "avg_lines_changed": 847.92,
+        "p90_lines_changed": 1560.3000000000002,
+        "p90_files_changed": 12.400000000000006,
+        "net_additions_ratio_median": 0.5174418604651163,
+        "duplication_pct": 0
+      },
+      "dora_archetype": "foundational-challenges",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 3
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "notes": "repository_root_commit_count is 3: this single-branch clone's history contains three zero-parent commits reachable from main (a history graft/unrelated-histories merge later in ember's life), and the earliest of the three (24f801c6, 2011-04-30) is the one this window's root commit count and analyzed_span_start trace to."
+    },
+    {
+      "repo": "curl/curl",
+      "url": "https://github.com/curl/curl",
+      "language": "C",
+      "why_reference": "Same reference as the existing granular observation of this repo: rebase-and-land trunk workflow, maintainers commit each reviewed change individually. Measured here during its own initial-build phase instead of a maintenance-era window (code-quality-metrics-4cv).",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "325238708fe3d50a7c1c4508f3af9209ba132330",
+      "window": {
+        "since": null,
+        "actual_span": "1999-12-29 to 2000-02-15 (HEAD-anchored newest-50 fetch after `git checkout -B master 3252387`, pinned so the pin's total rev-list --count is exactly 50, guaranteeing the fetch reaches the repository's own root)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 28.0,
+        "sprawling_commits_pct": 10.0,
+        "test_coverage_rate": 0.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 28.0,
+        "message_quality_pct": 34.0,
+        "avg_lines_changed": 1010.94,
+        "p90_lines_changed": 940.8000000000001,
+        "p90_files_changed": 4.200000000000003,
+        "net_additions_ratio_median": 0.05692803437164339,
+        "duplication_pct": 11.863853849499781
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "notes": "Root commit ('Initial revision', 1999-12-29) is curl's earliest commit tracked in git; curl's project itself predates this (first release 1996) but its git-tracked history begins here."
+    },
+    {
+      "repo": "django/django",
+      "url": "https://github.com/django/django",
+      "language": "Python",
+      "why_reference": "Same reference as the existing granular observation of this repo: rebase-and-land trunk workflow, ticket-tracked commit messages, no PR-merge mechanism visible in the history. Measured here during its own initial-build phase instead of a maintenance-era window (code-quality-metrics-4cv), but see exclusion_reason: the detector could not confirm the window reaches the root.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "158b54380e1b320023970b0f324ccc1a5c62aa5a",
+      "window": {
+        "since": null,
+        "actual_span": "2005-07-13 to 2005-07-15 by fetch (git log --max-count=50 on the pinned ref reached all 50 commits including the root, verified directly: `git rev-list --count` of the pin is exactly 50 and the root sha is the 50th-oldest entry in `git log --max-count=50`). The tool's own analyzed set, however, is 49 commits and excludes the root -- see exclusion_reason."
+      },
+      "commits_analyzed": 49,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 22.45,
+        "sprawling_commits_pct": 12.24,
+        "test_coverage_rate": 2.04,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 20.41,
+        "message_quality_pct": 20.41,
+        "avg_lines_changed": 403.29,
+        "p90_lines_changed": 210.80000000000013,
+        "p90_files_changed": 7,
+        "net_additions_ratio_median": 0.14285714285714285,
+        "duplication_pct": 0.1951941845594669
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "established",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": false,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": false,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "exclusion_reason": "DETECTOR DEFECT (code-quality-metrics-4cv finding, not this observation's fault): django's repository root (d6ded0e9, 'Created basic repository structure', an empty SVN-import artifact with zero files changed -- verified via `git show --stat`/`--name-status`, both empty) produces an empty `git show --numstat` output. lib/git.js's analyzeCommit treats an empty statsOutput identically to a git-command failure (`if (!statsOutput) return null;`), so the root commit is silently dropped from the analyzed set even though `git log --max-count=50` on the pinned ref did fetch it as one of the 50. This makes windowIncludesRepositoryRoot evaluate false and project_lifecycle read 'established' for a window that structurally reached the root. Out of scope to fix here (lib/git.js is not in this task's scope); kept as evidence of a real disagreement between intent and detection, per code-quality-metrics-4cv's consistency check. A window intended as django's greenfield practice cannot currently self-report initial-build without a lib/git.js fix distinguishing 'empty commit' from 'measurement failure'."
+    },
+    {
+      "repo": "postgres/postgres",
+      "url": "https://github.com/postgres/postgres",
+      "language": "C",
+      "why_reference": "Same reference as the existing granular observation of this repo: mailing-list patch-review workflow, no GitHub PR mechanism at all. Measured here during its own initial-build phase instead of a maintenance-era window (code-quality-metrics-4cv).",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "668aa24fc495a142fdf2ac12b32d849a04b21dc0",
+      "window": {
+        "since": null,
+        "actual_span": "1996-07-09 to 1996-07-23 (HEAD-anchored newest-50 fetch after `git checkout -B master 668aa24`, pinned so the pin's total rev-list --count is exactly 50, guaranteeing the fetch reaches the repository's own root)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 22.0,
+        "sprawling_commits_pct": 18.0,
+        "test_coverage_rate": 4.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 20.0,
+        "message_quality_pct": 82.0,
+        "avg_lines_changed": 4974.44,
+        "p90_lines_changed": 276.8000000000003,
+        "p90_files_changed": 9.200000000000003,
+        "net_additions_ratio_median": 0.455026455026455,
+        "duplication_pct": 5.01232864317061
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "notes": "Root commit ('Postgres95 1.01 Distribution - Virgin Sources', 1996-07-09) is a bulk import of an already-existing codebase, illustrating the scaffolding/import bias the brownfield-only-lifecycle reservation names directly (avg_lines_changed 4974.44 over this window is dominated by that kind of commit)."
+    },
+    {
+      "repo": "nodejs/node",
+      "url": "https://github.com/nodejs/node",
+      "language": "JavaScript/C++",
+      "why_reference": "Same reference as the existing granular observation of this repo: rebase-and-land trunk workflow with PR-URL trailers, no squash, no merge commits. Measured here during its own initial-build phase instead of a maintenance-era window (code-quality-metrics-4cv).",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "c5183738388e8e5cbfcac7deccec1d960389ae9d",
+      "window": {
+        "since": null,
+        "actual_span": "2009-02-16 to 2009-04-03 (HEAD-anchored newest-50 fetch after `git checkout -B main c518373`, pinned so the pin's total rev-list --count is exactly 50, guaranteeing the fetch reaches the repository's own root)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 40.0,
+        "sprawling_commits_pct": 20.0,
+        "test_coverage_rate": 12.0,
+        "test_isolation_rate": 2.0,
+        "uncovered_prod_rate": 38.0,
+        "message_quality_pct": 18.0,
+        "avg_lines_changed": 722.12,
+        "p90_lines_changed": 484.7000000000001,
+        "p90_files_changed": 7,
+        "net_additions_ratio_median": 0.35892857142857143,
+        "duplication_pct": 0
+      },
+      "dora_archetype": "foundational-challenges",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "notes": "Root commit ('add dependencies', 2009-02-16) is node's earliest commit; this window is the fastest-moving of the three founder-era baselines that did not need a bulk-import root (46-day span vs curl's 48 and postgres's 14, against ember's 4 and django's 2)."
+    },
+    {
+      "repo": "stride-nyc/remote_retro",
+      "url": "local repository (not on GitHub at the time of this measurement; cloned from /Users/kenjudy/Projects/remote_retro)",
+      "language": "Ruby/Elixir/JavaScript",
+      "why_reference": "Modern-era greenfield counterpart to the six historical baselines (code-quality-metrics-4cv): a real project whose first commit (2015-07-17) sits in the GitHub-native, post-2008 tooling era the historical baselines' own founding predates, so a historical-only greenfield set would re-collapse the era/lifecycle confound the brownfield-only-lifecycle reservation names.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "ba8bc5cce81cda0047eec5c95c5e4096aa489997",
+      "window": {
+        "since": null,
+        "actual_span": "2015-07-17 to 2015-12-14 (HEAD-anchored fetch after `git checkout -B master ba8bc5c`, pinned to the last commit within roughly six months of the repository's first commit; total rev-list --count from the pin is 18, all reachable commits, well under MAX_COMMITS so every one of them is analyzed)."
+      },
+      "commits_analyzed": 18,
+      "filtered_from": 18,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 16.67,
+        "sprawling_commits_pct": 5.56,
+        "test_coverage_rate": 5.56,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 11.11,
+        "message_quality_pct": 16.67,
+        "avg_lines_changed": 248.17,
+        "p90_lines_changed": 927.4000000000005,
+        "p90_files_changed": 5,
+        "net_additions_ratio_median": 0.10795454545454546,
+        "duplication_pct": 0
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "modern",
+      "population": "greenfield-modern",
+      "notes": "Only 18 commits total in this repository's whole first six months (a solo/small-team early-stage project), well under the 50-commit windows every other observation in this file rests on. duplication_pct (0%) rests on only 3 jscpd sources / 150 total lines scanned -- an extremely small denominator; see the report's discussion of whether greenfield duplication_pct is stable enough to band at all."
+    },
+    {
+      "repo": "stride-nyc/dotnetdependencytracer",
+      "url": "local repository (not on GitHub at the time of this measurement; cloned from /Users/kenjudy/Projects/dotnetdependencytracer)",
+      "language": "C#",
+      "why_reference": "Modern-era greenfield counterpart to the six historical baselines (code-quality-metrics-4cv): first commit 2024-06-13, in the current AI-assisted-tooling era. See CLAUDE.md's own note on this repository's committed bin/obj build output for a caveat that applies to this window too.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular, but only at LOW confidence (pr_reference_share 0, squash_committer_share 0.02, merge_commit_count 0): one committer name out of the sampled set carried a squash-flavoured identity, which lowers confidence without flipping the verdict (the same non-decisive role this signal plays for nodejs/node's own maintenance-era observations).",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "adcf8c8835e73962079a3b89d25261289f7da8f6",
+      "window": {
+        "since": null,
+        "actual_span": "2024-06-13 to 2024-07-01 (HEAD-anchored newest-50 fetch after `git checkout -B main adcf8c8`, pinned so the pin's total rev-list --count is exactly 50, guaranteeing the fetch reaches the repository's own root)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 58.0,
+        "sprawling_commits_pct": 56.0,
+        "test_coverage_rate": 74.0,
+        "test_isolation_rate": 2.0,
+        "uncovered_prod_rate": 12.0,
+        "message_quality_pct": 40.0,
+        "avg_lines_changed": 1574.36,
+        "p90_lines_changed": 1056.2000000000003,
+        "p90_files_changed": 13.100000000000001,
+        "net_additions_ratio_median": 0.3695068173754372,
+        "duplication_pct": 1.759020618556701
+      },
+      "dora_archetype": "legacy-bottleneck",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "low",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0.02,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "modern",
+      "population": "greenfield-modern",
+      "notes": "Only 18 real days of history (2024-06-13 to 2024-07-01) produced 50 analyzable commits -- the fastest pace of any window in this set except django's and ember's. large_commits_pct (58%) and sprawling_commits_pct (56%) are the highest in the whole greenfield set and match CLAUDE.md's documented finding for this repository: 789 of 1972 tracked paths are committed bin/ and obj/ build output, and ANALYSIS_IGNORE_PATTERNS was left at its empty default for this measurement (out of scope to change per-repo config here), so this window's size-shaped metrics likely carry some of that inflation rather than being pure hand-written-code churn."
+    },
+    {
+      "repo": "kenjudy/73V",
+      "url": "local repository (cloned from /Users/kenjudy/Projects/73V)",
+      "language": "JavaScript/TypeScript",
+      "why_reference": "Modern-era greenfield counterpart to the six historical baselines (code-quality-metrics-4cv): repository root dated 2022-01-26. See exclusion_reason: the repository's real development did not begin until roughly three years after this root commit, so a root-anchored window is not the six-month greenfield window it was intended to be.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, merge_commit_count 7 -- true two-parent merges are direct evidence for granular per the rule's case 3) despite a squash_committer_share of 0.67, which the rule treats as non-decisive on its own.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "9eec0c23357c4fcf01094cc227b8e46f796b805d",
+      "window": {
+        "since": null,
+        "actual_span": "2022-01-26 to 2025-01-30 -- see exclusion_reason for why this three-year span is not a six-month window despite the pin being chosen the same way as every other observation in this set (pin's total rev-list --count is exactly 50)."
+      },
+      "commits_analyzed": 42,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 14.29,
+        "sprawling_commits_pct": 4.76,
+        "test_coverage_rate": 0.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 14.29,
+        "message_quality_pct": 2.38,
+        "avg_lines_changed": 258.57,
+        "p90_lines_changed": 133.79999999999998,
+        "p90_files_changed": 4.699999999999996,
+        "net_additions_ratio_median": 0.3333333333333333,
+        "duplication_pct": 0
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0.6666666666666666,
+        "merge_commit_count": 7
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": false,
+      "era": "modern",
+      "population": "greenfield-modern",
+      "exclusion_reason": "REAL-WORLD ANOMALY, not a tool defect (code-quality-metrics-4cv finding): this repository's second-ever commit by author date is dated 2025-01-24 -- roughly three years after the root commit (2022-01-26, 'Initial commit', a non-empty 123-line/2-file commit, so this is not the same empty-commit defect found in django's observation). The repository was evidently created and then left dormant before real development began. Because windowIncludesRepositoryRoot only checks whether the pinned window's analyzed set includes the structural root -- which it does here, since the root is the sole ancestor of every later commit regardless of the calendar gap -- project_lifecycle self-reports 'initial-build' even though analyzed_span_start/end (2022-01-26 to 2025-01-30) span three years for what is nominally a 50-commit window. This technically passes the consistency check the task asked for (detector and intent agree that the window includes the root) while still not being a usable six-month greenfield window: 49 of the 50 fetched commits (42 analyzed after merge-commit filtering) actually fall within a single week in January 2025, not spread across the nominal span. See the sibling 'kenjudy/73V (post-dormancy comparison)' observation for the corrected window, and the report's discussion of the opposite-direction disagreement it produces."
+    },
+    {
+      "repo": "kenjudy/73V (post-dormancy comparison)",
+      "url": "local repository (cloned from /Users/kenjudy/Projects/73V)",
+      "language": "JavaScript/TypeScript",
+      "why_reference": "Supplementary measurement, not an independent reference: the same repository as the sibling 'kenjudy/73V' observation above, pinned 50 commits further forward so the window falls entirely within the real development burst that began 2025-01-24, skipping the three-year-old dormant root. Recorded to document the opposite-direction disagreement code-quality-metrics-4cv's consistency check was asked to surface, not to stand as its own greenfield reference.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, merge_commit_count 19).",
+      "measured_at": "2026-08-19",
+      "tool_commit": "bb6e7349799af1075e1d4c5a64c1a5059fa9e762",
+      "repo_head": "287edf7ed7e7eec425d12923a8eac41d1d7c7530",
+      "window": {
+        "since": null,
+        "actual_span": "2025-01-29 to 2025-01-31 (pin moved to the 100th commit overall by author date, so the HEAD-anchored newest-50 fetch selects commits 51-100 -- entirely inside the real development burst, entirely excluding the 2022 root)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 16.0,
+        "sprawling_commits_pct": 4.0,
+        "test_coverage_rate": 2.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 14.0,
+        "message_quality_pct": 2.0,
+        "avg_lines_changed": 424.3,
+        "p90_lines_changed": 409.90000000000003,
+        "p90_files_changed": 5,
+        "net_additions_ratio_median": 0.26666666666666666,
+        "duplication_pct": 0
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "established",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": false,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0.5432098765432098,
+        "merge_commit_count": 19
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": false,
+      "era": "modern",
+      "population": "greenfield-modern",
+      "exclusion_reason": "SUPPLEMENTARY / DISAGREEMENT-DOCUMENTING, not a candidate for derivation: this window is, by every practical measure, genuinely early practice (the first week of 73V's real development, roughly one week after the burst began), which is exactly what this reference set intends to capture. But because the repository's structural root sits three years earlier and is not among these 50 analyzed commits, project_lifecycle self-reports 'established' rather than 'initial-build' -- the opposite-direction disagreement from django's: here the window IS what was intended as greenfield, but the detector does not confirm it, because the root-inclusion check has no notion of a dormancy gap. Recorded so this disagreement is visible rather than silently resolved either way; the metrics broadly agree in shape with the sibling root-anchored observation above (16% vs 14.29% large commits, 4% vs 4.76% sprawling), which is some evidence the underlying practice being measured is the same regardless of which window is used, even though only one of the two satisfies the tool's own root-inclusion rule."
     }
   ],
   "reservations": [
@@ -4296,9 +4917,9 @@
     },
     {
       "id": "brownfield-only-lifecycle",
-      "severity": "high",
-      "concern": "Every window measures maintenance-era work on a decades-old codebase. No reference repository was measured during an initial build phase, and the tool has no notion of project lifecycle. Note this is a separate axis from era: era distinguishes pre-AI (2019-2020) from current calendar time, while this concerns where a project sits in its own life, and every observation in both eras is brownfield. This narrows the greenfield item already listed under narrow-population to a specific, directional defect: several metrics are biased against greenfield by construction, not merely uncalibrated for it. LARGE_COMMITS_PCT is the clearest case that still carries a verdict. Hattori and Lanza found large commits are disproportionately forward engineering while bug fixes are the smallest commits (EVOL 2008, Section 5.2), and initial build additionally carries scaffolding, vendored dependencies and generated files. P90_LINES_CHANGED inherits the same bias for the same reason. DUPLICATION_PCT is third, on arithmetic rather than published evidence: it divides duplicated lines by total lines, so a young codebase with a small denominator swings on a few blocks. The sharpest illustration is a metric that no longer carries a band: net_additions_ratio_median maps onto Nagappan and Ball's M7, which they defined to detect exactly this, 'In feature development the lines churned is much greater than the lines deleted, so a high value of M7 indicates new feature development' (ICSE 2005, Section 4). It is now reported without a verdict, so it can no longer produce a false alarm, but it remains a reason to read the reported figure with lifecycle in mind. Test co-change is a further candidate, since scaffolding often lands before a test suite exists, but no source was found for it and it is reasoning rather than evidence.",
-      "implication": "A greenfield project in its build phase will read as drifting on several banded metrics while doing nothing wrong, and the direction of every bias is the same: toward a worse verdict. The bands support 'no worse than these six mature projects during maintenance' and should not be applied to an initial build until a greenfield reference set exists. This also qualifies the external comparison recorded for P90_LINES_CHANGED: Kolassa's p90 of 261 pools full project histories across roughly 11,000 projects and therefore includes initial build phases, so it is a mixed-lifecycle population being compared against a brownfield-only band, not a like-for-like check."
+      "severity": "medium",
+      "concern": "Every window measures maintenance-era work on a decades-old codebase. No reference repository was measured during an initial build phase, and the tool has no notion of project lifecycle. Note this is a separate axis from era: era distinguishes pre-AI (2019-2020) from current calendar time, while this concerns where a project sits in its own life, and every observation in both eras is brownfield. This narrows the greenfield item already listed under narrow-population to a specific, directional defect: several metrics are biased against greenfield by construction, not merely uncalibrated for it. LARGE_COMMITS_PCT is the clearest case that still carries a verdict. Hattori and Lanza found large commits are disproportionately forward engineering while bug fixes are the smallest commits (EVOL 2008, Section 5.2), and initial build additionally carries scaffolding, vendored dependencies and generated files. P90_LINES_CHANGED inherits the same bias for the same reason. DUPLICATION_PCT is third, on arithmetic rather than published evidence: it divides duplicated lines by total lines, so a young codebase with a small denominator swings on a few blocks. The sharpest illustration is a metric that no longer carries a band: net_additions_ratio_median maps onto Nagappan and Ball's M7, which they defined to detect exactly this, 'In feature development the lines churned is much greater than the lines deleted, so a high value of M7 indicates new feature development' (ICSE 2005, Section 4). It is now reported without a verdict, so it can no longer produce a false alarm, but it remains a reason to read the reported figure with lifecycle in mind. Test co-change is a further candidate, since scaffolding often lands before a test suite exists, but no source was found for it and it is reasoning rather than evidence. Partially addressed (code-quality-metrics-4cv): a greenfield reference set now exists, split into two population values that must never be pooled with each other or with the granular default (population: \"greenfield-historical\" -- each of emberjs/ember.js, curl/curl, postgres/postgres and nodejs/node measured during its own first ~50 commits; population: \"greenfield-modern\" -- stride-nyc/remote_retro and stride-nyc/dotnetdependencytracer measured during their own first several months -- so era and lifecycle stay separate axes rather than the greenfield set re-collapsing them the way a historical-only greenfield sample would). This downgrades the severity from high to medium, the same way granular-history-only and pre-ai-baseline were downgraded once their own remedies were measured, but does not retire it: of the nine repositories targeted, only 4 of 6 historical baselines and 2 of 3 modern repositories produced a usable observation. git/git could not be measured in the environment this measurement ran in. django/django's repository root is an empty SVN-import artifact that a lib/git.js defect (analyzeCommit treats an empty diff identically to a git-command failure) silently drops from the analyzed set, so its window cannot self-report initial-build despite structurally reaching the root. kenjudy/73V's repository root sits roughly three years before its real development began, so its root-anchored window passes the structural root-inclusion check while still not being a genuine six-month window. No band from either new population has been adopted into lib/thresholds.js; see calibration/README.md's Greenfield reference set section for the full derivation table, the historical/modern comparison, and whether greenfield duplication_pct is stable enough to band at all.",
+      "implication": "A greenfield project in its build phase will read as drifting on several banded metrics while doing nothing wrong, and the direction of every bias is the same: toward a worse verdict. The bands support 'no worse than these six mature projects during maintenance' and should not be applied to an initial build until a greenfield reference set exists. This also qualifies the external comparison recorded for P90_LINES_CHANGED: Kolassa's p90 of 261 pools full project histories across roughly 11,000 projects and therefore includes initial build phases, so it is a mixed-lifecycle population being compared against a brownfield-only band, not a like-for-like check. A greenfield project can now be measured against derive-bands.js's own greenfield-historical or greenfield-modern proposal (once one is reviewed and adopted) instead of only being told 'no worse than these six mature projects during maintenance' -- but both new populations are thinner than even the squash-merge set (4 and 2 usable repositories respectively, one non-repeating window per repository), so any band adopted from them should be treated as more provisional than the granular default's already-qualified bands, not less."
     },
     {
       "id": "two-windows-per-repo",

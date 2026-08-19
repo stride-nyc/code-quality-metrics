@@ -159,6 +159,24 @@ describe('selectByPopulation', () => {
       { repo: 'repoC', population: 'squash-merge' }
     ]);
   });
+
+  // code-quality-metrics-4cv: the greenfield reference set needs its own population values
+  // (greenfield-historical, greenfield-modern) so they can be derived without pooling against
+  // the granular default, the same way squash-merge already does. Rather than hardcoding a
+  // third literal branch, selectByPopulation generalizes to any named population string: a
+  // value that is not 'granular' is matched by exact equality against observation.population,
+  // and 'squash-merge' becomes the first instance of that general rule rather than a special
+  // case, so this test also guards that the two prior tests above keep passing unchanged.
+  it('returns only observations matching an arbitrary named population when population is neither granular nor squash-merge', () => {
+    const observations = [
+      { repo: 'repoA' },
+      { repo: 'repoB', population: 'squash-merge' },
+      { repo: 'repoC', population: 'greenfield-historical' }
+    ];
+    expect(selectByPopulation(observations, 'greenfield-historical')).toEqual([
+      { repo: 'repoC', population: 'greenfield-historical' }
+    ]);
+  });
 });
 
 // Mirrors calibration/derive-bands.js's own rounding rule, so this test file does not
