@@ -526,6 +526,16 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('>Test coverage</p>');
   });
 
+  // code-quality-metrics-4er: "prod" is an abbreviation the reader has no reason to know.
+  it('labels the uncovered-prod tile without the unexplained "prod" abbreviation', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const uncoveredCard = cards.find(card => card.includes('>Uncovered production</p>'));
+
+    expect(uncoveredCard).toBeDefined();
+    expect(html).not.toContain('>Uncovered prod</p>');
+  });
+
   it('omits a threshold description for informational entries with no numeric boundary', () => {
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
