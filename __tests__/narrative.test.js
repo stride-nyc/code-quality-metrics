@@ -319,4 +319,50 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // code-quality-metrics-ll1 follow-up item 3: the original fabrication report's third claim
+  // was that the model wrote "a test_first_indicator of true" -- a field name that was real at
+  // report-generation time but had since been renamed to test_prod_cochange_commit (see the
+  // issue's own CORRECTION note). The number check can never catch this class of defect,
+  // because a snake_case identifier is not a number; it needs its own check. entry.key values
+  // are internal identifiers a reader has no use for -- entry.label is what a reader should see
+  // -- so any bullet quoting one verbatim is always wrong, independent of whether the digits (if
+  // any) elsewhere in the same bullet are correct.
+  test("rejects a bullet that quotes a payload entry's internal key verbatim instead of its label", () => {
+    const payload = [{
+      key: 'test_prod_cochange_commit',
+      label: 'Test coverage',
+      value: '55',
+      direction: 'higher-is-better',
+      status: 'good',
+      healthyBoundary: '23',
+      criticalBoundary: null
+    }];
+    const bullets = ['Positive: The report shows a test_prod_cochange_commit of true, indicating healthy co-change practice.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/test_prod_cochange_commit/);
+  });
+
+  // GUARD, not a called-shot RED: proves the check fires on the metric's own key, not on any
+  // snake_case-looking substring a bullet happens to contain -- an unrelated key from a
+  // different entry must not cause a false rejection.
+  test('does not reject a bullet that mentions no internal key at all, only labels and numbers', () => {
+    const payload = [{
+      key: 'test_prod_cochange_commit',
+      label: 'Test coverage',
+      value: '55',
+      direction: 'higher-is-better',
+      status: 'good',
+      healthyBoundary: '23',
+      criticalBoundary: null
+    }];
+    const bullets = ['Positive: Test coverage sits at 55, comfortably above the healthy boundary of 23.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
