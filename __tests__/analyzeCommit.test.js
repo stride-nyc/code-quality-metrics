@@ -69,6 +69,25 @@ describe('analyzeCommit', () => {
   });
 
   // --- exception cases ---
+  // Distinguishes an actually failed git invocation from the merely-empty-commit case
+  // above: the parent-count check succeeds (single parent, not a merge) but the numstat
+  // command itself throws. Both must still return null, but the warning text must say
+  // the command failed rather than "No stats found", which describes the empty-commit
+  // symptom, not this cause (code-quality-metrics-p4c).
+  test('warns that git show --numstat failed, using wording distinct from the empty-commit case, when the numstat command throws', () => {
+    execSync.mockImplementation(command => {
+      if (typeof command === 'string' && command.includes('%P')) {
+        return 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+      }
+      throw new Error('fatal: bad object');
+    });
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result).toBeNull();
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('git show --numstat failed'));
+  });
+
   test('returns null when execSync throws', () => {
     execSync.mockImplementation(() => { throw new Error('not a git repo'); });
     expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH)).toBeNull();
