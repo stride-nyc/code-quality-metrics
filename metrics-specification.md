@@ -1368,8 +1368,19 @@ only a generated-output check can, so one now runs on every call:
 - `buildNarrativePayload(catalog)` is what is actually sent to the model, not
   the raw catalog. It strips `concern`, `hasGauge` and `tier` (rendering/sort
   internals a reader should never see quoted), rounds `value`,
-  `healthyBoundary` and `criticalBoundary` through the same `formatValue`
-  the report's own cards use (`lib/report-template.js`), attaches each
+  `healthyBoundary` and `criticalBoundary` to two significant figures
+  (`narrativeValue`, code-quality-metrics-5qn) -- deliberately not the same
+  rounding the report's own cards use (`formatValue`, two fixed decimal
+  places, `lib/report-template.js`): a rate or line count drawn from a
+  45-commit sample does not support "62.22%" or "578.5 lines" (both real
+  quoted examples), so a value at that scale collapses to a round number the
+  way a reader would say it aloud (62.22 -> 62, 578.5 -> 580). A value that
+  already has two significant figures or fewer -- a ratio like
+  `net_additions_ratio_median`'s 0.2, or its own 0.63/0.79 boundaries -- is
+  left untouched, with no separate magnitude check needed: rounding an
+  already-short number to two significant figures reproduces it exactly,
+  unlike rounding to a fixed number of decimal places, which would collapse
+  a value below 1 toward zero. `buildNarrativePayload` also attaches each
   entry's `lib/metric-descriptions.js` prose, and marks `verdict: 'none'` on
   an entry only when BOTH its `direction` is `'informational'` or `'special'`
   AND its `status` has not reached `'warning'`/`'critical'` this run
@@ -1454,6 +1465,32 @@ validation rejects it, the Findings section falls back to the same plain
 templated bullets (`fallbackFindings` in `lib/report-template.js`): the top
 three critical/warning catalog entries, rendered as
 `"<label>: <value> (<status>)"`.
+
+**Readability (code-quality-metrics-5qn).** Passing validation is necessary
+but not sufficient -- a bullet can cite every number correctly and still be
+unreadable to someone who has not seen this tool before. Real generated
+prose, read before this change, showed five specific problems: jargon never
+explained ("p90", "the upper tail", "sprawling"), two decimal places on a
+rate from a 45-commit sample ("62.22%"), a "healthy boundary of N" restated
+in nearly every bullet, a sentence that opens with the metric name and number
+before saying what either means, and no bullet ever stating what "healthy"
+actually means. `NARRATIVE_SYSTEM_PROMPT` now instructs the model, in
+priority order: lead with the consequence rather than the metric name;
+explain "p90" the first time it appears, reusing each entry's own
+`description.measures` wording rather than inventing new phrasing; state the
+healthy/critical comparison where it earns its place rather than in nearly
+every bullet; say once, not repeatedly, that "healthy"/"critical" describe a
+position among six benchmark repositories rather than a validated threshold;
+and never present an entry the payload marked `verdict: 'none'` as a Concern,
+even as supporting color in a sentence about a real one. A final rule caps
+all four: none of this is license to sound more certain than the data
+supports -- rounding a number or explaining a term in plain words must never
+add confidence the catalog itself does not carry. Prompt wording is not
+unit-testable the way `buildNarrativePayload`'s shape and `validateNarrative`'s
+rejection behavior are; this file records the intent, and the rejection rate
+measured across real repository runs (unchanged or improved, never worse, is
+the bar) is what confirms the prompt change did not trade readability for
+fabrication.
 
 ---
 
