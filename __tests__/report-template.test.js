@@ -646,6 +646,23 @@ describe('renderReportHtml', () => {
     expect(section.toLowerCase()).not.toContain('not measurable');
   });
 
+  it('states Layer 1 did not run, with no "ran", "no static duplicates found", or "not measurable" claim, when layers_run.static is false', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 0,
+      static_duplicates: [],
+      semantic_findings: [],
+      layers_run: { static: false, semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).toContain('did not run');
+    expect(section).not.toContain('Layer 1 (static) ran');
+    expect(section).not.toContain('No static duplicates found');
+    expect(section.toLowerCase()).not.toContain('not measurable');
+  });
+
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
     const html = renderReportHtml(fixtureArgs());
     expect(html).not.toContain('Duplicate Code');
