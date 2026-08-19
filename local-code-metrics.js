@@ -230,6 +230,7 @@ async function collectLocalMetrics(options = {}) {
   // workflowType and branchesToAnalyze default to the feature-branch path; the
   // no-feature-branches fallback below overrides both for repos whose history
   // lives on main (trunk workflow), instead of returning early.
+  /** @type {'trunk'|'feature_branch'} */
   let workflowType = 'feature_branch';
   let branchesToAnalyze = allBranches;
 
@@ -348,10 +349,7 @@ async function collectLocalMetrics(options = {}) {
   const committerLog = runGitCommand(`git log --no-merges --since="${sinceStr}" --pretty=format:"%cn" ${historyRefs}`);
   const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
   const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
-  // Undetermined defaults to squashed, not unknown: squash-merge-delete is the more common
-  // workflow, and asserting a verdict against bands that don't apply is a worse error than
-  // withholding one that would have been valid (code-quality-metrics-bnq's notes).
-  const detectedForWithholding = detectedGranularity.value === 'unknown' ? 'squashed' : detectedGranularity.value;
+  const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
   const historyGranularity = options.history ?? detectedForWithholding;
 
   // Analyze commits in detail

@@ -435,6 +435,42 @@ describe('collectLocalMetrics — successful run', () => {
     });
   });
 
+  test('wires resolveHistoryGranularityForWithholding into the pipeline: a feature-branch sample with a low-confidence squashed detection resolves history_granularity to granular while preserving the raw detected value (code-quality-metrics-drv)', async () => {
+    // A feature-branch sample (workflow_type: feature_branch, the default branch
+    // setup in this describe block's beforeEach) where one of three commits
+    // carries a trailing PR reference: pr_reference_share 1/3, below the 0.5
+    // threshold, so detectHistoryGranularity alone reports squashed/low. This
+    // mirrors the measured remote_retro trigger (1 of 29 commits) that used to
+    // silence every commit-unit verdict for the whole repository -- commits
+    // unique to an unmerged feature branch are granular by construction,
+    // whatever one subject line says.
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-15T10:00:00Z|Dev|feat: dev container (#660)`,
+      `${SHA_B}|2024-01-14T10:00:00Z|Dev|feat: change one`,
+      `${SHA_C}|2024-01-13T10:00:00Z|Dev|feat: change two`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',   // git branch
+      gitLog,          // git log feature/x — three commits, one PR-referenced
+      NUMSTAT, NUMSTAT, NUMSTAT // git show numstat, one per commit
+    );
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.workflow_type).toBe('feature_branch');
+    expect(summary.history_granularity_detected).toBe('squashed');
+    expect(summary.history_granularity_confidence).toBe('low');
+    expect(summary.history_granularity).toBe('granular');
+  });
+
   test('a --history override forces history_granularity, recording both the override and what detection actually found', async () => {
     // Detection alone would say squashed (majority PR-referenced subjects); the
     // override forces granular for this invocation without changing what detection
