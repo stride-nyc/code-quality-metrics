@@ -434,6 +434,77 @@ describe('buildMetricCatalog with duplicates', () => {
   });
 });
 
+describe('buildMetricCatalog with an unsupported-language duplication scan (code-quality-metrics-tjn)', () => {
+  it('reports duplication_density_pct as informational "Not measurable", naming the extensions found, instead of omitting it', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      statistics: null,
+      static_duplicates: [],
+      unsupported_extensions: ['.ex', '.exs']
+    }));
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density).toBeDefined();
+    expect(density.value).toBe('Not measurable');
+    expect(density.status).toBe('neutral');
+    expect(density.hasGauge).toBe(false);
+    expect(density.concern).toBe(-Infinity);
+    expect(density.healthyBoundary).toBeNull();
+    expect(density.criticalBoundary).toBeNull();
+    expect(density.descriptiveNote).toContain('.ex');
+    expect(density.descriptiveNote).toContain('.exs');
+  });
+
+  it('says the measurement does not exist for this language, not merely that the band is inapplicable', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      statistics: null,
+      static_duplicates: [],
+      unsupported_extensions: ['.ex', '.exs']
+    }));
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    // The band was derived from C, JavaScript, Python and Go repositories; for a
+    // language jscpd cannot parse there is no measurement to hold a verdict at all,
+    // which is a stronger and different claim than "the band does not apply here".
+    expect(density.descriptiveNote).toMatch(/jscpd/i);
+    expect(density.descriptiveNote.toLowerCase()).toContain('does not exist');
+  });
+
+  it('omits duplication_lines and duplication_clones (there is no per-file data to show) while still rendering duplication_density_pct', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      statistics: null,
+      static_duplicates: [],
+      unsupported_extensions: ['.ex', '.exs']
+    }));
+
+    expect(entries.find(e => e.key === 'duplication_lines')).toBeUndefined();
+    expect(entries.find(e => e.key === 'duplication_clones')).toBeUndefined();
+    expect(entries.find(e => e.key === 'duplication_density_pct')).toBeDefined();
+  });
+
+  it('[guard] leaves the normal statistics-driven density gauge intact when unsupported_extensions is absent', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(true);
+    expect(density.descriptiveNote).toBeUndefined();
+  });
+
+  it('[guard] a genuine zero-source measurement (no unsupported_extensions field) still renders as a normal gauge, not informational', () => {
+    // Distinguishes lib/duplicate.js's own genuine-zero case (every scanned file supported
+    // but none met the min-lines/min-tokens floor) from the unsupported-language case: only
+    // the presence of unsupported_extensions should switch this tile to informational.
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
+      statistics: { clones: 0, duplicatedLines: 0, duplicatedTokens: 0, lines: 0, tokens: 0, sources: 0, percentage: 0, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
+    }));
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(true);
+    expect(density.value).toBe(0);
+    expect(density.status).toBe('good');
+    expect(density.descriptiveNote).toBeUndefined();
+  });
+});
+
 describe('buildMetricCatalog with a class B config override (code-quality-metrics-wcj)', () => {
   it('withholds the duplication_density_pct verdict when summary.config_sources.class_b_overridden is true', () => {
     const summary = fullSummary({

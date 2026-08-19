@@ -2,7 +2,9 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload, validateNarrative } = require('../lib/narrative');
+const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
+const { CONFIG } = require('../lib/config');
 
 function fixtureSummary(overrides) {
   return Object.assign({
@@ -46,10 +48,13 @@ describe('generateFindingsNarrative: client provided', () => {
     return { messages: { create: mockCreate } };
   }
 
+  // Golden path (test list item a): every number cited below (55, 40) appears in the fixture
+  // catalog at that exact precision, so validateNarrative must let this prose through
+  // unchanged rather than rejecting it.
   test("returns grouped bullets parsed from Claude's structured JSON response", async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
-      positive_findings: ['Test coverage sits at 55.00, comfortably healthy.'],
+      positive_findings: ['Test coverage sits at 55, comfortably healthy.'],
       concerns: ['Large commits are at 40, which is critical.'],
       recommended_actions: ['Split large commits into smaller reviewable units.']
     });
@@ -57,7 +62,7 @@ describe('generateFindingsNarrative: client provided', () => {
     const result = await generateFindingsNarrative(client, catalog, []);
 
     expect(result).toEqual([
-      'Positive: Test coverage sits at 55.00, comfortably healthy.',
+      'Positive: Test coverage sits at 55, comfortably healthy.',
       'Concern: Large commits are at 40, which is critical.',
       'Recommended action: Split large commits into smaller reviewable units.'
     ]);
@@ -78,6 +83,25 @@ describe('generateFindingsNarrative: client provided', () => {
 
     logSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  test('falls back to fallbackFindings, with a visible rejection notice, when the narrative fails validation', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const client = makeClient({
+      positive_findings: [],
+      concerns: ['Large commits sit at 999%, which is critical.'],
+      recommended_actions: []
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(result[0]).toMatch(/narrative rejected/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
+    expect(logSpy).toHaveBeenCalledTimes(1);
+    expect(logSpy.mock.calls[0][0]).toMatch(/999/);
+
+    logSpy.mockRestore();
   });
 
   // GUARD, not a called-shot RED: written after the try/catch already added
@@ -129,5 +153,384 @@ describe('generateFindingsNarrative: client provided', () => {
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();
+  });
+});
+
+describe('narrative output budget', () => {
+  // code-quality-metrics-ll1 follow-up item 1: measured against a real fresh run (a scratch
+  // clone of this repo, current schema, METRIC_DESCRIPTIONS included) with 10 live API calls
+  // sending the full catalog-with-descriptions payload plus 10 real top commits: 0/10 responses
+  // were truncated at the old 1024 cap, but output usage ranged from 609 to 855 tokens -- up to
+  // 83% of that budget already, with no headroom for a more verbose response. A second batch of
+  // 8 calls against an older, smaller catalog (no top commits) used 630-766 tokens against the
+  // same cap. Neither batch reproduced an actual truncation, but the margin was thin enough that
+  // one is plausible under normal response-length variance, consistent with the ticket's report
+  // of frequent parse failures. Mirrors the assertion style already used for the comparable
+  // AI_DUPLICATE_MAX_OUTPUT_TOKENS budget in __tests__/claudeAnalysis.test.js: the cap only
+  // manifests API-side, so there is no local observable for "the response was not cut off" --
+  // asserting the request parameter is what is testable.
+  test('requests enough output tokens to hold a complete three-group findings response', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, []);
+
+    expect(create.mock.calls[0][0].max_tokens).toBeGreaterThanOrEqual(4096);
+
+    logSpy.mockRestore();
+  });
+
+  test('reads the output token cap from CONFIG.NARRATIVE_MAX_OUTPUT_TOKENS rather than a second hardcoded literal', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, []);
+
+    expect(create.mock.calls[0][0].max_tokens).toBe(CONFIG.NARRATIVE_MAX_OUTPUT_TOKENS);
+
+    logSpy.mockRestore();
+  });
+});
+
+describe('buildNarrativePayload', () => {
+  test('strips concern, hasGauge and tier from every entry', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const sprawling = payload.find(entry => entry.key === 'sprawling_commits_pct');
+
+    expect(sprawling.concern).toBeUndefined();
+    expect(sprawling.hasGauge).toBeUndefined();
+    expect(sprawling.tier).toBeUndefined();
+  });
+
+  // GUARD, not a called-shot RED: the rounding this asserts was already added in the
+  // previous cycle's implementation (formatValue is applied to value/healthyBoundary/
+  // criticalBoundary in the same edit that stripped concern/hasGauge/tier), so this test
+  // was green on arrival. Kept as its own case, separate from the field-stripping test
+  // above, because it pins the specific measured defect (code-quality-metrics-ll1's
+  // 0.4108463434675432) rather than relying on the other test to cover it incidentally.
+  test('rounds a long floating-point value the same way the report cards do', () => {
+    const catalog = buildMetricCatalog(fixtureSummary(), {
+      statistics: { percentage: 0.4108463434675432, duplicatedLines: 15, lines: 3651, clones: 1 }
+    });
+    const payload = buildNarrativePayload(catalog);
+    const duplication = payload.find(entry => entry.key === 'duplication_density_pct');
+
+    expect(JSON.stringify(payload)).not.toContain('0.4108463434675432');
+    expect(duplication.value).toBe('0.41');
+  });
+
+  test("includes the metric's own explanatory prose from METRIC_DESCRIPTIONS", () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const sprawling = payload.find(entry => entry.key === 'sprawling_commits_pct');
+
+    expect(sprawling.description.measures).toBe(METRIC_DESCRIPTIONS.sprawling_commits_pct.measures);
+  });
+
+  test('marks an informational entry as carrying no verdict, and leaves a scored entry unmarked', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const messageQuality = payload.find(entry => entry.key === 'message_quality_pct');
+    const sprawling = payload.find(entry => entry.key === 'sprawling_commits_pct');
+
+    expect(messageQuality.direction).toBe('informational');
+    expect(messageQuality.verdict).toBe('none');
+    expect(sprawling.verdict).toBeUndefined();
+  });
+
+  // code-quality-metrics-ll1 follow-up item 4: test_isolation_rate (lib/report.js) carries
+  // direction: 'special' and status: 'good'/'neutral' -- it can never legitimately be a
+  // "Concern" (lib/report.js never assigns it 'warning' or 'critical'), but the marking
+  // condition above only checked direction === 'informational', so it fell through unmarked
+  // and could still be quoted as a Concern without validateNarrative's informational-label
+  // check ever seeing it.
+  test("marks a special-direction entry (test_isolation_rate) as carrying no verdict, matching informational", () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const testIsolation = payload.find(entry => entry.key === 'test_isolation_rate');
+
+    expect(testIsolation.direction).toBe('special');
+    expect(testIsolation.verdict).toBe('none');
+  });
+});
+
+describe('validateNarrative', () => {
+  // This is the measured defect from code-quality-metrics-ll1: the report generated against
+  // flight-info-spike claimed "well below the healthy boundary of 6%" when the catalog's real
+  // healthyBoundary for duplication_density_pct was 2 -- 6 appeared nowhere in the data. This
+  // fixture reproduces that exact shape (real healthyBoundary 2, prose claiming 6) rather than
+  // an arbitrary mismatch.
+  test('rejects a bullet citing a healthy boundary the payload does not hold', () => {
+    const payload = [{
+      key: 'duplication_density_pct',
+      label: 'Duplication density',
+      value: '0.41',
+      direction: 'higher-is-worse',
+      status: 'good',
+      healthyBoundary: '2',
+      criticalBoundary: '2.5'
+    }];
+    const bullets = ['Positive: Duplication density is 0.41%, well below the healthy boundary of 6%.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/6/);
+  });
+
+  // GUARD, not a called-shot RED: validateNarrative already exists from the cycle above; this
+  // pins a second measured defect (the concern sentinel, -11.178307313064913, quoted as if it
+  // were a reader-facing score) rather than exercising new production code. concern is no
+  // longer in the payload at all (buildNarrativePayload strips it), so any concern-shaped
+  // number the model still cites necessarily fails the same "not in payload" check as test g.
+  // Mutation-proven: reverting validateNarrative's number check to `return { valid: true,
+  // reason: null }` (as in the prior cycle's manual check) makes this fail the same way.
+  test('rejects a bullet citing a concern score, an internal sentinel absent from the payload', () => {
+    const payload = [{
+      key: 'duplication_density_pct',
+      label: 'Duplication density',
+      value: '0.41',
+      direction: 'higher-is-worse',
+      status: 'good',
+      healthyBoundary: '2',
+      criticalBoundary: '2.5'
+    }];
+    const bullets = ['Positive: Duplication density is 0.41%, with a concern score of -11.178307313064913.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/-11\.178307313064913/);
+  });
+
+  // GUARD, not a called-shot RED: pins the third measured defect (message_quality_pct, an
+  // informational entry, restored to a verdict under "Concern"). The bullet below cites only
+  // the number 20, which IS present in the payload (value: '20') -- deliberately, so this
+  // fails (if it fails) only via the informational-as-Concern check, never via the number
+  // check test g/h already cover. An earlier draft of this test used "1 in 5 commits" phrasing
+  // and passed even with the informational check fully disabled, caught instead by the number
+  // check on the stray "1" and "5" -- exactly the vacuous-green trap the ticket warns about.
+  // Verified by mutation: with the informationalLabels block removed, this fails with
+  // "Expected: false, Received: true" while the number-check tests above still pass.
+  test('rejects a Concern bullet naming a metric the payload marked verdict: none', () => {
+    const payload = [{
+      key: 'message_quality_pct',
+      label: 'Message quality',
+      value: '20',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Message quality stands at 20%, which this tool does not score.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/message quality/i);
+  });
+
+  // Found running a real scratchpad repro against flight-info-spike (code-quality-metrics-ll1's
+  // "verify the defect yourself" step), not from the test list: duplication_lines' value is a
+  // composite string ("15 / 3651", built from statistics.duplicatedLines/lines in lib/report.js),
+  // not a bare numeral. A model correctly citing either embedded number was being rejected as
+  // fabricated. Real production output: 'Positive: Duplication density stands at 0.41%, ... with
+  // only 1 clone block and 15 duplicated lines across 3651 scanned ...' -> rejected with
+  // 'cites "15", which does not appear in the metric catalog or top-commit payload'.
+  test('accepts a number embedded in a composite string value, not only a whole-string numeral', () => {
+    const payload = [{
+      key: 'duplication_lines',
+      label: 'Duplicated lines',
+      value: '15 / 3651',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Positive: 15 duplicated lines were found across 3651 scanned lines.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-ll1 follow-up item 3: the original fabrication report's third claim
+  // was that the model wrote "a test_first_indicator of true" -- a field name that was real at
+  // report-generation time but had since been renamed to test_prod_cochange_commit (see the
+  // issue's own CORRECTION note). The number check can never catch this class of defect,
+  // because a snake_case identifier is not a number; it needs its own check. entry.key values
+  // are internal identifiers a reader has no use for -- entry.label is what a reader should see
+  // -- so any bullet quoting one verbatim is always wrong, independent of whether the digits (if
+  // any) elsewhere in the same bullet are correct.
+  test("rejects a bullet that quotes a payload entry's internal key verbatim instead of its label", () => {
+    const payload = [{
+      key: 'test_prod_cochange_commit',
+      label: 'Test coverage',
+      value: '55',
+      direction: 'higher-is-better',
+      status: 'good',
+      healthyBoundary: '23',
+      criticalBoundary: null
+    }];
+    const bullets = ['Positive: The report shows a test_prod_cochange_commit of true, indicating healthy co-change practice.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/test_prod_cochange_commit/);
+  });
+
+  // GUARD, not a called-shot RED: proves the check fires on the metric's own key, not on any
+  // snake_case-looking substring a bullet happens to contain -- an unrelated key from a
+  // different entry must not cause a false rejection.
+  test('does not reject a bullet that mentions no internal key at all, only labels and numbers', () => {
+    const payload = [{
+      key: 'test_prod_cochange_commit',
+      label: 'Test coverage',
+      value: '55',
+      direction: 'higher-is-better',
+      status: 'good',
+      healthyBoundary: '23',
+      criticalBoundary: null
+    }];
+    const bullets = ['Positive: Test coverage sits at 55, comfortably above the healthy boundary of 23.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-ll1 follow-up item 2: the original report's second claim was a real
+  // value (18) mislabeled as a "healthy boundary" when 18 was p90_files_changed's own value and
+  // 8 was its actual healthy boundary. A presence-only check passes this, because 18 genuinely
+  // appears in the payload -- just not in the role the model claimed. This checks the role a
+  // number is given: when a bullet names a specific metric (by label) and attributes a number to
+  // that metric's "healthy boundary", the number must match THAT metric's own healthyBoundary
+  // field, not merely appear anywhere in the payload (e.g. as the same metric's value, or
+  // another metric's boundary).
+  test("rejects a bullet that cites a metric's own value as though it were its healthy boundary", () => {
+    const payload = [{
+      key: 'p90_files_changed',
+      label: 'Files changed, p90',
+      value: '18',
+      direction: 'higher-is-worse',
+      status: 'warning',
+      healthyBoundary: '8',
+      criticalBoundary: null
+    }];
+    const bullets = ['Concern: Files changed, p90 sits at 18, above the healthy boundary of 18.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/18/);
+  });
+
+  // GUARD, not a called-shot RED: proves the check does not fire when the cited boundary
+  // matches the correct field for the named metric -- a bullet correctly quoting its own
+  // healthyBoundary must still pass, even though the metric's value (18) is a different number
+  // present elsewhere in the same payload.
+  test('does not reject a bullet that correctly cites its own healthy boundary', () => {
+    const payload = [{
+      key: 'p90_files_changed',
+      label: 'Files changed, p90',
+      value: '18',
+      direction: 'higher-is-worse',
+      status: 'warning',
+      healthyBoundary: '8',
+      criticalBoundary: null
+    }];
+    const bullets = ['Concern: Files changed, p90 sits at 18, above the healthy boundary of 8.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // Found running generate-drift-report.js against a fresh scratch clone of this repo (ll1's
+  // own "verify by running" step, after implementing the item-2 check above), not from a
+  // written test list: real production output was 'Positive: Commit size at the 90th
+  // percentile is 164.9 lines, below the healthy boundary of 260, so even the routinely large
+  // commits stay within a readable range.' -- a correct citation of p90_lines_changed's real
+  // healthyBoundary (260). The label-match step picked "Large commits" as the sole candidate,
+  // because that label's text happens to appear later in the sentence as ordinary English (the
+  // routinely large commits), not as a reference to the large_commits_pct metric, and then
+  // compared 260 against Large commits' own healthyBoundary (19) instead -- a false rejection of
+  // correct prose. p90_lines_changed's own label ("Commit size, p90") never literally appears in
+  // the bullet at all (the model paraphrased it), so no entry actually names itself before the
+  // phrase; the fix is to only credit a label match that appears BEFORE the boundary phrase it
+  // is being checked against, mirroring how the phrase is normally written (name the metric,
+  // then state its boundary), rather than anywhere in the bullet.
+  test('does not attribute a boundary phrase to a metric whose label only appears after the phrase, as incidental English rather than a citation', () => {
+    const payload = [
+      { key: 'p90_lines_changed', label: 'Commit size, p90', value: '164.9', direction: 'higher-is-worse', status: 'good', healthyBoundary: '260', criticalBoundary: null },
+      { key: 'large_commits_pct', label: 'Large commits', value: '15', direction: 'higher-is-worse', status: 'good', healthyBoundary: '19', criticalBoundary: '30' }
+    ];
+    const bullets = ['Positive: Commit size at the 90th percentile is 164.9 lines, below the healthy boundary of 260, so even the routinely large commits stay within a readable range.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-6gu: found running generate-drift-report.js against a fresh scratch
+  // clone of this repo (code-quality-metrics-ll1's "verify by running" step). Real generated
+  // bullet: 'Concern: Duplication density is 6.27%, above the healthy boundary of 2%, with 924
+  // duplicated lines out of 14740 scanned and 24 separate clone blocks identified across the
+  // codebase.' This correctly names duplication_density_pct (a real scored metric) as the
+  // bullet's subject and states its real healthy boundary. The informational-label check
+  // rejected it anyway because duplication_lines' label "Duplicated lines" appears later in the
+  // same sentence as supporting detail ("924 duplicated lines"), and the check only tested
+  // whether an informational label appeared ANYWHERE in a Concern bullet, never whether the
+  // bullet was actually about it. The fix: skip the informational check entirely for a bullet
+  // that also names a real (verdict-bearing) scored metric by label -- a bullet naming a scored
+  // metric is about that metric, and an informational label found elsewhere in it is supporting
+  // detail, not the bullet's subject.
+  test('does not reject a Concern bullet naming a real scored metric, when an informational label appears later only as supporting detail', () => {
+    const payload = [
+      { key: 'duplication_density_pct', label: 'Duplication density', value: '6.27', direction: 'higher-is-worse', status: 'critical', healthyBoundary: '2', criticalBoundary: '6.5' },
+      { key: 'duplication_lines', label: 'Duplicated lines', value: '924 / 14740', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'duplication_clones', label: 'Clone count', value: 24, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ['Concern: Duplication density is 6.27%, above the healthy boundary of 2%, with 924 duplicated lines out of 14740 scanned and 24 separate clone blocks identified across the codebase.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-38h: found in the same session. Real generated bullet: '...with 924
+  // duplicated lines out of 14,803 scanned...'. The payload's duplication_lines value is the
+  // composite string "924 / 14803" (no thousands separator). NUMBER_PATTERN requires a digit run
+  // bordered by non-word characters on both sides, so "14,803" tokenizes as two separate numbers,
+  // "14" and "803", neither of which appears standalone in the payload -- the correctly-cited
+  // figure is rejected as fabricated because of formatting, not content. Uses "Positive:" rather
+  // than "Concern:" to isolate the number-matching defect from the informational-label check
+  // above (mirrors the existing composite-string-value test's structure).
+  test('canonicalizes a thousands-separator comma before comparing a cited number against the payload', () => {
+    const payload = [{
+      key: 'duplication_lines',
+      label: 'Duplicated lines',
+      value: '924 / 14803',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Positive: 924 duplicated lines were found across 14,803 scanned lines.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
   });
 });

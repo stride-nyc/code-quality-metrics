@@ -232,6 +232,61 @@ citation is out of this document's scope and is tracked on that issue.
 
 ## Metrics Reference
 
+### History Granularity and Commit-Unit Withholding
+
+Nine of the metrics below treat one `git log` entry as one discrete unit of developer work:
+large and sprawling commit percentage, the three-way test-coverage rates, p90 lines/files
+changed, and the commit-size and velocity trends. Their healthy/critical bands (see Threshold
+Provenance above) were calibrated against repositories with granular history, where that
+assumption holds. It does not hold when a commit is actually a squashed pull request: one
+"commit" then represents an unknown number of developer edits, so the band no longer describes
+the thing being measured. `lib/report.js`'s `buildMetricCatalog` withholds the verdict on all
+nine (`WITHHELD_WHEN_SQUASHED_KEYS`) rather than compare a whole-PR-sized value against a
+per-commit band — the value is still reported, with `hasGauge: false`, `status: 'neutral'`, and a
+`descriptiveNote` explaining why, but no healthy/warning/critical call is made.
+
+**Detection.** `detectHistoryGranularity` (`lib/git.js`) estimates `history_granularity_detected`
+from three signals over the analyzed commits: the share of subjects carrying a trailing
+`(#N)`/`(GH-N)` pull-request reference, the share of committer names matching a squash-bot
+pattern, and whether true merge commits are present (evidence *for* granular history, e.g. a
+merge-button workflow, not a squash signal). A majority PR-reference share (`>= 0.5`) reports
+`squashed` at `high` confidence; any smaller non-zero share reports `squashed` at `low`
+confidence; zero share reports `granular`; zero commits reports `unknown`.
+
+**Withholding rule (code-quality-metrics-drv).** `history_granularity_detected` alone is not
+what withholding acts on. `resolveHistoryGranularityForWithholding` (`local-code-metrics.js`)
+first checks `workflow_type`: commits unique to an unmerged feature branch
+(`workflow_type: feature_branch`) are granular by construction — they have not been squashed
+into anything yet — so the gate resolves `history_granularity` to `granular` for withholding
+purposes regardless of what the raw PR-reference signal found. Only when `workflow_type` is
+`trunk` does the raw detected value (falling back to `squashed` when `unknown`, preserving the
+code-quality-metrics-bnq default: asserting a verdict against bands that don't apply is a worse
+error than withholding one that would have been valid) reach the withholding decision. A
+`--history granular|squashed` CLI flag overrides the resolved value for one invocation and is
+recorded separately as `history_granularity_override`; `history_granularity_detected` always
+reports what detection itself found, unaffected by either the gate or the override.
+
+This matters because a single PR-referenced commit subject among many otherwise-granular
+feature-branch commits — a cherry-pick from a squash-merged main, a rebase onto a squash-merging
+main, or a developer simply typing an issue number — used to be enough to classify the entire
+sample `squashed` and silence every one of the nine verdicts. Measured before this fix: 1 of 29
+commits (3.4%) on remote_retro, 7 of 50 (14.0%) on daloopa, both `workflow_type: feature_branch`.
+
+**Three candidate rules were considered; the workflow_type gate was chosen.** Acting on
+confidence alone (withhold on `squashed`/`high`, caveat on `squashed`/`low`) does not resolve the
+underlying category error: a low-confidence squashed *label* on feature-branch commits is still
+describing something that structurally cannot be a squashed pull request, whatever confidence is
+attached to the label. Raising the zero-share threshold above zero would need an invented, unvalidated
+number with no natural boundary to derive it from. Gating on `workflow_type` needed no such
+number: it rests on a structural fact (an unmerged branch's commits cannot yet be the squashed
+result of a merge) rather than a tuned threshold. The trade this rule makes deliberately: a
+feature-branch repository where every commit subject happens to reference a PR (for reasons
+unrelated to squashing, e.g. an issue-tracker convention) now shows verdicts too, where the old
+rule withheld them — a consequence of the same structural fact, not a special case carved out for
+it. Trunk analysis of a repository that genuinely squash-merges is unaffected: those commits on
+main really are whole pull requests, and the gate does not apply outside
+`workflow_type: feature_branch`.
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -747,6 +802,40 @@ The count varies between runs on identical input, so it is reported as a finding
 confident zero: `layers_run.semantic` distinguishes "ran and found none" from "never ran" so a
 failed or skipped call cannot be read as a clean result.
 
+**Withholding when Layer 1's language is one jscpd cannot parse (code-quality-metrics-tjn)**:
+jscpd does not recognize every language. Verified live against `remote_retro` (an Elixir
+repository): two 30-line, obviously-duplicated `.ex` files still report
+`statistics.total.sources: 0` at the configured `DUPLICATE_MIN_LINES`/`DUPLICATE_MIN_TOKENS`, and
+still do at 1/1 -- jscpd exits 0 and writes a report shaped exactly like a genuine "0%
+duplication, nothing to flag" measurement, because it recognized none of the scanned files at
+all. Passing that through unchanged would report a language jscpd cannot parse as a confidently
+healthy 0%, the same silent-zero shape this project has already fixed once for a truncated
+semantic response (`code-quality-metrics-all`) and for squashed history's commit-unit verdicts.
+
+`statistics.total.sources === 0` alone does not distinguish "unsupported language" from "every
+scanned file happens to fall under the configured min-lines/min-tokens floor" -- both produce the
+identical zeroed report. `runDuplicateAnalysis` (`lib/duplicate.js`) tells them apart with a
+second, cheap jscpd pass with min-lines/min-tokens relaxed to 1, run only when the real scan
+already came back at zero sources: a genuinely supported language registers at least one source
+at that floor; an unsupported one still won't. This avoids the alternative of this project
+maintaining its own copy of jscpd's roughly 223-language support list, which would drift from
+jscpd's own list as it changes.
+
+When the probe also finds zero sources, `runDuplicateAnalysis` returns `statistics: null` and
+`unsupportedExtensions` (the distinct file extensions among the scanned files) instead of the
+zeroed statistics object. `local-code-metrics.js` carries this into
+`local_duplicate_analysis.json` as `unsupported_extensions`, and sets `layers_run.static` to
+`'unmeasured'` rather than a confident `true` -- the same tri-state convention `layers_run.semantic`
+already uses for its own failed/truncated case. `lib/report.js`'s `buildMetricCatalog` renders
+`duplication_density_pct` as informational (`value: 'Not measurable'`, `status: 'neutral'`, no
+gauge) naming the extensions found, instead of a silently omitted metric or a fabricated
+0%/healthy verdict. **This bears on the band, not only the measurement**: `DUPLICATION_PCT` was
+derived from C, JavaScript, Python and Go repositories, so for a language jscpd cannot parse, the
+band is not merely inapplicable -- the measurement itself does not exist. A genuine zero-source
+result (every scanned file *is* a supported language, just below the size floor at both the
+configured and the relaxed settings) is not affected: it has no `unsupportedExtensions` field and
+keeps its real, if trivial, `duplication_density_pct` verdict.
+
 ---
 
 ## Derived Metrics
@@ -1077,12 +1166,46 @@ Single summary object for the analysis run:
 {
   // Run metadata
   analysis_date: string,            // ISO 8601
-  analysis_period_days: number,
+  analysis_period_days: number,     // options.days ?? CONFIG.ANALYSIS_DAYS; carried for backward compat, does not by itself mean a day-based boundary was applied -- see window_requested_since
   total_commits: number,
   filtered_from: number,            // unique commits before MAX_COMMITS cap
+
+  // Analysis window (code-quality-metrics-g10): the actual span covered by the analyzed
+  // commits, never the requested window or "today". null window_requested_since means the
+  // run was HEAD-anchored from the start (no --since/--days given); a non-null value with
+  // window_widened false means the requested date boundary is exactly what was used
+  // (backward-compatible with pre-g10 behavior); window_widened true means an explicit
+  // --since/--days window returned zero commits and was widened to the newest MAX_COMMITS,
+  // ignoring the requested boundary. See CLAUDE.md's "Analysis Window" section.
+  analyzed_span_start: string,      // "YYYY-MM-DD", the oldest analyzed commit's date
+  analyzed_span_end: string,        // "YYYY-MM-DD", the newest analyzed commit's date
+  window_requested_since: string | null,
+  window_widened: boolean,
+
   workflow_type: "feature_branch" | "trunk",  // "trunk" when no feature branches exist; the default branch was analyzed directly
   branches_analyzed: string[],      // feature branches found, or [resolved default branch] when workflow_type is "trunk"
-  branch_commit_counts: Record<string, number>,
+  branch_commit_counts: Record<string, number>,  // commits fetched per branch before global selection -- in HEAD-anchored mode this saturates at MAX_COMMITS for any branch with that many commits ever, so it no longer means "how much this branch contributed"; see analyzed_branch_commit_counts for that
+
+  // Branch spread (code-quality-metrics-8sq): how many of the analyzed commits actually came
+  // from each branch, and how many distinct branches that is. A sample spread across many
+  // long-abandoned branches (measured: remote_retro, 29 across 30; dotnetdependencytracer, 50
+  // across 49) holds no signal about shipped practice. No filter is applied; this is
+  // visibility only -- see CLAUDE.md's "Branch Spread" section.
+  analyzed_branch_commit_counts: Record<string, number>,
+  branches_with_analyzed_commits: number,
+
+  // History granularity (code-quality-metrics-bnq, code-quality-metrics-drv): see "History
+  // Granularity and Commit-Unit Withholding" below for what each field means and how
+  // history_granularity is resolved from history_granularity_detected.
+  history_granularity: "granular" | "squashed",             // used to decide withholding; a --history override wins here
+  history_granularity_detected: "granular" | "squashed" | "unknown",  // detectHistoryGranularity's raw verdict, unaffected by the override or the workflow_type gate
+  history_granularity_confidence: "high" | "low",
+  history_granularity_signals: {
+    pr_reference_share: number,       // share of subjects carrying a trailing (#N)/(GH-N) reference
+    squash_committer_share: number,
+    merge_commit_count: number
+  },
+  history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
   // is the same defect class as the silent inclusion code-quality-metrics-y8j fixes.
@@ -1223,13 +1346,80 @@ The Findings section's connecting prose is the only part of the report that
 can be LLM-generated, via `lib/narrative.js`, and even then only the prose:
 the system prompt instructs the model to echo every number it references
 exactly as given, to the same precision, and never to compute, estimate, or
-restate a number differently. The narrative layer never computes or alters a
-number; it only writes sentences over metric values and top commits that
-`lib/report.js` already computed before the model ever sees them. When no
-`ANTHROPIC_API_KEY` is set, or the API call fails, or the response doesn't
-parse into usable findings, the Findings section falls back to the same
-plain templated bullets (`fallbackFindings` in `lib/report-template.js`): the
-top three critical/warning catalog entries, rendered as
+restate a number differently.
+
+A first pass at verifying this (code-quality-metrics-ll1) misread its own
+evidence: it compared a report rendered at one point in a session against
+catalog data from several hours later, after an unrelated threshold
+re-derivation and field rename had already landed in between, and concluded
+from the mismatch that the model had fabricated a duplication boundary, a
+concern score, and a field name. It had not -- every value it echoed was
+correct for the catalog state that actually produced that report; the two
+snapshots were simply never comparable. Re-measured against a single
+consistent run, three things were real: raw unrounded floats reaching the
+reader's prose (`0.4108463434675432%`), the internal `concern` sort
+sentinel (`lib/report.js`'s `computeConcern`) quoted as if it were a
+reader-facing score, and `message_quality_pct` -- an entry the catalog
+deliberately marks informational, with no healthy/critical band --
+presented under "Concern" anyway. A better-worded prompt cannot make an
+LLM's output verifiable regardless of which defect turns out to be real;
+only a generated-output check can, so one now runs on every call:
+
+- `buildNarrativePayload(catalog)` is what is actually sent to the model, not
+  the raw catalog. It strips `concern`, `hasGauge` and `tier` (rendering/sort
+  internals a reader should never see quoted), rounds `value`,
+  `healthyBoundary` and `criticalBoundary` through the same `formatValue`
+  the report's own cards use (`lib/report-template.js`), attaches each
+  entry's `lib/metric-descriptions.js` prose, and marks every entry whose
+  `direction` is `'informational'` or `'special'` (`test_isolation_rate` is
+  the only current example: it is scored `'good'`/`'neutral'`, never
+  `'warning'`/`'critical'`, so it can never legitimately be a Concern
+  either) `verdict: 'none'`. The user message also states once, up front,
+  that healthy/critical are benchmark quantiles, not validated outcome
+  thresholds (see "What a band means" above).
+- `validateNarrative(bullets, payload, topCommits)` checks the model's
+  flattened response against that same payload before it is ever returned.
+  It rejects (fails the render's narrative step, not merely warns) if any of
+  the following is true:
+  - a bullet cites a number, at whatever precision it wrote, that does not
+    appear anywhere in the catalog payload or the top-commits payload;
+  - a bullet names exactly one payload entry by label and attributes a
+    number to that metric's "healthy boundary" or "critical boundary" which
+    does not match that metric's own `healthyBoundary`/`criticalBoundary`
+    field -- catching a real value (e.g. a metric's own `value`) mislabeled
+    as its boundary, which a presence-only check cannot, since the digit is
+    genuinely present just not in that role. Deliberately narrow: it only
+    fires on that literal phrasing, tied to an unambiguous single-metric
+    label match, rather than attempting to parse what every number in open
+    prose means (code-quality-metrics-ll1 follow-up item 2);
+  - a bullet quotes one of the payload's internal `key` values verbatim
+    (e.g. `test_prod_cochange_commit`) instead of its human-readable
+    `label` -- a snake_case identifier has no legitimate reason to appear in
+    reader-facing prose (follow-up item 3);
+  - a bullet labeled "Concern" names a metric the payload marked
+    `verdict: 'none'`.
+- On rejection, `generateFindingsNarrative` logs the reason and returns the
+  same deterministic fallback described below, prefixed with a
+  `"Narrative rejected: <reason>"` bullet -- visible in the rendered report,
+  not a silently swallowed failure. A silent fallback is how the measured
+  defect went unnoticed in the first place.
+- The API call's `max_tokens` is `CONFIG.NARRATIVE_MAX_OUTPUT_TOKENS` (8192),
+  not a literal in `lib/narrative.js`. The original 1024 cap was measured,
+  not assumed, to be too tight once `lib/metric-descriptions.js` prose was
+  added to the payload: 23 live calls against two real catalogs produced 0
+  outright truncations, but output usage reached 855 of the 1024-token
+  budget (83%) on the payload carrying the full pipeline's 10 top commits --
+  thin enough that an occasional truncated, unparseable response is expected
+  under ordinary response-length variance (follow-up item 1).
+
+The narrative layer still never computes or alters a number itself; it only
+writes sentences over metric values and top commits that `lib/report.js`
+already computed before the model ever sees them. The check above verifies
+that promise held, rather than assuming it. When no `ANTHROPIC_API_KEY` is
+set, the API call fails, the response doesn't parse into usable findings, or
+validation rejects it, the Findings section falls back to the same plain
+templated bullets (`fallbackFindings` in `lib/report-template.js`): the top
+three critical/warning catalog entries, rendered as
 `"<label>: <value> (<status>)"`.
 
 ---

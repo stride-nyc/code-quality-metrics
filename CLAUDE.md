@@ -19,6 +19,47 @@ gh workflow run code-metrics.yml
 gh workflow run pr-metrics.yml
 ```
 
+### Analysis Window
+
+With no `--since`/`--days` flag, `local-code-metrics.js` is HEAD-anchored, not anchored on
+today: it takes the newest `CONFIG.MAX_COMMITS` commits (across all analyzed branches,
+merged and globally sorted, not the first commits encountered per branch) regardless of
+calendar date, then reports the actual span it found (code-quality-metrics-g10). `--since`
+and `--days` keep their prior meaning exactly: an explicit date boundary. A repository whose
+newest commit is older than a calendar window would have covered reports zero under a
+date-based default; measured on four repositories analyzed in this project, all four needed
+`--days` passed by hand at the old 30-day default (remote_retro 103 days stale, daloopa ~300,
+flight-info-spike 95, dotnetdependencytracer ~270). A HEAD-anchored default also matches the
+50-commit windows `calibration/README.md`'s bands were derived from more closely than a
+calendar range that happens to catch a handful of commits.
+
+If an explicit `--since`/`--days` window returns zero commits, the run widens automatically
+to the newest `CONFIG.MAX_COMMITS` commits, ignoring the requested boundary, rather than
+exiting for the operator to retry by hand.
+
+The actual analyzed span (the real oldest/newest commit dates, never the requested window or
+"today") is always reported: `analyzed_span_start`/`analyzed_span_end` in
+`local_metrics_summary.json`, and a masthead line in `local_drift_report.html`
+(`generate-drift-report.js`'s HTML output) stating the same span and naming a widened window
+explicitly. A report covering, say, 2025-02 to 2026-04 is never presentable as covering
+recent activity.
+
+This window applies to `local-code-metrics.js` only. `.github/workflows/code-metrics.yml` and
+`pr-metrics.yml` build their own windows against the GitHub REST API and are out of scope for
+this change; see code-quality-metrics-g10's own notes on whether they need the same treatment.
+
+### Branch Spread (code-quality-metrics-8sq)
+
+A sample can be dominated by long-abandoned, never-merged branches contributing roughly one
+commit each -- measured: remote_retro, 29 analyzed commits across 30 branches;
+dotnetdependencytracer, 50 across 49 -- which holds no signal about shipped practice, since
+nothing in an abandoned branch reached production. Rather than an invented recency filter,
+`local_metrics_summary.json` reports `analyzed_branch_commit_counts` (how many analyzed
+commits came from each branch) and `branches_with_analyzed_commits` (how many distinct
+branches that is), and the masthead states both counts together (e.g. "50 commits analyzed
+..., across 7 branches"), so a reader can see a thin spread without this toolkit asserting
+where "too thin" begins.
+
 ## Testing and Linting
 
 ```bash
@@ -93,6 +134,8 @@ distribution, and a generalized Pareto with shape above 1 has no finite mean at 
 metrics carry a band; three of those have a critical bound.
 
 Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
+
+Nine of the bands above (large/sprawling commit %, the three-way test-coverage rates, p90 lines/files changed, commit-size and velocity trend) treat one commit as one unit of work and are withheld entirely — not merely left un-banded — when the analyzed history is squashed pull requests rather than granular commits, since a whole PR sized as if it were one commit is not the thing the band was calibrated against. `history_granularity` is detected from PR-reference subjects, squash-flavored committer names, and merge-commit presence (`detectHistoryGranularity`, `lib/git.js`), but a `workflow_type: feature_branch` history always resolves to `granular` for withholding purposes regardless of that raw detection (`resolveHistoryGranularityForWithholding`, `local-code-metrics.js`): commits unique to an unmerged branch cannot yet be the squashed result of a merge, whatever a subject line says. The gate does not apply to `workflow_type: trunk`, where a genuinely squash-merging repository's main-branch commits really are whole pull requests and withholding is correct. See "History Granularity and Commit-Unit Withholding" in `metrics-specification.md` for the detection rule, the withholding rule, and why the other two candidate rules (act on confidence; raise the zero-share bar) were not chosen.
 
 Two bands have corroboration from outside this project's own six repositories, as a *position*
 rather than a *boundary*: p90 lines changed (260) against Kolassa, Riehle & Salim's published p90
