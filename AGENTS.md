@@ -324,6 +324,25 @@ For more details, see README.md and docs/QUICKSTART.md.
 
 ## Quality Gates
 
+**A green suite does not prove the work is committed.** Verify git state directly; do not infer
+it from test results. After any merge or commit you intend to report as done:
+
+```bash
+git log --oneline -1          # is HEAD what you think it is?
+git status --short            # is anything still uncommitted?
+```
+
+This is not pedantry. In one session a `git stash` run during an investigation, while a merge
+was staged, silently cleared `MERGE_HEAD` and converted the merge into ordinary working-tree
+edits. The file contents were all present, so the suite passed at the expected count and the
+work was reported as merged. Only the commit was missing, and the branch had to be rebuilt.
+`git stash` is not safe to run mid-merge; finish or abort the merge first.
+
+The same principle covers the stale-base problem above: a stale tree is internally consistent
+and its own tests pass. Test results tell you the code in the working tree is coherent. They
+tell you nothing about which commit you are on, whether it is the one you meant, or whether
+your changes are recorded anywhere durable.
+
 Run these after each implementation step, not only at the end of a session:
 
 **When renaming a field that appears in another file's JSDoc `@param` type**, update the JSDoc in the same step as the rename — do not defer to a later step. A transient typecheck failure between steps is a process violation. Run `npm run typecheck` immediately after any rename before proceeding.
