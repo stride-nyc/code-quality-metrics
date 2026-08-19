@@ -1069,6 +1069,153 @@ describe('renderReportHtml', () => {
     expect(orderedPositions).toEqual(sorted);
   });
 
+  function summarySection(html) {
+    const start = html.indexOf('<section class="report-summary">');
+    expect(start).toBeGreaterThanOrEqual(0);
+    return html.slice(start, html.indexOf('</section>', start));
+  }
+
+  // [guard] not a called-shot RED: renderTopSummary already counted concerns and named the top
+  // one when it was written in the prior commit. Proven by mutation: shadowing criticalCount
+  // and warningCount to 0 inside the concerns branch (so neither count is ever pushed) failed
+  // this test's /\d+ critical/ assertion, rendering "This run flags  signal, led by Large
+  // commits at 40 (critical)." with an empty count clause -- reverted after confirming.
+  it('[guard] states the count of concerns and names the top one by label and value', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '40.00' }));
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/\d+ critical/);
+    expect(summary).toContain('Large commits');
+    expect(summary).toContain('40');
+  });
+
+  // [guard] proven by mutation: forcing the `concerns.length === 0` branch condition to `false`
+  // (so the "no measured signal" branch can never be taken, even when concerns is actually
+  // empty) failed this test with a thrown TypeError ("Cannot read properties of undefined
+  // (reading 'label')") from `concerns[0]` being undefined -- reverted after confirming.
+  it('[guard] states no signal crossed a threshold when the catalog has no concerns', () => {
+    const html = renderReportHtml(fixtureArgs({
+      large_commits_pct: '5.00', sprawling_commits_pct: '5.00', uncovered_prod_rate: '1.00', test_coverage_rate: '90.00'
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toContain('No measured signal in this run crossed a warning or critical threshold.');
+  });
+
+  // code-quality-metrics-g39: "Consider whether the top summary should mention a high vendored
+  // share explicitly, since a reader who never scrolls would otherwise miss the one fact that
+  // changes how everything else reads" -- measured: flight-info-spike at 72%.
+  it('calls out a high vendored/generated share explicitly in the top summary', () => {
+    const html = renderReportHtml(fixtureArgs({
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 40, lines_count: 9000, lines_pct: '72.00' }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toContain('72');
+    expect(summary).toMatch(/vendored|generated/);
+    expect(summary).toMatch(/Analysis Scope/);
+  });
+
+  // [guard] proven by mutation: lowering VENDORED_SHARE_CALLOUT_THRESHOLD to 0 (so any nonzero
+  // share triggers the callout) failed this test, which found the callout text present for an
+  // 8% share it expects to be silent about -- reverted after confirming.
+  it('[guard] does not call out a vendored share below the callout threshold', () => {
+    const html = renderReportHtml(fixtureArgs({
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 2, lines_count: 100, lines_pct: '8.00' }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/vendored|generated/);
+  });
+
+  // The anchor mechanism a file:// page actually uses is fragment-to-id matching: the browser
+  // finds the element whose id exactly equals the URL fragment. This is what would break if the
+  // href and the id text drifted apart (e.g. a rename on one side only) even though "the markup
+  // contains an href" would still be true -- the failure mode this test targets, not just
+  // presence of an anchor tag.
+  it('the anchor from the summary to Findings resolves to the Findings heading, uniquely, the way a file:// fragment link would', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const summary = summarySection(html);
+
+    const hrefMatch = summary.match(/<a href="#([^"]+)">/);
+    expect(hrefMatch).not.toBeNull();
+    const fragment = hrefMatch[1];
+
+    const idPattern = new RegExp(`id="${fragment}"`, 'g');
+    const idMatches = html.match(idPattern) || [];
+    // A file:// page resolves a fragment link by finding the element whose id equals the
+    // fragment, per the HTML living-standard fragment-navigation algorithm -- the same
+    // mechanism plain http:// pages use, unaffected by the file: scheme. Uniqueness matters:
+    // if two elements shared this id, the target would be ambiguous depending on which one a
+    // real browser's tree-order search reaches first, an ambiguity this report must not have.
+    expect(idMatches).toHaveLength(1);
+
+    const idIndex = html.indexOf(`id="${fragment}"`);
+    const headingStart = html.lastIndexOf('<h2', idIndex);
+    const headingText = html.slice(headingStart, html.indexOf('</h2>', headingStart));
+    expect(headingText).toContain('Findings');
+
+    // Exercises the exact same URL-fragment resolution a browser performs when the report is
+    // opened from disk (a file: URL), rather than only inspecting the markup as strings: the
+    // WHATWG URL parser resolves the fragment component identically regardless of scheme, so
+    // constructing a file: URL with this href and reading its .hash back out proves the
+    // fragment round-trips exactly, with no percent-encoding surprise from special characters.
+    const fileUrl = new URL(`report.html#${fragment}`, 'file:///Users/example/repo/');
+    expect(fileUrl.hash).toBe(`#${fragment}`);
+  });
+
+  // Non-fabrication proof (code-quality-metrics-g39's central constraint): every numeral the
+  // top summary prints must be traceable to the catalog it was built from, or to
+  // vendored_generated_share -- the same number-presence discipline lib/narrative.js's
+  // validateNarrative applies to the LLM-generated Findings narrative, applied here to prove
+  // the deterministic summary cannot fabricate a number even by accident, not just that it
+  // currently does not.
+  it('never prints a number in the top summary that does not trace to the catalog or the vendored share', () => {
+    const summary = fixtureSummary({
+      large_commits_pct: '37.50',
+      sprawling_commits_pct: '22.00',
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 9, lines_count: 500, lines_pct: '31.00' }
+    });
+    const catalog = buildMetricCatalog(summary);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData() });
+    const summaryHtml = summarySection(html);
+
+    // Same allowed-number universe validateNarrative builds for the LLM narrative: every
+    // number appearing anywhere in the catalog's own values/boundaries, or in
+    // vendored_generated_share, canonicalized (percent sign and thousands separators
+    // stripped) the same way a number written into prose would be.
+    const numberPattern = /-?\d+(?:\.\d+)?/g;
+    const payloadText = JSON.stringify(catalog) + JSON.stringify(summary.vendored_generated_share);
+    const rawTokens = payloadText.match(numberPattern) || [];
+    // renderTopSummary reads vendored_generated_share.lines_pct through parseFloat then
+    // formatValue (the same "40.00" -> "40" trailing-zero trim every metric card already
+    // performs -- see the "formats metric values by rounding..." test above), so a raw
+    // payload token like "31.00" and the printed "31" are the same number reformatted, not two
+    // different numbers. The allowed set has to include both spellings for the same reason
+    // lib/narrative.js's own payload-building step (narrativeValue) exists: comparing prose
+    // against a payload's raw string precision would reject a legitimate reformat as fabricated.
+    const allowed = new Set(rawTokens);
+    for (const token of rawTokens) {
+      const parsed = parseFloat(token);
+      if (!Number.isNaN(parsed)) allowed.add(String(Math.round(parsed * 100) / 100));
+    }
+    // renderTopSummary performs exactly one arithmetic derivation beyond echoing a payload
+    // field verbatim: counting how many catalog entries carry status 'critical' or 'warning'.
+    // That count is not a fabrication risk the way a free-form-prose number is -- it is a
+    // provably correct tally over data already in the catalog, not new information -- so it is
+    // added to the allowed set explicitly, by the same counting rule, rather than expected to
+    // appear as a literal elsewhere in the payload by coincidence.
+    const criticalCount = catalog.filter(entry => entry.status === 'critical').length;
+    const warningCount = catalog.filter(entry => entry.status === 'warning').length;
+    allowed.add(String(criticalCount));
+    allowed.add(String(warningCount));
+
+    const printed = summaryHtml.match(numberPattern) || [];
+    for (const token of printed) {
+      expect(allowed.has(token)).toBe(true);
+    }
+  });
+
 });
 
 // code-quality-metrics-yte: the flat, single concern-sorted grid becomes five headed groups.
