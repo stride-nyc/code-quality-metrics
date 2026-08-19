@@ -481,4 +481,56 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // code-quality-metrics-6gu: found running generate-drift-report.js against a fresh scratch
+  // clone of this repo (code-quality-metrics-ll1's "verify by running" step). Real generated
+  // bullet: 'Concern: Duplication density is 6.27%, above the healthy boundary of 2%, with 924
+  // duplicated lines out of 14740 scanned and 24 separate clone blocks identified across the
+  // codebase.' This correctly names duplication_density_pct (a real scored metric) as the
+  // bullet's subject and states its real healthy boundary. The informational-label check
+  // rejected it anyway because duplication_lines' label "Duplicated lines" appears later in the
+  // same sentence as supporting detail ("924 duplicated lines"), and the check only tested
+  // whether an informational label appeared ANYWHERE in a Concern bullet, never whether the
+  // bullet was actually about it. The fix: skip the informational check entirely for a bullet
+  // that also names a real (verdict-bearing) scored metric by label -- a bullet naming a scored
+  // metric is about that metric, and an informational label found elsewhere in it is supporting
+  // detail, not the bullet's subject.
+  test('does not reject a Concern bullet naming a real scored metric, when an informational label appears later only as supporting detail', () => {
+    const payload = [
+      { key: 'duplication_density_pct', label: 'Duplication density', value: '6.27', direction: 'higher-is-worse', status: 'critical', healthyBoundary: '2', criticalBoundary: '6.5' },
+      { key: 'duplication_lines', label: 'Duplicated lines', value: '924 / 14740', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'duplication_clones', label: 'Clone count', value: 24, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ['Concern: Duplication density is 6.27%, above the healthy boundary of 2%, with 924 duplicated lines out of 14740 scanned and 24 separate clone blocks identified across the codebase.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-38h: found in the same session. Real generated bullet: '...with 924
+  // duplicated lines out of 14,803 scanned...'. The payload's duplication_lines value is the
+  // composite string "924 / 14803" (no thousands separator). NUMBER_PATTERN requires a digit run
+  // bordered by non-word characters on both sides, so "14,803" tokenizes as two separate numbers,
+  // "14" and "803", neither of which appears standalone in the payload -- the correctly-cited
+  // figure is rejected as fabricated because of formatting, not content. Uses "Positive:" rather
+  // than "Concern:" to isolate the number-matching defect from the informational-label check
+  // above (mirrors the existing composite-string-value test's structure).
+  test('canonicalizes a thousands-separator comma before comparing a cited number against the payload', () => {
+    const payload = [{
+      key: 'duplication_lines',
+      label: 'Duplicated lines',
+      value: '924 / 14803',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Positive: 924 duplicated lines were found across 14,803 scanned lines.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
