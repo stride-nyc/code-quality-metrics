@@ -307,6 +307,77 @@ rather than sitting in the masthead beside a value it does not describe. A human
 `--history` override is unaffected by this change and keeps stating what was forced and what
 detection itself found.
 
+### Project Lifecycle and Change-Size Withholding
+
+Four of the metrics above (large and sprawling commit percentage, p90 lines/files changed) and
+duplication density carry a further bias, on an axis independent of history granularity: their
+bands were calibrated against maintenance-era windows on six decades-old codebases
+(`calibration/observations.json`'s `brownfield-only-lifecycle` reservation, high severity).
+Lifecycle (greenfield vs. brownfield) and era (pre-AI vs. current) are separate axes, and only
+era is represented in the calibration data. Large commits are disproportionately forward
+engineering, and an initial build carries scaffolding, vendored dependencies and generated
+files (Hattori and Lanza, EVOL 2008) — biasing `LARGE_COMMITS_PCT` and `P90_LINES_CHANGED`
+toward a worse verdict; `DUPLICATION_PCT` is biased on arithmetic, since a small total-lines
+denominator swings on a few blocks. `P90_FILES_CHANGED` sits in the same tile group for the same
+underlying reason (an initial build's commits are unusually large and multi-file) even though
+no single cited study isolates the files-changed count the way Hattori and Lanza isolate lines.
+
+**Measured, not hypothetical.** flight-info-spike, a three-week greenfield spike (45 commits,
+2026-04-27 to 2026-05-15), was labelled `legacy-bottleneck` with 48.89% large commits and 42.22%
+sprawling commits before this change — graded against six mature projects doing maintenance.
+
+**The decision (code-quality-metrics-31w): display the value, withhold the verdict.** Hiding
+the tile was ruled out on the same evidence code-quality-metrics-tjn already established:
+duplication vanished from an Elixir report because jscpd could not parse the language, and the
+natural reading was a clean bill of health when nothing had actually been measured. `lib/report.js`'s
+`buildMetricCatalog` reuses `withholdEntry` — the same function squashed history and a class B
+config override already use — rather than adding a fourth shape. The note states that the
+bands are quantiles of maintenance-era windows on decades-old codebases and do not transfer to
+an initial build.
+
+**Detection is a structural fact, not a tuned number.** `windowIncludesRepositoryRoot`
+(`lib/git.js`) checks whether any analyzed commit's SHA is one of the repository's own root
+commit(s), found by `git rev-list --max-parents=0 --all` in `local-code-metrics.js` and compared
+against the whole analyzed set regardless of `workflow_type`. Unlike history granularity, no
+feature-branch special case is needed: a commit's SHA either is one of the repository's roots or
+it is not, independent of which ref found it — a genuinely new project bootstrapped directly on
+an unmerged branch is still detected. `local-code-metrics.js` resolves this to
+`project_lifecycle: 'initial-build' | 'established'`, reported alongside
+`project_lifecycle_signals` (`window_includes_repository_root`, `repository_root_commit_count`)
+for audit.
+
+**Why this rule over the other three candidates.** Repository age from first commit, total
+commit count, and the ratio of the window's span to the repository's whole history were all
+considered and rejected: each needs an invented age, count, or ratio boundary with no natural
+place to draw it, joining the six figures this project has already withdrawn as unsourced or
+untraceable. Whether the window includes the repository's root commit needs no such number —
+it rests on a structural fact, the same reasoning `workflow_type` already applied to history
+granularity above.
+
+**Which way this rule errs, and why that is the right way round.** Withholding every tile this
+gate touches (large/sprawling commit %, p90 lines/files changed, duplication density) costs a
+reader most of the "Change size and scope" group; asserting a verdict against bands that do not
+apply costs them a wrong one. This rule is built to almost never do the first to a real,
+established repository: `local-code-metrics.js` is HEAD-anchored by default (the newest
+`CONFIG.MAX_COMMITS`, 50, commits), so a mature repository's root commit is reachable inside the
+window only once its whole recorded history is smaller than the window itself. Measured against
+the four repositories copied for this ticket's own verification: 73V and remote_retro each carry
+3,174+ total commits, daloopa 357, dotnetdependencytracer 1,321 — all far above 50, so none of
+them trips the rule. The rule's failure mode is therefore a false negative, not a false
+positive: a greenfield window that starts partway into a still-small project's history (an
+explicit `--since` older than the repository but not old enough to reach commit zero, for
+instance) is graded normally, exactly as it was before this change. That is the pre-existing,
+already-documented bias this ticket opened against, not a new harm this rule introduces — so a
+missed greenfield window costs nothing beyond leaving today's known bias in place, while a false
+positive would cost a reader looking at a genuinely mature codebase every band on the page.
+
+**The report says plainly what it is still for.** Withholding four of six "Change size and
+scope" tiles plus duplication density leaves most of that group as ungraded numbers — honest,
+but also the point a reader asks what the report is still for. `lib/report-template.js`'s
+`renderLifecycleLine` states the answer in the masthead rather than leaving it to be inferred
+from a screen of ungraded tiles: "This report shows shape and trend for those tiles, not a
+grade."
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -1247,6 +1318,15 @@ Single summary object for the analysis run:
     merge_commit_count: number
   },
   history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
+
+  // Project lifecycle (code-quality-metrics-31w): see "Project Lifecycle and Change-Size
+  // Withholding" above. A purely structural detection -- no confidence axis and no override,
+  // unlike history_granularity above, since there is no raw guess to resolve or overrule.
+  project_lifecycle: "initial-build" | "established",
+  project_lifecycle_signals: {
+    window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict
+    repository_root_commit_count: number       // `git rev-list --max-parents=0 --all`'s count
+  },
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
   // is the same defect class as the silent inclusion code-quality-metrics-y8j fixes.
