@@ -629,6 +629,23 @@ describe('renderReportHtml', () => {
     expect(section).toContain('.exs');
   });
 
+  it('GUARD: still reports a genuine zero as "No static duplicates found" and "Layer 1 (static) ran" when layers_run.static is true (a supported language with no duplication)', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 4,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: { clones: 0, duplicatedLines: 0, duplicatedTokens: 0, lines: 900, tokens: 4200, sources: 4, percentage: 0, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 },
+      layers_run: { static: true, semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).toContain('No static duplicates found');
+    expect(section).toContain('Layer 1 (static) ran');
+    expect(section.toLowerCase()).not.toContain('not measurable');
+  });
+
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
     const html = renderReportHtml(fixtureArgs());
     expect(html).not.toContain('Duplicate Code');
