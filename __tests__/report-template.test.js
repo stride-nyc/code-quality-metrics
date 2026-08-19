@@ -609,6 +609,17 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('the strongest drift signal in the report');
   });
 
+  // code-quality-metrics-4er: large_commits_pct's description called large commits "the
+  // clearest sign of code accepted wholesale rather than reviewed" -- an unranked superlative.
+  // The direction (harder to review) is supported, but the boundary is a selectivity choice
+  // and the tail is confounded by vendoring, which this project's own calibration data hit.
+  it('describes large commits plainly, without calling them the clearest sign of anything', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('where the line falls is a selectivity choice, not a validated health boundary');
+    expect(html).not.toContain('the clearest sign of code accepted wholesale rather than reviewed');
+  });
+
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
     const duplicates = {
       files_scanned: 3,
