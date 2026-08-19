@@ -341,6 +341,22 @@ describe('renderReportHtml', () => {
     expect(bottleneck).toContain('legacy-bottleneck');
   });
 
+  // code-quality-metrics-rpw: the verdict line named its own archetype twice -- once as a
+  // "label: " prefix and again inside describeArchetypeBody's explanatory sentence ('...this
+  // toolkit's rule labels that combination "legacy-bottleneck" because...'). Redundant, not
+  // incorrect, but a single occurrence reads as clean prose. Scoped to the verdict paragraph
+  // alone (not the whole page) so a second, unrelated mention elsewhere in the report can never
+  // make this assertion pass for the wrong reason.
+  it('[guard] names the archetype label only once in the verdict line, not as a repeated prefix', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'legacy-bottleneck' }));
+    const verdictStart = html.indexOf('class="verdict"');
+    const verdictEnd = html.indexOf('</p>', verdictStart);
+    const verdict = html.slice(verdictStart, verdictEnd);
+
+    const occurrences = verdict.split('legacy-bottleneck').length - 1;
+    expect(occurrences).toBe(1);
+  });
+
   // The four dora_archetype values are boundaries this toolkit invented from
   // commit shape, not a DORA-validated classification (DORA derives its own
   // archetypes from survey data). foundational-challenges is the archetype a
