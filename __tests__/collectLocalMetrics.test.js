@@ -352,15 +352,44 @@ describe('collectLocalMetrics — early exits', () => {
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
-  test('exits with code 1 when git branch listing fails', async () => {
+  // code-quality-metrics-wzy2: `git branch -a` succeeds with empty stdout on a freshly
+  // initialised repository that has no branches yet -- there is nothing wrong with the git
+  // command. That must not be reported as the command having failed.
+  test('does not report a git failure, and continues to the trunk fallback, when git branch -a succeeds with empty output', async () => {
     mockExecSequence(
       FAKE_ROOT,    // git rev-parse --show-toplevel
       FAKE_REMOTE,  // git remote get-url origin
-      ''            // git branch → empty
+      '',           // git branch -a → succeeds, no branches exist yet
+      ''            // git log HEAD (trunk fallback) → no commits (unborn HEAD)
     );
+
+    await collectLocalMetrics();
+
+    expect(console.error).not.toHaveBeenCalledWith(expect.stringContaining('Unable to list Git branches'));
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  // [guard] proven by mutation: changing the catch block below to swallow the error (e.g.
+  // `branchesOutput = '';` instead of reporting and exiting) makes this test fail --
+  // process.exit is never called and no "Unable to list Git branches" message is printed,
+  // because the genuine failure then reads identically to the success-with-empty-output case
+  // the test above covers. Confirmed live: with that mutation applied, this test fails with
+  // "Resolved to value: undefined" instead of rejecting with 'process.exit'.
+  test('[guard] still exits with code 1 and reports the git failure when git branch -a genuinely fails', async () => {
+    execSync.mockImplementation(command => {
+      const cmd = typeof command === 'string' ? command : String(command);
+      if (cmd.includes('rev-parse --show-toplevel')) return FAKE_ROOT;
+      if (cmd.includes('remote get-url')) return FAKE_REMOTE;
+      if (cmd === 'git branch -a') {
+        throw new Error('fatal: not a git repository (or any of the parent directories)');
+      }
+      return '';
+    });
 
     await expect(collectLocalMetrics()).rejects.toThrow('process.exit');
     expect(process.exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Unable to list Git branches'));
   });
 
   test('returns without writing files when no feature branches exist', async () => {

@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // Load .env file if present — allows ANTHROPIC_API_KEY to be set without exporting to the
 // shell. Resolved relative to this script's own directory (not process.cwd()), since this
@@ -256,10 +257,24 @@ async function collectLocalMetrics(options = {}) {
   console.log('');
 
   // Get all local and remote branches except main/master
-  const branchesOutput = runGitCommand('git branch -a');
-  if (!branchesOutput) {
+  //
+  // runGitCommand collapses "the command failed" and "the command succeeded with empty
+  // stdout" into the same '' return, which is exactly the wrong thing here (code-quality-
+  // metrics-wzy2): a freshly initialised repository with no branches yet has `git branch -a`
+  // succeed with legitimately empty output, and that must not be reported as the tool being
+  // unable to list branches. execSync's own success/failure is asked directly instead,
+  // bypassing runGitCommand, the same way analyzeCommit's own numstat call does
+  // (code-quality-metrics-p4c) -- a genuinely broken git invocation still exits below, while
+  // an empty-but-successful one falls through to the no-feature-branches trunk fallback.
+  let branchesOutput;
+  try {
+    branchesOutput = execSync('git branch -a', { encoding: 'utf8' }).trim();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('❌ Unable to list Git branches');
+    console.error(`Error: ${msg}`);
     process.exit(1);
+    return;
   }
 
   const branchLines = parseBranchList(branchesOutput);
