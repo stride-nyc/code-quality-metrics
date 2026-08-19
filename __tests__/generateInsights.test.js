@@ -206,9 +206,11 @@ describe('generateInsights', () => {
   });
 
   // Regression guard for the reproduction case verified against nodejs/node and curl/curl
-  // (code-quality-metrics-tde9): commit.date is author date, while --since filters on
-  // committer date, so a healthy, correctly-reproduced window can legitimately have an
-  // analyzed span that starts BEFORE the requested --since boundary. This must never warn.
+  // (code-quality-metrics-tde9). A healthy, correctly-reproduced window can legitimately have
+  // an analyzed span that starts BEFORE the requested --since boundary -- this held under the
+  // original author-date selection (pre-#76), and remains possible under committer-date
+  // selection too (a low-velocity repository whose newest commits since the boundary still
+  // span back past it). This must never warn.
   test('does not warn when the analyzed span starts before the requested --since date', () => {
     const { warnings } = generateInsights(makeSummary({
       window_requested_since: '2026-08-01',
@@ -225,6 +227,25 @@ describe('generateInsights', () => {
       analyzed_span_end: '2026-08-16'
     }), []);
     expect(warnings.some(w => w.includes('starts') && w.includes('after'))).toBe(false);
+  });
+
+  // Regression guard (code-quality-metrics-tde9), re-verified after #76 switched commit
+  // selection from author date to committer date: reproducing the recorded nodejs/node
+  // observation (repo_head cb9bb667, --since 2026-08-01) against a real blobless clone at
+  // current HEAD now reports analyzed_span_start 2026-08-08 -- a 7-day lag purely from that
+  // repository's commit velocity exhausting MAX_COMMITS, not from contamination. Neither the
+  // span-lag nor the count-mismatch check must fire on this real, healthy run.
+  test('does not warn on the real, re-verified nodejs/node reproduction (7-day span lag, exact count match)', () => {
+    const { warnings } = generateInsights(makeSummary({
+      window_requested_since: '2026-08-01',
+      window_widened: false,
+      analyzed_span_start: '2026-08-08',
+      analyzed_span_end: '2026-08-11',
+      filtered_from: 178,
+      window_expected_commit_count: 178
+    }), []);
+    expect(warnings.some(w => w.includes('starts') && w.includes('after'))).toBe(false);
+    expect(warnings.some(w => w.includes('mismatch'))).toBe(false);
   });
 
   test('emits a warning when the analyzed span collapses to a single day', () => {
