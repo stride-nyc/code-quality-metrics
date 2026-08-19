@@ -169,16 +169,25 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/widened/i);
   });
 
-  it('renders the detected history granularity and confidence in the masthead', () => {
+  // code-quality-metrics-aoo state 1 (4 of 5 repositories analysed: 73V, remote_retro,
+  // daloopa, dotnetdependencytracer): workflow_type feature_branch settles the unit
+  // structurally regardless of what the raw detector guessed, so the line must state the
+  // resolved fact in plain words and must not pair it with the confidence of the discarded
+  // guess (the exact bug: "History: granular (low confidence)" reads as unsure about a
+  // value that was never actually in doubt).
+  it('states individual commits with no confidence hedge when workflow_type settles the unit structurally (state 1)', () => {
     const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'feature_branch',
       history_granularity: 'granular',
-      history_granularity_detected: 'granular',
-      history_granularity_confidence: 'high',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
       history_granularity_override: null
     }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
 
-    expect(html).toContain('granular');
-    expect(html).toContain('high confidence');
+    expect(line).toContain('Comparing individual commits');
+    expect(line).toContain('unmerged branches');
+    expect(line).not.toContain('confidence');
   });
 
   it('records that a human overrode the heuristic, and what the heuristic itself found, in the masthead', () => {
@@ -414,6 +423,28 @@ describe('renderReportHtml', () => {
     expect(html).toContain('12');
     expect(html).toContain('61.50');
     expect(html).toContain('**/vendor/**');
+  });
+
+  // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
+  // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
+  // Analysis Scope as provenance, so the audit trail survives even though the masthead no
+  // longer contradicts itself.
+  it('surfaces the discarded raw detection in Analysis Scope as provenance when workflow_type structurally overrode it', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'feature_branch',
+      history_granularity: 'granular',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
+      history_granularity_signals: { pr_reference_share: 0.0345, squash_committer_share: 0, merge_commit_count: 0 },
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 0, lines_count: 0, lines_pct: '0.00' }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('Detection guessed');
+    expect(scope).toContain('squashed pull requests');
+    expect(scope).toContain('unmerged branches');
   });
 
   it('omits the exclusion section entirely, without throwing, when the summary predates this feature (both fields absent)', () => {
