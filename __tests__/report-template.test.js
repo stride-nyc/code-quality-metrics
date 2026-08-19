@@ -569,6 +569,22 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('release/9');
   });
 
+  // code-quality-metrics-rpw: "Branches analyzed" here and "across N branches" in the masthead
+  // used the same word for two different sets -- this bullet lists branches_analyzed (every
+  // branch considered, measured 51 on 73V), the masthead counts
+  // branches_with_analyzed_commits (only those that contributed a commit, measured 4). Asserts
+  // both halves: the new label naming the actual set is present, and the old label implying
+  // the masthead's set is gone -- the first alone would pass even if the old, misleading label
+  // were left standing alongside it.
+  it('labels the Analysis Scope branch bullet with the set it lists, not the masthead\'s contributing-branch wording', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'release/9'] }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('Branches considered');
+    expect(scope).not.toContain('Branches analyzed:');
+  });
+
   // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
   // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
   // Analysis Scope as provenance, so the audit trail survives even though the masthead no
