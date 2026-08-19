@@ -474,7 +474,7 @@ describe('renderReportHtml', () => {
     // numeric critical boundary that does not exist.
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
-    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
 
     expect(coverageCard).toBeDefined();
     expect(coverageCard).not.toMatch(/critical (above|below) \d/);
@@ -507,11 +507,23 @@ describe('renderReportHtml', () => {
     // bands (good, warning) and no gauge-critical path at all.
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
-    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
 
     expect(coverageCard).not.toContain('gauge-critical');
     const bandCount = (coverageCard.match(/class="gauge-band /g) || []).length;
     expect(bandCount).toBe(2);
+  });
+
+  // code-quality-metrics-4er: "Test coverage" reads as line/branch coverage from a coverage
+  // tool. It is not -- it is commits that touched tests and production code together. Renaming
+  // the user-facing label only; the underlying summary field test_coverage_rate is untouched.
+  it('labels the test-coverage tile so it does not read as coverage-tool output', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
+
+    expect(coverageCard).toBeDefined();
+    expect(html).not.toContain('>Test coverage</p>');
   });
 
   it('omits a threshold description for informational entries with no numeric boundary', () => {
