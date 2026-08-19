@@ -541,6 +541,52 @@ describe('buildMetricCatalog with a class B config override (code-quality-metric
   });
 });
 
+// code-quality-metrics-yte: five fixed headings, seventeen tiles, no remainder. The mapping
+// below is copied from the issue's own table (decided with the user, not re-derived here) so
+// this test can assert membership directly against it rather than merely asserting the
+// headings exist -- a test that only checks "five headings render" proves nothing about which
+// tile sits under which one, and a test that checks the total proves nothing about any single
+// tile having the right home.
+describe('buildMetricCatalog metric groups (code-quality-metrics-yte)', () => {
+  const EXPECTED_GROUP_BY_KEY = {
+    large_commits_pct: 'Change size and scope',
+    sprawling_commits_pct: 'Change size and scope',
+    avg_lines_changed: 'Change size and scope',
+    p90_lines_changed: 'Change size and scope',
+    p90_files_changed: 'Change size and scope',
+    net_additions_ratio_median: 'Change size and scope',
+
+    duplication_density_pct: 'Duplication',
+    duplication_lines: 'Duplication',
+    duplication_clones: 'Duplication',
+    duplication_semantic_findings: 'Duplication',
+
+    test_coverage_rate: 'Test practice',
+    test_isolation_rate: 'Test practice',
+    uncovered_prod_rate: 'Test practice',
+
+    velocity_commits_per_day: 'Pace and direction',
+    commit_size_trend: 'Pace and direction',
+    velocity_trend: 'Pace and direction',
+
+    message_quality_pct: 'Commit messages'
+  };
+
+  it('assigns every one of the seventeen tiles to its documented group, with no tile left ungrouped and no group beyond the five documented headings', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    expect(entries).toHaveLength(17);
+
+    for (const [key, expectedGroup] of Object.entries(EXPECTED_GROUP_BY_KEY)) {
+      const entry = entries.find(e => e.key === key);
+      expect(entry).toBeDefined();
+      expect(entry.group).toBe(expectedGroup);
+    }
+
+    const distinctGroups = new Set(entries.map(e => e.group));
+    expect(distinctGroups).toEqual(new Set(Object.values(EXPECTED_GROUP_BY_KEY)));
+  });
+});
+
 describe('buildGaugeSvgParts', () => {
   const oracleArgs = {
     value: 51.11,
