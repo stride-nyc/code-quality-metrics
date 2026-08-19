@@ -49,4 +49,11 @@ describe('parseCliArgs', () => {
   test('accepts a valid --config value', () => {
     expect(parseCliArgs(['--config', '/tmp/shared/.codemetrics.json'])).toEqual({ config: '/tmp/shared/.codemetrics.json' });
   });
+
+  // GUARD: proven by removing the `if (!argv[i + 1]) throw` guard on the --config
+  // branch in local-code-metrics.js -- without it, options.config is silently set to
+  // undefined and the loop continues, so this test starts failing.
+  test('rejects --config given without a value', () => {
+    expect(() => parseCliArgs(['--config'])).toThrow(/--config/);
+  });
 });
