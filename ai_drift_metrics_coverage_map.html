@@ -315,8 +315,8 @@ const GIT_METRICS = [
     title:'Code review quality', sub:'Reviewer depth and count', type:'gap',
     source:'DORA measures review speed, a 3.1% increase per 25% increase in AI adoption, but not review depth.',
     cite:'DORA 2024, p. 37',
-    measured:'Not measured. Requires GitHub API data beyond commit history.',
-    connect:'Review depth is not derivable from commit history, so this stays a gap regardless of thresholds.',
+    measured:'Not measured yet. The data is not in commit history, but pr-metrics.yml already runs with GitHub API access, so reviewer count and comment depth are reachable from the workflow that posts the PR comment (<code>code-quality-metrics-5w1</code>).',
+    connect:'Unmeasured rather than unreachable: unlike incident data, the PR workflow could read this today. Any measure would ship as informational; DORA measures review speed, not depth, and no source supplies a depth boundary.',
     basis:'Not applicable.', v:'pending'
   },
 ];
