@@ -292,6 +292,25 @@ describe('renderReportHtml', () => {
     expect(html).toContain('squashed');
   });
 
+  // code-quality-metrics-bmg: the archetype verdict headlined the report, above every metric
+  // tile, classifying an entire team from four commit-shape percentages (measured absurdity:
+  // a three-week-old greenfield spike labelled legacy-bottleneck). It moves below the "Commit
+  // messages" group, in a block marked under development, and out of the masthead entirely.
+  it('moves the archetype verdict out of the masthead, into a section after Commit messages marked under development', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
+    const masthead = mastheadSection(html);
+    expect(masthead).not.toContain('class="verdict"');
+
+    const commitMessagesHeading = html.indexOf('<h2 class="metric-category-heading">Commit messages</h2>');
+    const flightLogHeading = html.indexOf('<h2>Flight Log</h2>');
+    const verdictPosition = html.indexOf('class="verdict"');
+    expect(commitMessagesHeading).toBeGreaterThanOrEqual(0);
+    expect(flightLogHeading).toBeGreaterThan(commitMessagesHeading);
+    expect(verdictPosition).toBeGreaterThan(commitMessagesHeading);
+    expect(verdictPosition).toBeLessThan(flightLogHeading);
+    expect(html).toMatch(/under development/i);
+  });
+
   it('renders a verdict line derived from summary.dora_archetype', () => {
     const harmonious = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(harmonious).toMatch(/class="verdict"/);
