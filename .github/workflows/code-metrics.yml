@@ -255,6 +255,8 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
+            const { THRESHOLDS } = require('./lib/thresholds');
             const summary = JSON.parse(fs.readFileSync('metrics_summary.json', 'utf8'));
 
             const branchActivity = Object.entries(summary.branch_commit_counts || {})
@@ -264,6 +266,21 @@ jobs:
             function statusMark(value, threshold, direction = 'below') {
               const ok = direction === 'below' ? parseFloat(value) < threshold : parseFloat(value) > threshold;
               return ok ? 'OK' : 'Warning';
+            }
+
+            // Renders a metric's calibrated band as "<healthy%, critical >critical%".
+            // Some bands are two-band (critical: null in lib/thresholds.js -- the
+            // extreme rests on a single reference repo, not two corroborating
+            // repos; see lib/thresholds.js's header comment). Formatting `critical`
+            // without this check would print "critical > null%" for those metrics.
+            function formatBand(direction, healthy, critical, unit = '%') {
+              const healthyCmp = direction === 'above' ? '>' : '<';
+              const target = `${healthyCmp}${healthy}${unit}`;
+              if (critical === null || critical === undefined) {
+                return `${target} (no critical band established)`;
+              }
+              const criticalCmp = direction === 'above' ? '<' : '>';
+              return `${target}, critical ${criticalCmp}${critical}${unit}`;
             }
 
             const archetypeDescriptions = {
@@ -287,13 +304,13 @@ jobs:
               '',
               '| Metric | Value | Target | Status |',
               '|--------|-------|--------|--------|',
-              `| Large Commits (>100 prod lines) | ${summary.large_commits_pct}% | <20% | ${statusMark(summary.large_commits_pct, 20)} |`,
-              `| Sprawling Commits (>5 files) | ${summary.sprawling_commits_pct}% | <10% | ${statusMark(summary.sprawling_commits_pct, 10)} |`,
-              `| Test Coverage (test+prod commits) | ${summary.test_coverage_rate}% | >50% | ${statusMark(summary.test_coverage_rate, 50, 'above')} |`,
-              `| Test Isolation (test-only commits) | ${summary.test_isolation_rate}% | >10% | ${statusMark(summary.test_isolation_rate, 10, 'above')} |`,
-              `| Uncovered Prod (large, no tests) | ${summary.uncovered_prod_rate}% | <10% | ${statusMark(summary.uncovered_prod_rate, 10)} |`,
-              `| Message Quality | ${summary.message_quality_pct}% | >60% | ${statusMark(summary.message_quality_pct, 60, 'above')} |`,
-              `| Net Additions Ratio (median) | ${summary.net_additions_ratio_median} | <0.50 | ${parseFloat(summary.net_additions_ratio_median) < 0.50 ? 'OK' : 'Warning'} |`,
+              `| Large Commits (>100 prod lines) | ${summary.large_commits_pct}% | ${formatBand('below', THRESHOLDS.LARGE_COMMITS_PCT.healthy, THRESHOLDS.LARGE_COMMITS_PCT.critical)} | ${statusMark(summary.large_commits_pct, THRESHOLDS.LARGE_COMMITS_PCT.healthy)} |`,
+              `| Sprawling Commits (>5 files) | ${summary.sprawling_commits_pct}% | ${formatBand('below', THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy, THRESHOLDS.SPRAWLING_COMMITS_PCT.critical)} | ${statusMark(summary.sprawling_commits_pct, THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy)} |`,
+              `| Test Coverage (test+prod commits) | ${summary.test_coverage_rate}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} | ${statusMark(summary.test_coverage_rate, THRESHOLDS.TEST_COVERAGE_RATE.healthy, 'above')} |`,
+              `| Test Isolation (test-only commits) | ${summary.test_isolation_rate}% | ${formatBand('above', THRESHOLDS.TEST_ISOLATION_RATE.positive, null)} | ${statusMark(summary.test_isolation_rate, THRESHOLDS.TEST_ISOLATION_RATE.positive, 'above')} |`,
+              `| Uncovered Prod (large, no tests) | ${summary.uncovered_prod_rate}% | ${formatBand('below', THRESHOLDS.UNCOVERED_PROD_RATE.healthy, THRESHOLDS.UNCOVERED_PROD_RATE.critical)} | ${statusMark(summary.uncovered_prod_rate, THRESHOLDS.UNCOVERED_PROD_RATE.healthy)} |`,
+              `| Message Quality | ${summary.message_quality_pct}% | no band, see spec |`,
+              `| Net Additions Ratio (median) | ${summary.net_additions_ratio_median} | no band, see spec |`,
               '',
               '### Commit Size Distribution',
               '',
@@ -318,9 +335,8 @@ jobs:
               '',
               '### Interpretation',
               '',
-              '- Target: <20% large commits, <10% sprawling commits',
-              '- Test-first discipline should remain above 50%',
-              '- Message quality above 60% indicates disciplined commit practices',
+              `- Target: <${THRESHOLDS.LARGE_COMMITS_PCT.healthy}% large commits, <${THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy}% sprawling commits`,
+              `- Test-first discipline should remain above ${THRESHOLDS.TEST_COVERAGE_RATE.healthy}%`,
               '- Large commits measured by production code only (excludes test files)',
               '- p90 > 500 lines warrants investigation of review burden',
               '',

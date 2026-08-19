@@ -1,6 +1,7 @@
 'use strict';
 
 const { generateInsights } = require('../local-code-metrics');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 /** Build a minimal summary object with overridable fields */
 function makeSummary(overrides = {}) {
@@ -48,93 +49,130 @@ describe('generateInsights', () => {
     );
     expect(warnings).toEqual([]);
     expect(recommendations).toEqual([]);
-    expect(insights).toHaveLength(3); // healthy large + healthy sprawling + strong test coverage (60% > 50)
+    expect(insights).toHaveLength(3); // healthy large + healthy sprawling + strong test coverage (60% > THRESHOLDS.TEST_COVERAGE_RATE.healthy)
   });
 
   // --- healthy thresholds produce positive insights, no warnings ---
-  test('emits healthy insight for large_commits_pct below 20', () => {
-    const { insights, warnings } = generateInsights(makeSummary({ large_commits_pct: '15.00' }), []);
+  test('emits healthy insight for large_commits_pct below healthy', () => {
+    const value = THRESHOLDS.LARGE_COMMITS_PCT.healthy - 4;
+    const { insights, warnings } = generateInsights(makeSummary({ large_commits_pct: String(value) }), []);
     expect(warnings.some(w => w.includes('large commit'))).toBe(false);
     expect(insights.some(i => i.includes('Healthy large commit rate'))).toBe(true);
   });
 
-  test('emits healthy insight for sprawling_commits_pct below 10', () => {
-    const { insights, warnings } = generateInsights(makeSummary({ sprawling_commits_pct: '5.00' }), []);
+  test('emits healthy insight for sprawling_commits_pct below healthy', () => {
+    const value = THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy - 13;
+    const { insights, warnings } = generateInsights(makeSummary({ sprawling_commits_pct: String(value) }), []);
     expect(warnings.some(w => w.includes('sprawling'))).toBe(false);
     expect(insights.some(i => i.includes('Good sprawling commit control'))).toBe(true);
   });
 
-  test('emits positive insight for test_coverage_rate above 50', () => {
-    const { insights } = generateInsights(makeSummary({ test_coverage_rate: '55.00' }), []);
+  test('emits positive insight for test_coverage_rate above healthy', () => {
+    const value = THRESHOLDS.TEST_COVERAGE_RATE.healthy + 5;
+    const { insights } = generateInsights(makeSummary({ test_coverage_rate: String(value) }), []);
     expect(insights.some(i => i.includes('Strong test coverage'))).toBe(true);
   });
 
   // --- warning thresholds ---
-  test('emits warning (not critical) for large_commits_pct between 20 and 40', () => {
-    const { warnings } = generateInsights(makeSummary({ large_commits_pct: '30.00' }), []);
+  test('emits warning (not critical) for large_commits_pct between healthy and critical', () => {
+    const band = THRESHOLDS.LARGE_COMMITS_PCT;
+    const value = (band.healthy + band.critical) / 2;
+    const { warnings } = generateInsights(makeSummary({ large_commits_pct: value.toFixed(2) }), []);
     expect(warnings.some(w => w.includes('High large commit rate'))).toBe(true);
     expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  test('emits critical warning for large_commits_pct above 40', () => {
-    const { warnings, recommendations } = generateInsights(makeSummary({ large_commits_pct: '45.00' }), []);
+  test('emits critical warning for large_commits_pct above critical', () => {
+    const value = THRESHOLDS.LARGE_COMMITS_PCT.critical + 5;
+    const { warnings, recommendations } = generateInsights(makeSummary({ large_commits_pct: String(value) }), []);
     expect(warnings.some(w => w.includes('Very high large commit rate'))).toBe(true);
     expect(recommendations.length).toBeGreaterThan(0);
   });
 
-  test('emits warning (not critical) for sprawling_commits_pct between 10 and 25', () => {
-    const { warnings } = generateInsights(makeSummary({ sprawling_commits_pct: '15.00' }), []);
+  test('emits warning (not critical) for sprawling_commits_pct between healthy and critical', () => {
+    const band = THRESHOLDS.SPRAWLING_COMMITS_PCT;
+    const value = (band.healthy + band.critical) / 2;
+    const { warnings } = generateInsights(makeSummary({ sprawling_commits_pct: value.toFixed(2) }), []);
     expect(warnings.some(w => w.includes('High sprawling commit rate'))).toBe(true);
     expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  test('emits critical warning for sprawling_commits_pct above 25', () => {
-    const { warnings, recommendations } = generateInsights(makeSummary({ sprawling_commits_pct: '30.00' }), []);
+  // sprawling_commits_pct is three-band under era:current (calibration/derive-bands.js:
+  // two distinct repos corroborate the max, nodejs/node and curl/curl) -- unlike the
+  // prior pooled-derivation band, where it was two-band, a value above its critical
+  // bound must now read as critical, the same as any other three-band metric.
+  test('emits critical warning for sprawling_commits_pct above critical', () => {
+    const value = THRESHOLDS.SPRAWLING_COMMITS_PCT.critical + 5;
+    const { warnings, recommendations } = generateInsights(makeSummary({ sprawling_commits_pct: String(value) }), []);
     expect(warnings.some(w => w.includes('Very high sprawling commit rate'))).toBe(true);
     expect(recommendations.length).toBeGreaterThan(0);
   });
 
-  test('emits warning for test_coverage_rate below 30', () => {
-    const { warnings } = generateInsights(makeSummary({ test_coverage_rate: '20.00' }), []);
+  test('emits warning for test_coverage_rate below the low-coverage cutoff', () => {
+    // Gated by THRESHOLDS.TEST_COVERAGE_RATE.warning, not .healthy -- see
+    // lib/thresholds.js's comment on why the two can differ. Using the smaller
+    // of the two keeps this test correct regardless of which one moves.
+    const value = Math.min(THRESHOLDS.TEST_COVERAGE_RATE.healthy, THRESHOLDS.TEST_COVERAGE_RATE.warning) - 5;
+    const { warnings } = generateInsights(makeSummary({ test_coverage_rate: String(value) }), []);
     expect(warnings.some(w => w.includes('Low test coverage'))).toBe(true);
   });
 
   // --- uncovered_prod_rate ---
-  test('emits critical warning for uncovered_prod_rate above 20', () => {
-    const { warnings, recommendations } = generateInsights(makeSummary({ uncovered_prod_rate: '25.00' }), []);
+  // uncovered_prod_rate is two-band under era:current (calibration/derive-bands.js:
+  // only emberjs/ember.js corroborates the extreme) -- unlike the prior
+  // pooled-derivation band, where it was three-band, THRESHOLDS now reports
+  // critical: null for it, so no value, however high, should ever read as
+  // "critical". Same null-coercion bug class the sprawling/avg_lines guard
+  // tests below already cover for their own (still two-band) metrics.
+  test('never emits a critical warning for uncovered_prod_rate, however high (two-band: no critical bound)', () => {
+    const { warnings, recommendations } = generateInsights(makeSummary({ uncovered_prod_rate: '90.00' }), []);
+    expect(warnings.some(w => w.includes('🚨'))).toBe(false);
     expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(true);
-    expect(recommendations.length).toBeGreaterThan(0);
+    expect(recommendations).toEqual([]);
   });
 
-  test('emits warning (not critical) for uncovered_prod_rate between 10 and 20', () => {
-    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '15.00' }), []);
+  test('emits warning (not critical) for uncovered_prod_rate above healthy', () => {
+    const value = THRESHOLDS.UNCOVERED_PROD_RATE.healthy + 5;
+    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: String(value) }), []);
     expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(true);
     expect(warnings.some(w => w.includes('🚨'))).toBe(false);
   });
 
-  test('emits no uncovered_prod warning when rate is below 10', () => {
-    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: '5.00' }), []);
+  test('emits no uncovered_prod warning when rate is below healthy', () => {
+    const value = Math.max(THRESHOLDS.UNCOVERED_PROD_RATE.healthy - 8, 0);
+    const { warnings } = generateInsights(makeSummary({ uncovered_prod_rate: String(value) }), []);
     expect(warnings.some(w => w.includes('uncovered production commits'))).toBe(false);
   });
 
   // --- test_isolation_rate ---
-  test('emits positive insight for test_isolation_rate above 10', () => {
-    const { insights } = generateInsights(makeSummary({ test_isolation_rate: '15.00' }), []);
+  test('emits positive insight for test_isolation_rate above the positive threshold', () => {
+    const value = THRESHOLDS.TEST_ISOLATION_RATE.positive + 5;
+    const { insights } = generateInsights(makeSummary({ test_isolation_rate: String(value) }), []);
     expect(insights.some(i => i.includes('test-only commits'))).toBe(true);
   });
 
-  test('emits no test isolation insight when rate is below 10', () => {
-    const { insights } = generateInsights(makeSummary({ test_isolation_rate: '5.00' }), []);
+  test('emits no test isolation insight when rate is below the positive threshold', () => {
+    const value = Math.max(THRESHOLDS.TEST_ISOLATION_RATE.positive - 5, 0);
+    const { insights } = generateInsights(makeSummary({ test_isolation_rate: String(value) }), []);
     expect(insights.some(i => i.includes('test-only commits'))).toBe(false);
   });
 
-  test('emits warning for avg_lines_changed above 500', () => {
-    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '600.00' }), []);
+  test('emits warning (not critical) for avg_lines_changed between healthy and critical', () => {
+    const band = THRESHOLDS.AVG_LINES_CHANGED;
+    const value = (band.healthy + band.critical) / 2;
+    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: value.toFixed(2) }), []);
     expect(warnings.some(w => w.includes('High average lines per commit'))).toBe(true);
+    expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  test('emits critical warning for avg_lines_changed above 1000', () => {
-    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '1200.00' }), []);
+  // avg_lines_changed is three-band under era:current (calibration/derive-bands.js:
+  // two distinct repos corroborate the max, nodejs/node and postgres/postgres) --
+  // unlike the prior pooled-derivation band, where it was two-band, a value above
+  // its critical bound must now read as critical, the same as any other
+  // three-band metric.
+  test('emits critical warning for avg_lines_changed above critical', () => {
+    const value = THRESHOLDS.AVG_LINES_CHANGED.critical + 50;
+    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: String(value) }), []);
     expect(warnings.some(w => w.includes('Very high average lines per commit'))).toBe(true);
   });
 

@@ -2,26 +2,45 @@
 
 const { THRESHOLDS } = require('../lib/thresholds');
 
+// Values-lock test: pins the exact numeric bands lib/thresholds.js exports. This
+// is intentionally an equality assertion on data, not on behavior -- when the
+// calibrated bands change deliberately (as they do here: every band is
+// re-derived from `node calibration/derive-bands.js --era current` (n=12),
+// per code-quality-metrics-82k, rather than the pooled default. Seven
+// previously-adopted bands move, and test_coverage_rate and duplication_pct
+// gain a real, observation-derived band for the first time. test_isolation_rate
+// stays informational: derive-bands.js computes no healthy/critical for it, so
+// its `positive` value is not calibration-derived), this test is updated to
+// match, not weakened or deleted. See calibration/README.md and
+// lib/thresholds.js's own comments for provenance.
+//
+// MESSAGE_QUALITY_PCT and NET_ADDITIONS_RATIO_MEDIAN are deliberately absent
+// (code-quality-metrics-a9z, code-quality-metrics-6ti): both bands are dropped
+// because the literature review found no defensible boundary for either
+// measure, so both metrics are now reported descriptively with no band at
+// all -- not merely re-tiered, removed. See lib/thresholds.js's own comment
+// at the removal site for the full rationale.
+//
+// DORA_ARCHETYPE is also deliberately absent (code-quality-metrics-6vi): it used to hold a
+// second, hand-copied set of large/sprawling/testCoverage/uncoveredProd/messageQuality numbers
+// for classifyDoraArchetype() to read, and those copies went stale relative to the bands above
+// (sprawling drifted to nearly half the calibrated value) without anything catching it.
+// classifyDoraArchetype() in lib/metrics.js now reads LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT,
+// TEST_COVERAGE_RATE and UNCOVERED_PROD_RATE above directly, so there is nothing left for a
+// DORA_ARCHETYPE key to hold: duplicating a value here is exactly what let it go stale.
 describe('THRESHOLDS', () => {
-  it('exports the exact numeric bands currently hardcoded in lib/metrics.js', () => {
+  it('exports the calibrated numeric bands', () => {
     expect(THRESHOLDS).toEqual({
-      LARGE_COMMITS_PCT: { healthy: 20, critical: 40 },
-      SPRAWLING_COMMITS_PCT: { healthy: 10, critical: 25 },
-      TEST_COVERAGE_RATE: { warning: 30, healthy: 50 },
+      LARGE_COMMITS_PCT: { healthy: 19, critical: 30 },
+      SPRAWLING_COMMITS_PCT: { healthy: 18, critical: 20 },
+      TEST_COVERAGE_RATE: { warning: 30, healthy: 23 },
       TEST_ISOLATION_RATE: { positive: 10 },
-      UNCOVERED_PROD_RATE: { warning: 10, critical: 20 },
-      MESSAGE_QUALITY_PCT: { healthy: 60, critical: 40 },
-      AVG_LINES_CHANGED: { warning: 500, critical: 1000 },
+      UNCOVERED_PROD_RATE: { healthy: 13, critical: null },
+      AVG_LINES_CHANGED: { healthy: 140, critical: 200 },
       AI_BATCH_SHARE: { additionsRatio: 3, share: 0.3 },
-      P90_LINES_CHANGED: { healthy: 200, critical: 500 },
-      P90_FILES_CHANGED: { healthy: 8, critical: 15 },
-      NET_ADDITIONS_RATIO_MEDIAN: { healthy: 0.33, critical: 0.50 },
-      DUPLICATION_PCT: { healthy: 3, critical: 10 },
-      DORA_ARCHETYPE: {
-        HARMONIOUS: { large: 20, sprawling: 10, testCoverage: 50, uncoveredProd: 10, messageQuality: 60 },
-        LEGACY_BOTTLENECK: { sprawling: 25, large: 30 },
-        FOUNDATIONAL_CHALLENGES: { large: 40, uncoveredProd: 20 }
-      }
+      P90_LINES_CHANGED: { healthy: 260, critical: null },
+      P90_FILES_CHANGED: { healthy: 8, critical: null },
+      DUPLICATION_PCT: { healthy: 6, critical: 6.5 }
     });
   });
 });

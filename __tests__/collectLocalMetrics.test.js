@@ -412,7 +412,7 @@ describe('collectLocalMetrics — successful run', () => {
     // 11 unique commits — triggers the "... and N more" branch
     const commits = Array.from({ length: 11 }, (_, i) => {
       const sha = String(i).padStart(40, `${i}`);
-      return `${sha}|2024-01-15|Dev|commit ${i}`;
+      return `${sha}|2024-01-15|Dev|commit ${i}\x1e`;
     }).join('\n');
 
     const numstat = `1\t0\tsrc/file.js`;
@@ -452,9 +452,9 @@ describe('collectLocalMetrics — successful run', () => {
       FAKE_REMOTE,
       '  feature/x',
       [
-        `${SHA}|2024-01-14T10:00:00Z|Dev|feat: new file one`,
-        `${SHA2}|2024-01-15T10:00:00Z|Dev|feat: new file two`,
-        `${SHA3}|2024-01-16T10:00:00Z|Dev|feat: new file three`
+        `${SHA}|2024-01-14T10:00:00Z|Dev|feat: new file one\x1e`,
+        `${SHA2}|2024-01-15T10:00:00Z|Dev|feat: new file two\x1e`,
+        `${SHA3}|2024-01-16T10:00:00Z|Dev|feat: new file three\x1e`
       ].join('\n'),
       newFileNumstat,
       newFileNumstat,
@@ -672,6 +672,19 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(dupCall).toBeDefined();
     const output = JSON.parse(dupCall[1]);
     expect(output.static_duplicates).toEqual([fixtureDuplicate]);
+  });
+
+  test('excludes merge commits so their changes are not counted twice', async () => {
+    // git show --numstat diffs a merge against its first parent, so merging a
+    // single-commit branch reproduces that commit's diff exactly and the same change
+    // is counted twice. Verified on flight-info-spike: merge 7126d5c and its child
+    // dacea2c both reported 9 files and 943 lines. Asserting the git command because
+    // which commits git emits is not observable locally.
+    await collectLocalMetrics();
+
+    const logCalls = execSync.mock.calls.map(c => c[0]).filter(c => String(c).includes('git log'));
+    expect(logCalls.length).toBeGreaterThan(0);
+    logCalls.forEach(c => expect(c).toMatch(/--no-merges/));
   });
 
   test('scans for duplicates once, not once per consumer', async () => {

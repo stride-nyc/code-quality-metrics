@@ -72,6 +72,25 @@ describe('analyzeCommit', () => {
     expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).large_commit).toBe(false);
   });
 
+  test('does not flag a commit as large when its production lines are under the threshold', () => {
+    // Tests accompanying a change must not be what pushes it over. Counting them made
+    // the metric penalise the practice this toolkit identifies as protective, and
+    // uncovered_prod_rate already covers the untested case separately.
+    const prod = CONFIG.LARGE_COMMIT_THRESHOLD - 10;
+    execSync.mockReturnValue(
+      numstatLine(prod, 0, 'src/app.js') + '\n' + numstatLine(30, 0, 'src/app.test.js')
+    );
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.large_commit).toBe(false);
+    expect(result.total_additions).toBe(prod + 30);
+  });
+
+  test('still flags a commit as large on production lines alone', () => {
+    execSync.mockReturnValue(numstatLine(CONFIG.LARGE_COMMIT_THRESHOLD + 1, 0, 'src/app.js'));
+    expect(analyzeCommit(MOCK_SHA, MOCK_BRANCH).large_commit).toBe(true);
+  });
+
   test('marks sprawling_commit true when files changed exceed threshold', () => {
     const manyFiles = Array.from({ length: CONFIG.SPRAWLING_COMMIT_THRESHOLD + 1 }, (_, i) =>
       numstatLine(1, 0, `src/file${i}.js`)

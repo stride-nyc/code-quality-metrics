@@ -3,6 +3,7 @@
 const { renderReportHtml } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { buildMetricCatalog } = require('../lib/report');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 function fixtureSummary(overrides) {
   return Object.assign({
@@ -104,6 +105,26 @@ describe('renderReportHtml', () => {
     expect(bottleneck).toContain('legacy-bottleneck');
   });
 
+  // The four dora_archetype values are boundaries this toolkit invented from
+  // commit shape, not a DORA-validated classification (DORA derives its own
+  // archetypes from survey data). foundational-challenges is the archetype a
+  // naive good/warning/critical mapping would color red; it must not, since
+  // that would assert a confidence the classification does not support.
+  it('never renders the foundational-challenges verdict as critical (red)', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'foundational-challenges' }));
+    expect(html).toMatch(/class="verdict" data-status="[^"]+"/);
+    expect(html).not.toContain('class="verdict" data-status="critical"');
+    expect(html).toContain('data-status="warning"');
+  });
+
+  it('renders harmonious-high-achiever as good and mixed-signals as neutral, distinct from foundational-challenges', () => {
+    const good = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
+    expect(good).toContain('class="verdict" data-status="good"');
+
+    const neutral = renderReportHtml(fixtureArgs({ dora_archetype: 'mixed-signals' }));
+    expect(neutral).toContain('class="verdict" data-status="neutral"');
+  });
+
   it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
@@ -118,6 +139,8 @@ describe('renderReportHtml', () => {
     expect(indices).toEqual(sortedIndices);
   });
 
+  // message_quality_pct dropped out of the gauge set (code-quality-metrics-6ti): a gauge
+  // implies a band, and this metric no longer has one.
   it('renders a semicircular gauge svg for each catalog entry with hasGauge true', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
@@ -125,18 +148,21 @@ describe('renderReportHtml', () => {
     const gaugeCount = (html.match(/<svg class="gauge"/g) || []).length;
     const expectedCount = args.catalog.filter(entry => entry.hasGauge).length;
 
-    expect(expectedCount).toBe(5);
+    expect(expectedCount).toBe(4);
     expect(gaugeCount).toBe(expectedCount);
   });
 
+  // code-quality-metrics-a9z: net_additions_ratio_median no longer has any band, so it never
+  // reports warning/critical/good, however the value moves -- only the fixed 'neutral'
+  // status this metric now always carries.
   it('renders a status chip for plain stat cards with hasGauge false', () => {
-    const args = fixtureArgs({ net_additions_ratio_median: 0.45 });
+    const args = fixtureArgs({ net_additions_ratio_median: 0.9 });
     const html = renderReportHtml(args);
     const entry = args.catalog.find(e => e.key === 'net_additions_ratio_median');
 
     expect(entry.hasGauge).toBe(false);
-    expect(entry.status).toBe('warning');
-    expect(html).toContain('<span class="status-chip">warning</span>');
+    expect(entry.status).toBe('neutral');
+    expect(html).toContain('<span class="status-chip">neutral</span>');
   });
 
   it('embeds all six vendored fonts via @font-face base64 data URIs', () => {
@@ -258,10 +284,58 @@ describe('renderReportHtml', () => {
   it('renders a threshold description for each metric card describing its healthy and critical boundaries', () => {
     const html = renderReportHtml(fixtureArgs());
 
-    // large_commits_pct: higher-is-worse, healthy 20, critical 40 (from lib/thresholds.js)
-    expect(html).toContain('Healthy below 20, critical above 40');
-    // test_coverage_rate: higher-is-better, healthy 50, critical (warning) 30
-    expect(html).toContain('Healthy above 50, critical below 30');
+    // large_commits_pct: higher-is-worse. Read from THRESHOLDS rather than
+    // restating the numbers, so a recalibration that moves this band doesn't
+    // break this test for no reason (it already broke once, hardcoded at 23).
+    const band = THRESHOLDS.LARGE_COMMITS_PCT;
+    expect(html).toContain(`Healthy below ${band.healthy}, critical above ${band.critical}`);
+  });
+
+  it('describes a two-band metric honestly: a healthy bound but no fabricated critical bound', () => {
+    // test_coverage_rate is two-band (critical: null, per lib/thresholds.js's own
+    // comment for the current healthy value and its provenance): the low extreme
+    // rests on a single reference repo. The card must say so, never state a
+    // numeric critical boundary that does not exist.
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+
+    expect(coverageCard).toBeDefined();
+    expect(coverageCard).not.toMatch(/critical (above|below) \d/);
+    expect(coverageCard.toLowerCase()).toContain('no critical bound');
+  });
+
+  // code-quality-metrics-a9z, code-quality-metrics-6ti: both bands are dropped entirely
+  // (no gauge, no verdict), which is exactly the situation this project has already flagged
+  // as a bug risk for the two-band tier -- a bare number with no explanation reads as broken.
+  // The card must say why, briefly, the same way the two-band tile above says "No critical
+  // bound: the high end rests on a single reference repository."
+  it('renders a brief reason for the missing verdict on net_additions_ratio_median and message_quality_pct cards', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+
+    const netAdditionsCard = cards.find(card => card.includes('>Net-new ratio (median)</p>'));
+    expect(netAdditionsCard).toBeDefined();
+    expect(netAdditionsCard).toContain('class="metric-threshold"');
+    expect(netAdditionsCard.toLowerCase()).toContain('no healthy/critical band');
+
+    const messageQualityCard = cards.find(card => card.includes('>Message quality</p>'));
+    expect(messageQualityCard).toBeDefined();
+    expect(messageQualityCard).toContain('class="metric-threshold"');
+    expect(messageQualityCard.toLowerCase()).toContain('no healthy/critical band');
+  });
+
+  it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
+    // test_coverage_rate is two-band. A gauge asserting a red zone it cannot
+    // support would overstate what the data shows, so it must render only two
+    // bands (good, warning) and no gauge-critical path at all.
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+
+    expect(coverageCard).not.toContain('gauge-critical');
+    const bandCount = (coverageCard.match(/class="gauge-band /g) || []).length;
+    expect(bandCount).toBe(2);
   });
 
   it('omits a threshold description for informational entries with no numeric boundary', () => {

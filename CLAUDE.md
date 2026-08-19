@@ -57,20 +57,51 @@ Three public components sharing pure-computation logic via `lib/`:
 
 ## Key Metrics and Thresholds
 
-| Metric | Healthy Threshold |
-|--------|------------------|
-| Large commit % (>100 prod lines) | <20% |
-| Sprawling commit % (>5 files) | <10% |
-| Test-to-production ratio | 0.5–2.0:1 |
-| Avg files changed per commit | <5 |
-| Commit message quality % | >60% |
-| Net additions ratio (median) | <0.50 |
+Bands are quantiles of a six-repository benchmark (nodejs/node, emberjs/ember.js, git/git,
+postgres/postgres, django/django, curl/curl), derived by `calibration/derive-bands.js` from
+`calibration/observations.json` — the same published-method framing Alves, Ypma and Visser use
+in "Deriving Metric Thresholds from Benchmark Data" (ICSM 2010, DOI 10.1109/ICSM.2010.5609747).
+**"Healthy" below means "at or below the 75th percentile of this benchmark," not "validated
+against a quality outcome."** No cited source publishes a boundary number for any of these
+metrics: DORA scores batch size from self-reported ordinal survey answers and never converts
+them to a line count, and GitClear reports trends and prevalence rather than a healthy line.
+Values below are current as of `node calibration/derive-bands.js --era current`; a metric marked
+two-band has no critical bound because its extreme rests on a single reference repository with
+no second repository corroborating it within 15% (`lib/report.js`'s `statusForTwoBand`
+enforces this at runtime — never reads a `null` critical bound as zero).
 
-Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and DORA team archetype are included in the summary.
+| Metric | Healthy | Critical | Tier |
+|--------|---------|----------|------|
+| Large commit % (>100 prod lines) | ≤19% | >30% | three-band |
+| Sprawling commit % (>5 files) | ≤18% | >20% | three-band |
+| Test coverage rate (test+prod co-occurrence) | ≥23% | — | two-band |
+| Uncovered prod rate | ≤13% | — | two-band |
+| Commit message quality % | ≥66% | — | two-band |
+| Avg lines changed | ≤140 | >200 | three-band |
+| p90 lines changed | ≤260 | — | two-band |
+| p90 files changed | ≤8 | — | two-band |
+| Net additions ratio (median) | ≤0.63 | >0.79 | three-band |
+| Duplication density % | ≤6% | >6.5% | three-band |
+
+Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
+
+Two bands have corroboration from outside this project's own six repositories, as a *position*
+rather than a *boundary*: p90 lines changed (260) against Kolassa, Riehle & Salim's published p90
+of 261 LoC/commit over 8.7M commits (SOFSEM 2013), and p90 files changed (8) against Sadowski et
+al.'s ~90% of Google changes touching fewer than 10 files (ICSE-SEIP 2018) and Alali et al.'s gcc
+p90 of ~8 files (ICPC 2008). Thirteen reservations qualify every band, three of them high
+severity, including that a fitted, multi-feature just-in-time defect model already fails to
+transfer across projects (down to 0.38 AUC, worse than random — Kamei et al., EMSE 2016), which
+bears directly on how far an unfitted scalar band like these can be carried to a project unlike
+the six references. See `calibration/README.md` and the Threshold Provenance section of
+`metrics-specification.md` for the full derivation rule, the external anchors, and all thirteen
+reservations. Do not cite these numbers as validated outcome thresholds.
 
 ### DORA Archetype Classification
 
-The summary includes a `dora_archetype` field classifying the repository into one of four team archetypes based on large commit %, sprawling commit %, test-first %, and message quality %:
+The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape, and all five boundary values are unsourced. Do not read the field as a DORA classification.
+
+It classifies the repository based on large commit %, sprawling commit %, test-first %, and message quality %:
 
 | Archetype | Signal |
 |-----------|--------|
@@ -101,16 +132,17 @@ Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is th
 | `AI_ANALYSIS_MAX_COMMITS` | 5 | Max commits sent to Claude per run |
 | `AI_DIFF_MAX_CHARS` | 4000 | Diff truncation limit for Claude API calls |
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
-| `DUPLICATE_MIN_LINES` | 5 | Minimum lines for jscpd to flag a duplicate block |
-| `DUPLICATE_MIN_TOKENS` | 50 | Minimum tokens for jscpd to flag a duplicate block |
+| `DUPLICATE_MIN_LINES` | 10 | Minimum lines for jscpd to flag a duplicate block |
+| `DUPLICATE_MIN_TOKENS` | 100 | Minimum tokens for jscpd to flag a duplicate block |
 | `DUPLICATE_IGNORE_PATTERNS` | `[]` | Glob patterns for jscpd to ignore (e.g. generated files) |
-| `DUPLICATE_SCAN_PATHS` | `[]` | Paths jscpd scans; empty means all provided file paths |
 
 Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
 
 ### Duplicate Detection Tuning
 
-The defaults (`DUPLICATE_MIN_LINES: 5`, `DUPLICATE_MIN_TOKENS: 50`) are calibrated for JavaScript. Other languages typically need higher thresholds to suppress boilerplate false positives:
+The defaults (`DUPLICATE_MIN_LINES: 10`, `DUPLICATE_MIN_TOKENS: 100`) match what SonarQube uses for its own duplicated-lines gate, so the measured percentage is comparable to the roughly 3 to 23 percent range published across clone studies with stated methods. They were previously 5 and 50, half of Sonar's minimum in both dimensions; Wagner et al. measured the same three systems at both settings and found roughly a threefold difference, so position in that published range depends more on detector settings than on the codebase. Raising them lost the one alignment this toolkit had with a primary source, since 5 lines matched GitClear's definition of a duplicate block. The trade is deliberate: GitClear's floor is for detecting a clone, Sonar's is for calling one a quality problem, and this toolkit reports a rate rather than a clone list.
+
+The examples below predate the change and one is now moot: the Java row recommends exactly the new global default. Other languages may still need higher values to suppress boilerplate:
 
 ```js
 // Java — longer method signatures and boilerplate

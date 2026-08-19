@@ -5,6 +5,8 @@ jest.mock('fs');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { runDuplicateCheck, runDuplicateAnalysis, resolveModuleNeighbors } = require('../lib/duplicate');
 const { CONFIG } = require('../lib/config');
 
@@ -35,6 +37,7 @@ beforeEach(() => {
   execSync.mockReturnValue('');
   fs.existsSync.mockReturnValue(true);
   fs.readFileSync.mockReturnValue(JSON.stringify({ duplicates: [FIXTURE_DUPLICATE] }));
+  fs.mkdtempSync.mockReturnValue('/tmp/jscpd-output-mock');
 });
 
 describe('runDuplicateCheck', () => {
@@ -63,6 +66,91 @@ describe('runDuplicateCheck', () => {
     execSync.mockImplementation(() => { throw new Error('exit code 1'); });
     const result = runDuplicateCheck(['src/lib/git.js']);
     expect(result).toEqual([]);
+  });
+
+  test('removes the temporary output directory even when jscpd exits non-zero', () => {
+    // A naive cleanup call placed after the success path would never run here,
+    // since this path returns early. Forces try/finally rather than a trailing
+    // statement.
+    execSync.mockImplementation(() => { throw new Error('exit code 1'); });
+    runDuplicateCheck(['src/lib/git.js']);
+    expect(fs.rmSync).toHaveBeenCalledWith('/tmp/jscpd-output-mock', { recursive: true, force: true });
+  });
+
+  // GUARDs: these pass against the try/finally added for the non-zero-exit case
+  // above without a fresh red, since all early-return paths and the success
+  // path share that one finally block. Recorded here to pin cleanup on the
+  // remaining paths specifically.
+  test('GUARD: removes the temporary output directory when the report file is missing', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/lib/git.js']);
+    expect(fs.rmSync).toHaveBeenCalledWith('/tmp/jscpd-output-mock', { recursive: true, force: true });
+  });
+
+  test('GUARD: removes the temporary output directory after a successful run', () => {
+    runDuplicateCheck(['src/lib/git.js']);
+    expect(fs.rmSync).toHaveBeenCalledWith('/tmp/jscpd-output-mock', { recursive: true, force: true });
+  });
+
+  test('GUARD: does not create or remove any directory when filePaths is empty', () => {
+    runDuplicateCheck([]);
+    expect(fs.mkdtempSync).not.toHaveBeenCalled();
+    expect(fs.rmSync).not.toHaveBeenCalled();
+  });
+
+  test('creates a unique output directory per run via fs.mkdtempSync instead of a shared fixed path', () => {
+    // Regression guard for code-quality-metrics-ddv: a fixed shared tmp path meant
+    // two concurrent runs on one machine wrote and read back each other's report.
+    fs.mkdtempSync.mockReturnValue('/tmp/jscpd-output-abc123');
+    runDuplicateCheck(['src/app.js']);
+
+    const expectedPrefix = path.join(os.tmpdir(), 'jscpd-output-');
+    expect(fs.mkdtempSync).toHaveBeenCalledWith(expectedPrefix);
+
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('--output "/tmp/jscpd-output-abc123"');
+  });
+
+  test('excludes vendored dependency trees by default', () => {
+    // No CONFIG override here: this exercises the actual shipped default, the
+    // same one pr-metrics.yml relies on. nodejs/node vendors npm in-tree under
+    // deps/, which had no matching ignore pattern and inflated duplication
+    // from 5.12 percent to 15.09 percent on a pure vendored dependency sync.
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('**/deps/**');
+    expect(command).toContain('**/vendor/**');
+    expect(command).toContain('**/third_party/**');
+    expect(command).toContain('**/node_modules/**');
+  });
+
+  test('excludes generated-code trees by default', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('**/generated/**');
+  });
+
+  test('excludes lock files by default', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('**/package-lock.json');
+    expect(command).toContain('**/yarn.lock');
+    expect(command).toContain('**/pnpm-lock.yaml');
+    expect(command).toContain('**/*.lock');
+  });
+
+  test('composes --min-lines and --min-tokens flags at Sonar-equivalent minimums by default', () => {
+    // Sonar's 3% gate is measured at 100 tokens over 10 lines; this pins the shipped
+    // defaults literally, so it fails if the defaults ever drift, unlike a test that
+    // reads CONFIG.DUPLICATE_MIN_LINES back and would pass at any value.
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['src/app.js']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('--min-lines 10');
+    expect(command).toContain('--min-tokens 100');
   });
 });
 

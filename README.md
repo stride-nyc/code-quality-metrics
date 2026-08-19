@@ -103,14 +103,20 @@ instead of returning an empty report.
 
 ## Key Metrics Tracked
 
-| Metric | Target | Purpose |
+No published source supplies a boundary number for any of these. Targets are quantiles of a
+six-repository benchmark (see [metrics-specification.md](metrics-specification.md#threshold-provenance-and-calibration)),
+so "healthy" here means "at or below the 75th percentile of that benchmark," not "validated
+against a defect or delivery outcome."
+
+| Metric | Target (benchmark-relative) | Purpose |
 |--------|--------|---------|
-| **Large Commit %** | <20% | Detects batch AI code acceptance |
-| **Sprawling Commit %** | <10% | Identifies scattered changes across files |
-| **Test-First Discipline** | >50% | Monitors TDD practices with AI tools |
-| **Message Quality %** | >60% | Conventional commits or descriptive messages |
-| **Net Additions Ratio (median)** | <0.50 | Flags batch-acceptance pattern (bounded 0–1: 1.0 = entirely net-new code) |
-| **Avg Files Changed** | <5 | Measures development granularity |
+| **Large Commit %** | ≤19% | Detects batch AI code acceptance |
+| **Sprawling Commit %** | ≤18% | Identifies scattered changes across files |
+| **Test Coverage Rate** (test+prod co-occurrence, not sequencing) | ≥23% | Same-commit test/production overlap |
+| **Message Quality %** | ≥66% | Conventional commits or descriptive messages |
+| **Net Additions Ratio (median)** | ≤0.63 | Flags batch-acceptance pattern (bounded -1–1: 1.0 = entirely net-new code) |
+| **Duplication Density %** | ≤6% | Share of scanned production code textually duplicated |
+| **Avg Files Changed (p90)** | ≤8 | Measures development granularity |
 
 ## Real-World Example
 
@@ -217,43 +223,73 @@ AI_ANALYSIS_MAX_COMMITS: 5,        // max commits sent to Claude per run
 
 ## Understanding Results
 
-### Healthy Patterns
+These bands are quantiles of a six-repository benchmark, not validated outcome thresholds; see
+[metrics-specification.md](metrics-specification.md#threshold-provenance-and-calibration) for the
+derivation, the two external anchors that exist, and the reservations that qualify all of them.
+"Healthy" below means "at or below the 75th percentile of that benchmark." Metrics marked
+two-band below have no critical line at all: their worst observed value rests on a single
+reference repository, so no second repository corroborates a critical boundary and only
+good/warning verdicts are ever reported for them.
+
+### Benchmark-relative "healthy" (three-band metrics)
 ```
-Large commits: <20%
-Sprawling commits: <10%
-Test-first discipline: >50%
-Message quality: >60%
-Net additions ratio (median): <0.33
+Large commits: ≤19%
+Sprawling commits: ≤18%
+Net additions ratio (median): ≤0.63
+Avg lines changed: ≤140
+Duplication density: ≤6%
 ```
 
-### Warning Signs
+### Warning (above the benchmark's typical range)
 ```
-Large commits: 20-40%
-Sprawling commits: 10-25%
-Test-first discipline: 30-50%
-Net additions ratio (median): 0.33-0.50
+Large commits: 19-30%
+Sprawling commits: 18-20%
+Net additions ratio (median): 0.63-0.79
+Avg lines changed: 140-200
+Duplication density: 6-6.5%
 ```
 
-### Critical Issues
+### Critical (at or beyond the worst value two or more reference repositories both produced)
 ```
-Large commits: >40%
-Sprawling commits: >25%
-Test-first discipline: <30%
-Net additions ratio (median): >0.50
+Large commits: >30%
+Sprawling commits: >20%
+Net additions ratio (median): >0.79
+Avg lines changed: >200
+Duplication density: >6.5%
+```
+
+### Two-band metrics (no corroborated critical line; good/warning only)
+```
+Test coverage rate (test+prod co-occurrence): ≥23% good, else warning
+Uncovered prod rate: ≤13% good, else warning
+Message quality: ≥66% good, else warning
+p90 lines changed: ≤260 good, else warning
+p90 files changed: ≤8 good, else warning
 ```
 
 ## DORA Archetype Classification
 
-The summary includes a `dora_archetype` field:
+The summary includes a `dora_archetype` field classifying the repository into one of four
+buckets. **The names are borrowed from DORA; the method is not.** DORA derives seven archetypes
+from cluster analysis of survey responses covering burnout, friction and delivery instability.
+This derives four from commit shape instead, and all five boundary values below are this
+toolkit's own unsourced judgement, not calibrated from the six-repository benchmark and not a
+DORA classification:
 
 | Archetype | Signal |
 |-----------|--------|
-| `harmonious-high-achiever` | All metrics in healthy range |
-| `legacy-bottleneck` | High sprawl + high large commits |
-| `foundational-challenges` | Large commits >40% or low test discipline |
-| `mixed-signals` | No clear threshold breached |
+| `harmonious-high-achiever` | All four contributing metrics below their own warning line |
+| `legacy-bottleneck` | High sprawl (>25%) + high large commits (>30%) |
+| `foundational-challenges` | Large commits >40%, or low test discipline + elevated large commits |
+| `mixed-signals` | No clear archetype threshold breached |
 
 ## Workflow Outputs
+
+The two GitHub Actions workflows below do not read `lib/thresholds.js` — neither `require`s it —
+so the percentages they print (`<20%`, `<10%`, `>50%`) are their own separate, older, hardcoded
+constants, not the benchmark-derived bands in the "Understanding Results" section above. The two
+threshold sets are not currently reconciled; that is tracked separately (`code-quality-metrics-3hx`)
+rather than done here.
 
 ### Weekly Metrics Report (GitHub Issue)
 ```markdown
