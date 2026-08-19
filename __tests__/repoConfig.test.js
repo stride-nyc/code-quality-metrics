@@ -208,4 +208,15 @@ describe('resolveConfigOverrides — explicit config path (code-quality-metrics-
 
     expect(() => resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, missingConfigPath)).toThrow(/not found/);
   });
+
+  // GUARD: proven by removing the `mustExist &&` guard on the isDirectory check inside
+  // applyOverrideFile -- without scoping it to mustExist, or without the check at all,
+  // this test either throws for the wrong reason (statSync on an implicit path) or does
+  // not throw the clear "is a directory" message at all.
+  test('throws a clear message when an explicit --config path is a directory, not a file', () => {
+    const targetDir = makeTempDir('cqm-explicit-dir-target-');
+    const configAsDir = makeTempDir('cqm-explicit-dir-config-');
+
+    expect(() => resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, configAsDir)).toThrow(/is a directory, not a file/);
+  });
 });
