@@ -539,6 +539,19 @@ describe('renderReportHtml', () => {
   // code-quality-metrics-4er: "Commit size, p90" puts the jargon "p90" in the label while its
   // own description already explains it in plain words ("nine out of ten commits are smaller
   // than this"). The label should say the same thing the description does.
+  it('labels the files-changed percentile tile without the "p90" jargon, matching its sibling', () => {
+    // Its own description already says "Nine out of ten commits touch fewer files than this",
+    // so repeating p90 in the label adds jargon without information. Paired with
+    // "Commit size, high end" (code-quality-metrics-4er): leaving one of the two fixed and the
+    // other not is a worse state than either.
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const filesCard = cards.find(card => card.includes('>Files changed, high end</p>'));
+
+    expect(filesCard).toBeDefined();
+    expect(html).not.toContain('>Files changed, p90</p>');
+  });
+
   it('labels the commit-size percentile tile without the "p90" jargon', () => {
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
