@@ -236,6 +236,121 @@ describe('tool_commit provenance', () => {
   });
 });
 
+// A commits_analyzed short of MAX_COMMITS is either a small repository, a filtered merge, or a
+// defect -- the first two are recordable facts, the third is not (code-quality-metrics-dxl).
+// Three of the four short-count observations found in this dataset were annotated by whoever
+// happened to notice; nothing required it. This gate requires an explanation for every included
+// observation going forward, without demanding one already-recorded shape: an observation can
+// either carry a dedicated short_count_explanation field (used going forward), or its notes can
+// already state the exact shortfall count in prose (the shape microsoft/playwright's and
+// stride-nyc/remote_retro's pre-existing records already use, and which this gate must recognize
+// without editing either record).
+/**
+ * @param {Array<any>} observations
+ * @returns {string[]}
+ */
+function findUnexplainedShortCounts(observations) {
+  return observations
+    .filter(o => o.include_in_derivation)
+    .filter(o => typeof o.commits_analyzed === 'number'
+      && o.commits_analyzed < (o.config?.MAX_COMMITS ?? CONFIG.MAX_COMMITS))
+    .filter(o => {
+      const hasField = typeof o.short_count_explanation === 'string' && o.short_count_explanation.trim() !== '';
+      const notesStateTheCount = typeof o.notes === 'string' && new RegExp(`\\b${o.commits_analyzed}\\b`).test(o.notes);
+      return !hasField && !notesStateTheCount;
+    })
+    .map(o => `${o.repo} ${o.window?.since ?? o.window}: commits_analyzed ${o.commits_analyzed} short of ${o.config?.MAX_COMMITS ?? CONFIG.MAX_COMMITS} with no explanation`);
+}
+
+describe('short count provenance', () => {
+  // [guard] Proves the checker is not vacuous: a fixture observation short of MAX_COMMITS with
+  // no short_count_explanation and notes that never mention the shortfall must be flagged. Every
+  // observation in the real dataset currently happens to have an explanation, so a check that
+  // only ran against real data could pass by measuring a dataset with nothing wrong in it, the
+  // same trap the tool_commit and CONFIG gates above avoid by asserting their grouping is
+  // non-empty.
+  test('[guard] flags an included short-count observation that carries no explanation', () => {
+    const fixture = [{
+      repo: 'fixture/short-no-explanation',
+      include_in_derivation: true,
+      commits_analyzed: 40,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2026-01-01' },
+      notes: 'An ordinary window with nothing unusual about it.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([
+      'fixture/short-no-explanation 2026-01-01: commits_analyzed 40 short of 50 with no explanation'
+    ]);
+  });
+
+  // [guard] microsoft/playwright and stride-nyc/remote_retro were already explained before this
+  // gate existed, by prose in notes stating the exact shortfall count -- and this task must not
+  // edit either record. Without this exemption the gate would newly fail on two records nobody
+  // asked to have touched, the same shape of false alarm the tool_commit gate's own comments warn
+  // against ("exactly the shape of gate people learn to ignore rather than act on").
+  test('[guard] does not flag a short-count observation whose notes already state the exact shortfall count', () => {
+    const fixture = [{
+      repo: 'fixture/notes-state-the-count',
+      include_in_derivation: true,
+      commits_analyzed: 18,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2015-07-17' },
+      notes: 'Only 18 commits total in this repository\'s whole first six months.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([]);
+  });
+
+  // [guard] emberjs/ember.js and curl/curl (code-quality-metrics-dxl) use a dedicated field
+  // rather than folding their explanation into notes prose, since their notes already discuss
+  // other things (top-commit dominance, duplication) unrelated to the shortfall. Proven by
+  // mutation: deleting the `!hasField` arm of the filter below turns this fixture back into a
+  // reported violation, the same failure the first guard test in this file exists to catch.
+  test('[guard] does not flag a short-count observation that carries a short_count_explanation field', () => {
+    const fixture = [{
+      repo: 'fixture/field-explains-it',
+      include_in_derivation: true,
+      commits_analyzed: 49,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2026-04-16' },
+      notes: 'Top commit is 40% of window volume, an ordinary refactor.',
+      short_count_explanation: 'One commit failed to fetch its blob and was dropped; reproduced.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([]);
+  });
+
+  // [guard] The gate above only checks observations with include_in_derivation: true, matching
+  // every other gate in this file (e.g. tool_commit provenance, observation provenance): an
+  // excluded observation feeds no band, and most excluded short counts already carry an
+  // exclusion_reason rather than this field. Proven by mutation: deleting the
+  // `.filter(o => o.include_in_derivation)` line turns this fixture back into a reported
+  // violation.
+  test('[guard] does not flag an excluded short-count observation', () => {
+    const fixture = [{
+      repo: 'fixture/excluded-short-count',
+      include_in_derivation: false,
+      commits_analyzed: 20,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2026-01-01' },
+      notes: 'Superseded window, kept per the append-only convention.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([]);
+  });
+
+  // [guard] The actual gate: applies the checker proven against fixtures above to the real
+  // dataset. This is the check that would have caught all four of code-quality-metrics-dxl's
+  // short counts at the time they were recorded, and catches a fifth one the same way. It is
+  // deliberately not the only test of this behavior -- see the fixture-based guards above -- a
+  // dataset where every current observation happens to be explained would make this test pass
+  // for the wrong reason on its own.
+  test('[guard] every included observation short of MAX_COMMITS in the current dataset carries an explanation', () => {
+    expect(findUnexplainedShortCounts(observationData.observations)).toEqual([]);
+  });
+});
+
 describe('workflow provenance', () => {
   // [guard] This passes today. It is here because the class of defect it catches once
   // shipped silently: eight references to MESSAGE_QUALITY_PCT and

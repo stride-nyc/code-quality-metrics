@@ -18,15 +18,17 @@
  * matching this script's behaviour before the era field existed. Pass --era to derive
  * bands from a single era's observations only.
  *
- * --population is optional and defaults to 'granular', unlike --era: a squash-merge
- * reference set (one commit is a whole pull request) and the granular one (one commit is
- * an individual commit) describe different units and must never be pooled
- * (code-quality-metrics-7sk), so the default has to actively exclude squash-merge
- * observations rather than pool everything. Every observation recorded before the
- * population field existed has no `population` key and is treated as granular, so this
- * default reproduces exactly what this script already did before any squash-merge
- * observation existed. Pass --population squash-merge to derive bands from the
- * squash-merge reference set instead.
+ * --population is optional and defaults to 'granular', unlike --era: each population (a
+ * squash-merge reference set where one commit is a whole pull request; a greenfield-historical
+ * or greenfield-modern reference set where one commit is measured during a project's own
+ * initial build rather than its maintenance era, code-quality-metrics-4cv; the granular default
+ * itself) describes a different unit or lifecycle phase and must never be pooled with another
+ * (code-quality-metrics-7sk), so the default has to actively exclude every other population
+ * rather than pool everything. Every observation recorded before the population field existed
+ * has no `population` key and is treated as granular, so this default reproduces exactly what
+ * this script already did before any other population existed. Pass --population <name> (e.g.
+ * squash-merge, greenfield-historical, greenfield-modern) to derive bands from that reference
+ * set instead.
  */
 
 const fs = require('fs');
@@ -212,20 +214,23 @@ function selectByEra(observations, era) {
 }
 
 /**
- * Filter observations to a single population: 'granular' (one commit is an individual commit)
- * or 'squash-merge' (one commit is a whole pull request). Unlike selectByEra, this defaults to
- * 'granular' rather than pooling everything -- the two populations describe different units and
- * must never be pooled (code-quality-metrics-7sk), so the safe default is the one that matches
- * every observation recorded before the population field existed: an observation with no
- * `population` field is treated as granular, so passing no --population flag reproduces exactly
- * what derive-bands.js already did before any squash-merge observation existed.
+ * Filter observations to a single population: 'granular' (one commit is an individual commit,
+ * the default) or any other named population -- 'squash-merge' (one commit is a whole pull
+ * request), or a greenfield population such as 'greenfield-historical'/'greenfield-modern'
+ * (code-quality-metrics-4cv) -- matched by exact equality against each observation's own
+ * `population` field. Unlike selectByEra, this defaults to 'granular' rather than pooling
+ * everything: every population describes a different unit or a different lifecycle phase and
+ * must never be pooled with another (code-quality-metrics-7sk), so the safe default is the one
+ * that matches every observation recorded before the population field existed. An observation
+ * with no `population` field is treated as granular, so passing no --population flag reproduces
+ * exactly what derive-bands.js already did before any non-granular observation existed.
  * @param {Array<object>} observations
- * @param {string} [population] - 'granular' (default) or 'squash-merge'
+ * @param {string} [population] - 'granular' (default) or any other named population value
  * @returns {Array<object>}
  */
 function selectByPopulation(observations, population = 'granular') {
-  if (population === 'squash-merge') return observations.filter(o => o.population === 'squash-merge');
-  return observations.filter(o => (o.population ?? 'granular') === 'granular');
+  if (population === 'granular') return observations.filter(o => (o.population ?? 'granular') === 'granular');
+  return observations.filter(o => o.population === population);
 }
 
 function main() {

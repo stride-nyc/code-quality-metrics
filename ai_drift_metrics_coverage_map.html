@@ -7,6 +7,7 @@
   .dot-full { background: #1D9E75; }
   .dot-partial { background: #BA7517; }
   .dot-gap { background: #D85A30; }
+  .dot-unbuilt { background: #4E7FD0; }
   .dot-oos { background: #888780; }
 
   .section-label { font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-tertiary); margin: 1.25rem 0 .5rem; }
@@ -22,12 +23,14 @@
   .card-full   { background: #E1F5EE; border-color: #5DCAA5; }
   .card-partial { background: #FAEEDA; border-color: #EF9F27; }
   .card-gap    { background: #FAECE7; border-color: #D85A30; }
+  .card-unbuilt { background: #E9F0FB; border-color: #94B4E4; }
   .card-oos    { background: #F1EFE8; border-color: #B4B2A9; }
 
   @media (prefers-color-scheme: dark) {
     .card-full   { background: #085041; border-color: #1D9E75; }
     .card-partial { background: #633806; border-color: #BA7517; }
     .card-gap    { background: #4A1B0C; border-color: #993C1D; }
+    .card-unbuilt { background: #1E3355; border-color: #4E7FD0; }
     .card-oos    { background: #2C2C2A; border-color: #5F5E5A; }
   }
 
@@ -35,12 +38,14 @@
   .card-full .card-title   { color: #085041; }
   .card-partial .card-title { color: #633806; }
   .card-gap .card-title    { color: #4A1B0C; }
+  .card-unbuilt .card-title { color: #1D3A66; }
   .card-oos .card-title    { color: #444441; }
 
   @media (prefers-color-scheme: dark) {
     .card-full .card-title   { color: #9FE1CB; }
     .card-partial .card-title { color: #FAC775; }
     .card-gap .card-title    { color: #F5C4B3; }
+    .card-unbuilt .card-title { color: #BCD3F2; }
     .card-oos .card-title    { color: #D3D1C7; }
   }
 
@@ -48,12 +53,14 @@
   .card-full .card-sub   { color: #0F6E56; }
   .card-partial .card-sub { color: #854F0B; }
   .card-gap .card-sub    { color: #993C1D; }
+  .card-unbuilt .card-sub { color: #3A62A5; }
   .card-oos .card-sub    { color: #5F5E5A; }
 
   @media (prefers-color-scheme: dark) {
     .card-full .card-sub   { color: #5DCAA5; }
     .card-partial .card-sub { color: #EF9F27; }
     .card-gap .card-sub    { color: #F0997B; }
+    .card-unbuilt .card-sub { color: #7FA4DD; }
     .card-oos .card-sub    { color: #888780; }
   }
 
@@ -117,6 +124,9 @@
   .calib-row:last-child { border-bottom: none; }
   .calib-name { font-size: 11.5px; font-family: var(--font-mono); color: var(--color-text-primary); }
   .calib-note { font-size: 11px; color: var(--color-text-secondary); line-height: 1.5; }
+  .limit-row { display: grid; grid-template-columns: 190px 1fr; gap: 10px; align-items: baseline; padding: 7px 0; border-bottom: 0.5px solid var(--color-border-tertiary); }
+  .limit-row:last-child { border-bottom: none; }
+  .limit-name { font-size: 11.5px; color: var(--color-text-primary); font-weight: 500; }
   .repro { font-size: 11px; color: var(--color-text-secondary); line-height: 1.6; background: var(--color-background-secondary); border: 0.5px solid var(--color-border-tertiary); border-radius: 8px; padding: 10px 12px; }
   .repro code { font-family: var(--font-mono); font-size: 10.5px; }
 </style>
@@ -126,7 +136,8 @@
   <div class="legend">
     <div class="legend-item"><div class="dot dot-full"></div>Fully covered by this toolkit</div>
     <div class="legend-item"><div class="dot dot-partial"></div>Partial / proxy only</div>
-    <div class="legend-item"><div class="dot dot-gap"></div>Gap — needs external tool</div>
+    <div class="legend-item"><div class="dot dot-gap"></div>Gap — needs data this toolkit never sees</div>
+    <div class="legend-item"><div class="dot dot-unbuilt"></div>Backlog — data in reach, analysis not built</div>
     <div class="legend-item"><div class="dot dot-oos"></div>Out of scope (organizational)</div>
   </div>
 
@@ -153,6 +164,12 @@
   <div class="section-label">Calibration status</div>
   <div id="calib-list"></div>
 
+  <div class="section-label">What these bands cannot tell you</div>
+  <div id="limits-list"></div>
+
+  <div class="section-label">Findings that cut against this toolkit's premise</div>
+  <div id="counter-list"></div>
+
   <div class="section-label">How this was checked</div>
   <div class="repro" id="repro"></div>
 
@@ -171,7 +188,7 @@ const CAPS = [
   { num:'#1', title:'Clear AI stance', sub:'Org policy', type:'oos', detail:'Whether the organization has a communicated AI policy. Requires survey data — not visible in commit history.' },
   { num:'#2', title:'Healthy data ecosystems', sub:'Data infra quality', type:'oos', detail:'Quality of internal data infrastructure supporting AI tools. Organizational survey instrument only.' },
   { num:'#3', title:'AI-accessible internal data', sub:'Knowledge systems', type:'oos', detail:'Whether AI tools can access relevant internal documentation and knowledge. Not in git history.' },
-  { num:'#4', title:'Strong version control', sub:'Commit discipline', type:'full', detail:'Fully addressed. Metrics: commit velocity trend, message quality score, branch discipline, additions ratio. All derived from git log.' },
+  { num:'#4', title:'Strong version control', sub:'Commit discipline', type:'full', detail:'Addressed with measured signals: commit velocity trend, branch discipline, message quality and additions ratio (the latter two reported without bands, as informational). All derived from git log.' },
   { num:'#5', title:'Working in small batches', sub:'Batch discipline', type:'full', detail:'Fully addressed. Metrics: large commit %, sprawling commit %, p50/p90/p95 lines and files changed, commit size trend. Core DORA differentiator.' },
   { num:'#6', title:'User-centric focus', sub:'Product decisions', type:'oos', detail:'User adoption, retention, satisfaction — product and UX telemetry. Not addressable from git history.' },
   { num:'#7', title:'Quality internal platforms', sub:'CI/CD and tooling', type:'partial', detail:'Partially visible via workflow file complexity in .github/. Core CI/CD reliability metrics require pipeline telemetry.' },
@@ -192,7 +209,7 @@ const GIT_METRICS = [
     cite:'DORA 2025, pp. 50, 57-58',
     measured:'Share of analysed commits where additions plus deletions across <strong>production files only</strong> exceeds <code>LARGE_COMMIT_THRESHOLD</code> (100). Test files matching <code>TEST_FILE_PATTERNS</code> are excluded from the total.',
     connect:'Inference by this toolkit. DORA never reads commit history; it asks developers to estimate their batch size. We substitute an objective count for that self-report, which is arguably better evidence, but it is not the same measurement and DORA has not validated it.',
-    basis:'No source supplies either number. DORA publishes no line-count boundary anywhere, and its ordinal buckets do not convert to one. The 100 line unit remains the author\'s judgement. The 19/30 bands are quantiles of this project\'s own six-repository benchmark (Alves, Ypma &amp; Visser, ICSM 2010, is the published method citation for that approach): 12 observations (era: current) give p75 = 19 and a maximum of 30, corroborated at the extreme by both nodejs/node and curl/curl (three-band). "Healthy" means "at or below the 75th percentile of this benchmark", not a validated outcome. See <code>calibration/</code>. Robbes et al. (2026, ~9.4M commits) show what the 100 line unit selects rather than what it validates: it sits above the human third quartile (41 added lines) and just below the AI-assisted third quartile (114), so it flags roughly the top decile of human commits and the top quartile of AI-assisted ones -- not a population-neutral cut. The same literature (Hindle et al., MSR 2008; D\'Ambros, Lanza &amp; Robbes, WCRE 2009) found large commits disproportionately made of license changes, generated documentation, merges and vendored imports rather than ordinary development, so a rising rate can reflect more of that mix rather than more drift.',
+    basis:'No published source, research paper or industry report, supplies either number; both are this project\'s own, with the basis for each stated here. DORA publishes no line-count boundary anywhere, and its ordinal buckets do not convert to one. The 100 line unit remains the author\'s judgement. The 19/30 bands are quantiles of this project\'s own six-repository benchmark (Alves, Ypma &amp; Visser, ICSM 2010, is the published method citation for that approach): 12 observations (era: current) give p75 = 19 and a maximum of 30, corroborated at the extreme by both nodejs/node and curl/curl (three-band). "Healthy" means "at or below the 75th percentile of this benchmark", not a validated outcome. See <code>calibration/</code>. Robbes et al. (2026, ~9.4M commits) show what the 100 line unit selects rather than what it validates: it sits above the human third quartile (41 added lines) and just below the AI-assisted third quartile (114), so it flags roughly the top decile of human commits and the top quartile of AI-assisted ones. For a drift detector that asymmetry is the design working rather than a bias: the cut sits inside the range where the AI-era size shift actually shows. The same literature (Hindle et al., MSR 2008; D\'Ambros, Lanza &amp; Robbes, WCRE 2009) found large commits disproportionately made of license changes, generated documentation, merges and vendored imports rather than ordinary development, so a rising rate can reflect more of that mix rather than more drift.',
     v:'measured'
   },
   {
@@ -202,7 +219,7 @@ const GIT_METRICS = [
     cite:'DORA 2024 p. 37; DORA 2025 p. 4',
     measured:'Share of analysed commits touching more than <code>SPRAWLING_COMMIT_THRESHOLD</code> (5) files, counting every changed file including tests and binaries.',
     connect:'Inference. Scattering a change across many files is one mechanism that could raise instability, but DORA does not measure files per commit and publishes no pull request size figure. An earlier version of this toolkit cited a "154% increase in pull request size" to DORA; that figure appears in no DORA report and has been withdrawn.',
-    basis:'Neither the 5 file unit nor the 18/20 bands appears in any source. The bands are quantiles of the same six-repository benchmark: 12 observations give p75 = 18 and a maximum of 20, corroborated by three distinct repositories (nodejs/node, django/django, curl/curl) -- three-band. Robbes et al. (2026) put files touched at a median of 2 for both human and AI-assisted commits, with Q3 = 3 (human) and Q3 = 4 (AI-assisted); the 5-file unit sits above Q3 for both, so a sub-10% sprawl rate is close to automatic regardless of population and the metric discriminates poorly. Hattori &amp; Lanza (ASE 2008), the origin of the "5 files" convention, chose 5 for presentation of a power-law bucket, not from any relationship to defects, and their own corpus and D\'Ambros et al. (WCRE 2009) both found the largest, most file-spanning commits dominated by license changes, generated documentation and merges -- so a rising rate can reflect more of that mix, not more drift.',
+    basis:'Neither the 5 file unit nor the 18/20 bands appears in any published source, research paper or industry report; both are this project\'s own. The bands are quantiles of the same six-repository benchmark: 12 observations give p75 = 18 and a maximum of 20, corroborated by three distinct repositories (nodejs/node, django/django, curl/curl) -- three-band. Robbes et al. (2026) put files touched at a median of 2 for both human and AI-assisted commits, with Q3 = 3 (human) and Q3 = 4 (AI-assisted); the 5-file unit sits above Q3 for both, so a sub-10% sprawl rate is close to automatic regardless of who wrote the commits: the flag discriminates poorly <em>between human and AI authorship</em>. Across repositories the rate still varies enough to band (benchmark p75 = 18, worst 20), so it keeps descriptive value as a practice measure while being the weakest dimension for detecting AI drift specifically. Hattori &amp; Lanza (ASE 2008), the origin of the "5 files" convention, chose 5 for presentation of a power-law bucket, not from any relationship to defects, and their own corpus and D\'Ambros et al. (WCRE 2009) both found the largest, most file-spanning commits dominated by license changes, generated documentation and merges -- so a rising rate can reflect more of that mix, not more drift.',
     v:'measured'
   },
   {
@@ -212,7 +229,7 @@ const GIT_METRICS = [
     cite:'DORA 2025, p. 50',
     measured:'Each commit is classified by whether it touches test files, production files, or both. <code>test_coverage_rate</code> counts commits touching both, <code>test_isolation_rate</code> commits touching only tests, <code>uncovered_prod_rate</code> large production-only commits. Two detection defects were found by measuring reference repositories: the directory pattern required a leading slash, so a repository-root <code>test/</code> never matched and Node classified 1 of 1514 files as a test, and git\'s suite under <code>t/</code> matched nothing, reporting 0 percent coverage for one of the most heavily tested C projects. Both fixed.',
     connect:'This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this toolkit called testing DORA\'s "single strongest predictor" of whether AI helps or hurts a team; that claim is not supported by the report and has been withdrawn. Same-commit co-occurrence is also a published-noisy proxy for test-first sequencing: Sun et al. (TOSEM 2023) report "the pervasive existence of noise" in exactly this heuristic, and Borle et al. (EMSE 2018) note in their own threats section that co-occurrence "could look like testing at the same time, or even testing later" than production code.',
-    basis:'No source supplies a boundary. Both bands are two-band quantiles of the six-repository benchmark (12 observations): test_coverage_rate healthy = 23 (p25, since higher is better), uncovered_prod_rate healthy = 13 (p75). Both extremes rest on a single repository (emberjs/ember.js), so neither has a corroborated critical bound. Levin &amp; Yehudai (ICSME 2017, 242,567 commits) independently found test-touching commit rates topping out below 68.5%, with per-activity medians in the teens to thirties -- the same range as 23.',
+    basis:'No published source, research paper or industry report, supplies a boundary. Both bands are this project\'s own: two-band quantiles of the six-repository benchmark (12 observations): test_coverage_rate healthy = 23 (p25, since higher is better), uncovered_prod_rate healthy = 13 (p75). Both extremes rest on a single repository (emberjs/ember.js), so neither has a corroborated critical bound. Levin &amp; Yehudai (ICSME 2017, 242,567 commits) independently found test-touching commit rates topping out below 68.5%, with per-activity medians in the teens to thirties -- the same range as 23.',
     v:'measured'
   },
   {
@@ -222,7 +239,7 @@ const GIT_METRICS = [
     cite:'DORA 2025, p. 50',
     measured:'Percentiles of total lines changed per commit, whole diff including tests, computed with <code>simple-statistics</code>. Unlike the large-commit flag, these describe how much a reviewer reads, so test lines are counted.',
     connect:'Using a distribution rather than an average is this project\'s own methodological choice, and a sound one: a p90 of 500 against a p50 of 30 reveals occasional explosions that an average of 65 conceals. DORA publishes no percentile guidance.',
-    basis:'Quantiles of the six-repository benchmark: avg_lines_changed is three-band (healthy 140, critical 200, corroborated by nodejs/node and postgres/postgres); p90_lines_changed is two-band (healthy 260, only nodejs/node near the extreme). p90_lines_changed also has the one genuine external anchor in this table: Kolassa, Riehle &amp; Salim (SOFSEM 2013) report a published p90 of 261 LoC/commit over 8.7M commits -- a position check, not a boundary derivation, and the unit definitions do not fully match.',
+    basis:'p90_lines_changed is a two-band quantile of the six-repository benchmark: healthy = 260, with only nodejs/node near the worst observed value, so no critical bound. It carries the one genuine outside comparison in this table: Kolassa, Riehle &amp; Salim measured a p90 of 261 lines per commit across 8.7 million commits. That is a position check, not a boundary: the two counts define the line slightly differently, with biases pulling in opposite directions, and Alali et al.\'s gcc data puts the same percentile nearer 160 lines, so this is one large corpus\'s position rather than a convergent constant. The <strong>average</strong> is reported without a band on purpose. Commit sizes follow a very long-tailed distribution, and three independent studies that fitted it agree the shape is one where the average is not a stable number: Kolassa\'s own figures show a mean of 466 against a median of 16, with the mean sitting <em>above</em> the 90th percentile of the same data. One vendored dependency import can move it and nothing else. This project\'s own records show exactly that happening. The percentiles carry the load instead.',
     v:'measured'
   },
   {
@@ -252,7 +269,7 @@ const GIT_METRICS = [
     cite:'GitClear 2025, pp. 5, 8',
     measured:'Median of (additions - deletions) / (additions + deletions) per commit, bounded to plus or minus one.',
     connect:'Directionally consistent with GitClear\'s finding that refactoring is being displaced by accumulation. GitClear measures line categories across 211 million changed lines; this measures one ratio per commit. An earlier version of this toolkit\'s specification attributed this construct to DORA as a named "batch-acceptance pattern"; that attribution could not be traced to any DORA publication and has been withdrawn.',
-    basis:'Quantiles of the six-repository benchmark, three-band: healthy = 0.63 (p75), critical = 0.79, corroborated by git/git and django/django. Whether the additions-over-deletions form itself is the right construct is a separate, larger question this table does not resolve (<code>code-quality-metrics-a9z</code>).',
+    basis:'No band. The benchmark would support one (p75 = 0.63, worst 0.79), but it was dropped rather than adopted, because the measure itself does not hold up. Nagappan &amp; Ball tested this exact form, additions divided by deletions, as one of eight ways to measure churn against defect density across 45 million lines of Windows Server. It came last, and their model dropped it. What worked instead was churn divided by the <em>size of the code being changed</em>, which is a different calculation this toolkit does not perform. Shin et al. found the additions-only version passed their usefulness test in 0 of 80 runs, against 76 of 80 for total churn. Scoring a repository against a line drawn on a measure the research discarded is not defensible, so the ratio is still reported and no longer graded. Worth knowing what it actually detects: Nagappan &amp; Ball defined it to spot <em>new feature development</em>, since new code has little to delete. That makes it read high on healthy greenfield work. Replacing it with the supported calculation is open as <code>code-quality-metrics-6ni</code>.',
     v:'measured'
   },
   {
@@ -262,7 +279,7 @@ const GIT_METRICS = [
     cite:'DORA 2025, p. 50',
     measured:'Share of messages matching conventional commit format, or containing at least <code>MESSAGE_QUALITY_MIN_WORDS</code> (10) words. Now scored against the full commit body rather than the subject alone, which the short-subject convention used by postgres, git and curl requires: on an identical 50-commit set postgres moved from 22 to 94 percent. A trailing block of <code>Key: value</code> trailers is stripped first, since a body of only <code>PR-URL:</code> and <code>Reviewed-By:</code> lines otherwise passed on reviewer count alone.',
     connect:'No cited source discusses commit message specificity as a measured signal, so the construct is original. The word-count branch specifically is the losing side of a settled comparison: Li &amp; Ahmed (ICSE 2023, 185,026 commits) found semantic What/Why quality beats word count at every window size with coefficients roughly two orders of magnitude larger; Barnett et al. (MSR 2016) found word count significant in only 43% of 342 systems. This does not change what the metric scores today.',
-    basis:'Two-band quantile of the six-repository benchmark: healthy = 66 (p25, higher is better), resting on a single repository (emberjs/ember.js) with no second corroborating the extreme, so no critical bound is reported. The 10-word rule is unchanged and remains the author\'s judgement.',
+    basis:'No band. The benchmark would support one (p25 = 66), but it was dropped, because a band cannot fix what this metric actually reports. Two problems. First, 10 words is a high bar: across 23 million GitHub commits the typical message is shorter than that, so on a project that has not adopted conventional commit format the word test fails for most commits and the score collapses. Second, on a project that <em>has</em> adopted the format, the format test passes almost everything regardless of what the message says. The number therefore tracks whether a team uses conventional commits far more than whether its messages are informative. That is a narrower signal than the name promises, not a worthless one: adopting a message convention is a real version-control practice, and the defect is the label "quality", which the informational demotion corrects. The 10-word rule is unchanged and remains the author\'s judgement; replacing it with a meaning-based check is open as <code>code-quality-metrics-tym</code>.',
     v:'measured'
   },
   {
@@ -281,7 +298,7 @@ const GIT_METRICS = [
     source:'GitClear analysed 211 million changed lines from 2020 to 2024 and recorded an eight-fold increase in the frequency of code blocks with five or more duplicated lines during 2024. Their duplicate-block prevalence rose from 0.70% of commits in 2020 to 6.66% in 2024.',
     cite:'GitClear 2025, pp. 1, 5, 12',
     measured:'jscpd <code>statistics.total.percentage</code>: duplicated lines as a share of lines scanned across production files from the analysed commits. Vendored, generated and lock-file trees are excluded by default: Node vendors dependencies in-tree, and one <code>deps/</code> sync moved its measured duplication from 5.12 to 15.09 percent with no change in practice. The ignore list was also being passed to jscpd through the wrong flag, so every configured pattern was silently inert.',
-    connect:'Different denominators. GitClear reports the share of <strong>commits containing</strong> a duplicate block; this reports the share of <strong>lines that are</strong> duplicated. 6.66% and 6% are not comparable quantities, and no source publishes a share-of-lines figure. The best evidence on duplication as a defect signal runs the other way: Rahman, Bird &amp; Devanbu (MSR 2010, four C projects) found clones "may be less defect prone than non-cloned code" and Wagner et al. (SANER 2016) found clone length does not predict faultiness (ρ = 0.268, p = 0.120). This metric is kept as a drift signal, not a defect-risk claim.',
+    connect:'Different denominators. GitClear reports the share of <strong>commits containing</strong> a duplicate block; this reports the share of <strong>lines that are</strong> duplicated. 6.66% and 6% are not comparable quantities, and no published source supplies a share-of-lines figure. The direct tests of duplication as a defect signal split: Rahman, Bird &amp; Devanbu (MSR 2010, four C projects) found clones "may be less defect prone than non-cloned code", Wagner et al. (SANER 2016) found clone length does not predict faultiness (ρ = 0.268, p = 0.120), while Juergens et al. (ICSE 2009) found "nearly every second unintentionally inconsistent change to a clone leads to a fault" -- harm from <em>divergence between</em> clones, which a line-matching scanner cannot see in either direction. This metric is kept as a drift signal, not a defect-risk claim.',
     basis:'Quantiles of the six-repository benchmark, two-band: healthy = 2 (p75), no critical bound, since only curl/curl sits within 15% of the worst observed value. Measured at Sonar\'s own minimum clone size (<code>DUPLICATE_MIN_LINES: 10</code>/<code>DUPLICATE_MIN_TOKENS: 100</code>), so the percentage means what Sonar\'s duplicated-lines gate and the published 3-23 percent clone-study range mean. The earlier 6/6.5 three-band was derived at 5/50 and outlived that setting: Wagner et al. found halving the minimum roughly triples measured duplication on the same systems, and re-measuring these six repositories at 10/100 moved the median 3.24x, so duplication was scored about three times too permissively until it was re-derived (<code>code-quality-metrics-8ad</code>). A band here is comparable only at the settings it was derived at. See <code>calibration/</code>.',
     v:'measured'
   },
@@ -296,18 +313,18 @@ const GIT_METRICS = [
     v:'sourced'
   },
   {
-    title:'Copy-paste at AST level', sub:'Structural clone detection', type:'gap',
+    title:'Copy-paste at AST level', sub:'Structural clone detection', type:'unbuilt',
     source:'GitClear\'s core commercial capability.', cite:'GitClear 2025',
     measured:'Not measured. jscpd matches tokens, not structure.',
     connect:'The semantic layer above is a partial substitute using a language model rather than AST analysis.',
     basis:'Not applicable.', v:'pending'
   },
   {
-    title:'Code review quality', sub:'Reviewer depth and count', type:'gap',
+    title:'Code review quality', sub:'Reviewer depth and count', type:'unbuilt',
     source:'DORA measures review speed, a 3.1% increase per 25% increase in AI adoption, but not review depth.',
     cite:'DORA 2024, p. 37',
-    measured:'Not measured. Requires GitHub API data beyond commit history.',
-    connect:'Review depth is not derivable from commit history, so this stays a gap regardless of thresholds.',
+    measured:'Not measured yet. The data is not in commit history, but pr-metrics.yml already runs with GitHub API access, so reviewer count and comment depth are reachable from the workflow that posts the PR comment (<code>code-quality-metrics-5w1</code>).',
+    connect:'Unmeasured rather than unreachable: unlike incident data, the PR workflow could read this today. Any measure would ship as informational; DORA measures review speed, not depth, and no source supplies a depth boundary.',
     basis:'Not applicable.', v:'pending'
   },
 ];
@@ -327,7 +344,7 @@ const TOOLS = [
 const VLABEL = { sourced:'sourced', principle:'self-derived', measured:'measured n=12', unstated:'no basis', pending:'n/a' };
 
 function typeClass(t) {
-  return { full:'card-full', partial:'card-partial', gap:'card-gap', oos:'card-oos' }[t];
+  return { full:'card-full', partial:'card-partial', gap:'card-gap', unbuilt:'card-unbuilt', oos:'card-oos' }[t];
 }
 
 function renderGrid(id, items, detailId, hasThresholds) {
@@ -399,6 +416,67 @@ GIT_METRICS.filter(m => m.v === 'unstated' || m.v === 'measured').forEach(m => {
   </div>`;
 });
 
+const LIMITS = [
+  { name:'Whether a project is healthy',
+    note:'Only whether it looks like these six projects. Deriving a threshold from a benchmark of reference systems is an established method, but the people who published it are explicit that it produces a comparison, not a verdict: the thresholds "represent overall volume of code from a benchmark of systems", and validating them against real outcomes is listed as work still to do. Nothing here has been checked against defect rates, incidents or delivery stability.',
+    cite:'Alves, Ypma &amp; Visser, ICSM 2010' },
+  { name:'Anything about a project still being built',
+    note:'Every window measures maintenance work on a decades-old codebase, so the bands describe brownfield practice only. Three of them lean against greenfield in the same direction, toward a worse verdict: large-commit rate and p90 lines, because early build work is mostly new features plus scaffolding, vendored dependencies and generated files; and duplication, because a small codebase has a small denominator, so a couple of repeated blocks move the percentage a lot. That last one is arithmetic rather than a measured finding, and no source was found either way on whether early build work lands tests later, so the test-discipline band may lean the same way on reasoning alone. Do not apply these bands to an initial build.',
+    cite:'Hattori &amp; Lanza, ASE 2008; recorded as the brownfield-only-lifecycle reservation' },
+  { name:'Whether they fit your repository',
+    note:'Not something the bands can tell you themselves, but fit is checkable, and partly checked for you: the comparison degrades along known axes of dissimilarity from the six references, and this toolkit already gates several at runtime. Squashed history withholds every commit-unit verdict; changed duplicate-detector settings withhold the duplication verdict; the brownfield-only reservation above covers projects still being built; language and domain remain yours to judge, and a 320-system study found every context factor it examined shifts metric distributions. What a poor fit costs is the healthy/warning labels, not the measurements: the values, their distributions, and their movement over time inside your own repository stay well-defined, and within-repo drift is what this toolkit exists to detect. The caution on the labels is real: models fitted on one project fell to 0.38 accuracy on another, worse than guessing, and no single metric correlated with defects across all five systems studied at Microsoft. Both results bound outcome prediction, which these bands do not attempt, but they are the clearest published warning against carrying a project-derived number to a dissimilar project.',
+    cite:'Kamei et al., EMSE 2016; Nagappan, Ball &amp; Zeller, ICSE 2006; Zhang et al., ICSM 2013 via Foucault et al., SAC 2014' },
+  { name:'Whether they will still hold next year',
+    note:'They are built to be re-derived, not to hold. The metric-to-outcome relationship drifts fast: commit-risk models lose 11 to 34 percentage points of accuracy within a year of being fitted. The descriptive statistics themselves moved more slowly here: the recorded pre-2022 windows of the same six references show modest, mixed-direction movement over roughly four years. Observations are era-tagged and <code>calibration/derive-bands.js</code> re-derives every band from them, so the answer to drift is scheduled re-derivation, not trust in a frozen figure.',
+    cite:'McIntosh &amp; Kamei, TSE 2018' },
+  { name:'Whether one metric can be read alone',
+    note:'Each metric here is scored against its own band, independently. The largest study of commit-level risk found that a factor "may have a positive or a negative influence depending on what other factors are in the model", and demonstrated it, with files-touched flipping from risk-raising to risk-lowering between two models on the same data. Read the metrics together, not one at a time.',
+    cite:'Kamei et al., TSE 2013' },
+];
+
+const COUNTER = [
+  { name:'Duplication may not signal defects',
+    note:'The direct tests split. The strongest exonerating study looked at four large C projects across their whole histories and found the opposite of the usual assumption: clones "may be less defect prone than non-cloned code", with most bugs having no cloned code in them at all. A separate industrial study found longer duplicate blocks are no more fault-prone than short ones. What the research does implicate is duplicates <em>drifting apart</em> over time: the strongest harm-side study found nearly every second unintentional divergence between clones was a fault. A line-matching scanner cannot see divergence in either direction, so duplication is kept here as a drift signal, not a defect-risk claim.',
+    cite:'Rahman, Bird &amp; Devanbu, MSR 2010; Wagner et al., SANER 2016; Juergens et al., ICSE 2009' },
+  { name:'AI adoption did not clearly raise duplication',
+    note:'The most careful causal study available compared 806 projects that adopted Cursor against 1,380 matched projects that did not. Duplicated lines rose about 7 percent, which was not statistically significant (though the point estimate is positive and the interval nearly excludes zero, so this reads better as underpowered than as a clean null). Its authors, and a second independent team, both fault the widely cited analysis behind the AI-drives-duplication claim on method: it could not tell who was actually using the tool. That rejects the attribution, not the possibility, and the same study still measures absolute warning and debt counts rising with post-adoption volume.',
+    cite:'He et al., MSR 2026; Robbes et al., 2026' },
+  { name:'Agent commits touch tests more often, not less',
+    note:'Across 1.25 million commits from 2025, 23 percent of commits written by coding agents added or changed a test file, against 13 percent for everyone else. That runs against the assumption behind the test-discipline metric. The same study raises a different worry the metric cannot see: agent commits also add mocks more often, and a mock-heavy test proves less.',
+    cite:'Hora, MSR 2026' },
+  { name:'Commits are getting longer, not wider',
+    note:'Sprawl is the dimension that moves least. In the largest dataset with a genuine pre-AI baseline, the share of commits touching several files did not shift with AI adoption. A separate study of 9.4 million commits found the typical commit touches 2 files whether a human or an AI wrote it. Commit length does rise; file count barely does.',
+    cite:'Daniotti et al., Science 2026; Robbes et al., 2026' },
+  { name:'AI commits are not reverted more often',
+    note:'Across a census of open-source repositories, two of three widely used agents had their commits reverted less often than humans in the same projects, by 32 and 82 percent. The third was reverted 34 percent more. No uniform penalty.',
+    cite:'Khosravani &amp; Mockus, 2026' },
+  { name:'These measures can move without quality changing',
+    note:'A randomised trial with experienced maintainers warns that lines of code, commit counts and pull request counts are not fixed targets: AI can shift them without productivity or scope changing, by producing wordier code that does the same thing, or by splitting work differently. Every metric on this page is that kind of measure. Treat a band being crossed as a prompt to look, never as a finding on its own.',
+    cite:'Becker et al., METR 2025' },
+];
+
+const limitsEl = document.getElementById('limits-list');
+LIMITS.forEach(l => {
+  limitsEl.innerHTML += `<div class="limit-row">
+    <span class="limit-name">${l.name}</span>
+    <span class="calib-note">${l.note}<div class="cite">${l.cite}</div></span>
+  </div>`;
+});
+
+const counterEl = document.getElementById('counter-list');
+counterEl.innerHTML = '<p class="calib-note" style="margin:0 0 8px">This toolkit assumes AI assistance degrades commit-level ' +
+  'discipline. A research pass on 2026-08-18 found published evidence pointing the other way on several specific claims -- and ' +
+  'with the premise on the dimension that moves most: commit size rises under AI assistance in every large corpus measured, ' +
+  'causally in the best-identified study (He et al., +28.6% lines added). The items below bound which drift signals carry that ' +
+  'weight, not whether anything is moving. Full citations, units and search records are in ' +
+  '<code>calibration/research-findings.md</code>.</p>';
+COUNTER.forEach(c => {
+  counterEl.innerHTML += `<div class="limit-row">
+    <span class="limit-name">${c.name}</span>
+    <span class="calib-note">${c.note}<div class="cite">${c.cite}</div></span>
+  </div>`;
+});
+
 document.getElementById('repro').innerHTML =
   '<p style="margin:0 0 8px"><strong>Source claims.</strong> Checked against the reports themselves rather than summaries. ' +
   'The PDFs were text-extracted and searched directly: DORA <em>State of AI-Assisted Software Development 2025</em>, ' +
@@ -429,8 +507,9 @@ document.getElementById('repro').innerHTML =
   'pull request, so these bands do not transfer to the many projects that squash. The references were chosen because they are ' +
   'considered disciplined, then healthy was defined as what they do, which supports "no worse than these six" rather than ' +
   '"healthy". And a fitted, multi-feature just-in-time defect model already fails to transfer across projects (down to 0.38 ' +
-  'AUC, worse than random -- Kamei et al., EMSE 2016), which bears directly on how far an unfitted scalar band like these can ' +
-  'be carried to a project unlike the six references. A pre-2022 baseline for all six repositories now exists and shows modest, ' +
+  'AUC, worse than random -- Kamei et al., EMSE 2016). That result bounds fitted prediction models rather than benchmark ' +
+  'quantiles, which predict nothing and so fail by going uninformative rather than by scoring worse than chance -- but it ' +
+  'remains the clearest published warning against carrying any project-derived number to a project unlike the six references. A pre-2022 baseline for all six repositories now exists and shows modest, ' +
   'mixed-direction movement rather than uniform AI-era degradation, which downgraded that reservation from high to medium ' +
   'rather than retiring it.</p>' +
   '<p style="margin:0"><strong>Seven defects were found by measuring rather than by reading the code</strong>, three of which ' +

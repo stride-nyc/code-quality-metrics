@@ -63,6 +63,11 @@ function mockExecSequence(...values) {
     // Answer it out of band too, with a single parent -- i.e. "not a merge" --
     // so every commit under test is still analyzed rather than skipped.
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    // Tests predating project-lifecycle detection supply no value for the
+    // repository-root-commit query (`git rev-list --max-parents=0 --all`). Answer it out of
+    // band too, defaulting to "no root commit found" (project_lifecycle: established) so
+    // every prior test's positional values still line up.
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -84,6 +89,7 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // Answer it out of band too, with a single parent -- i.e. "not a merge" --
     // so every commit under test is still analyzed rather than skipped.
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -102,6 +108,48 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     if (typeof command === 'string' && command.includes('--merges')) return mergesOutput;
     if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
+/**
+ * Like mockExecSequence, but answers the repository-root-commit query (`git rev-list
+ * --max-parents=0 --all`) with rootCommitsOutput instead of the "no root commit found"
+ * default. Positional values cover every other command.
+ */
+function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return rootCommitsOutput;
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
+/**
+ * Like mockExecSequence, but the repository-root-commit query (`git rev-list
+ * --max-parents=0 --all`) throws instead of returning a string -- a genuine command
+ * failure, distinct from a command that succeeds with empty stdout (code-quality-metrics-dqri).
+ * Positional values cover every other command.
+ */
+function mockExecSequenceWithRootCommitFailure(...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) {
+      throw new Error('fatal: unable to read tree');
+    }
     const val = values[i] ?? '';
     i++;
     return val;
@@ -304,15 +352,44 @@ describe('collectLocalMetrics — early exits', () => {
     expect(process.exit).toHaveBeenCalledWith(1);
   });
 
-  test('exits with code 1 when git branch listing fails', async () => {
+  // code-quality-metrics-wzy2: `git branch -a` succeeds with empty stdout on a freshly
+  // initialised repository that has no branches yet -- there is nothing wrong with the git
+  // command. That must not be reported as the command having failed.
+  test('does not report a git failure, and continues to the trunk fallback, when git branch -a succeeds with empty output', async () => {
     mockExecSequence(
       FAKE_ROOT,    // git rev-parse --show-toplevel
       FAKE_REMOTE,  // git remote get-url origin
-      ''            // git branch → empty
+      '',           // git branch -a → succeeds, no branches exist yet
+      ''            // git log HEAD (trunk fallback) → no commits (unborn HEAD)
     );
+
+    await collectLocalMetrics();
+
+    expect(console.error).not.toHaveBeenCalledWith(expect.stringContaining('Unable to list Git branches'));
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  // [guard] proven by mutation: changing the catch block below to swallow the error (e.g.
+  // `branchesOutput = '';` instead of reporting and exiting) makes this test fail --
+  // process.exit is never called and no "Unable to list Git branches" message is printed,
+  // because the genuine failure then reads identically to the success-with-empty-output case
+  // the test above covers. Confirmed live: with that mutation applied, this test fails with
+  // "Resolved to value: undefined" instead of rejecting with 'process.exit'.
+  test('[guard] still exits with code 1 and reports the git failure when git branch -a genuinely fails', async () => {
+    execSync.mockImplementation(command => {
+      const cmd = typeof command === 'string' ? command : String(command);
+      if (cmd.includes('rev-parse --show-toplevel')) return FAKE_ROOT;
+      if (cmd.includes('remote get-url')) return FAKE_REMOTE;
+      if (cmd === 'git branch -a') {
+        throw new Error('fatal: not a git repository (or any of the parent directories)');
+      }
+      return '';
+    });
 
     await expect(collectLocalMetrics()).rejects.toThrow('process.exit');
     expect(process.exit).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Unable to list Git branches'));
   });
 
   test('returns without writing files when no feature branches exist', async () => {
@@ -339,6 +416,36 @@ describe('collectLocalMetrics — early exits', () => {
     await collectLocalMetrics();
 
     expect(fs.writeFileSync).not.toHaveBeenCalled();
+  });
+
+  // code-quality-metrics-1g6j: uniqueCommits (git log) is non-empty here -- one commit on
+  // feature/x -- but every commit's `git show --numstat` genuinely fails, so analyzeCommit
+  // (lib/git.js) returns null for each one and `metrics` ends up empty even though commits
+  // were found. That gap is not covered by the uniqueCommits.length === 0 guard above.
+  test('returns without writing files (rather than throwing) when every commit in the window fails analysis', async () => {
+    const SHA = 'a'.repeat(40);
+    execSync.mockImplementation(command => {
+      const cmd = typeof command === 'string' ? command : String(command);
+      if (cmd.includes('rev-parse --show-toplevel')) return FAKE_ROOT;
+      if (cmd.includes('remote get-url')) return FAKE_REMOTE;
+      if (cmd === 'git branch -a') return '  feature/x';
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('%cn')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40); // single parent: not a merge commit
+      if (cmd.includes('--max-parents=0')) return '';
+      if (cmd.includes('%H|%ai')) return `${SHA}|2026-08-10T10:00:00Z|Dev|feat: add thing`;
+      if (cmd.includes('--numstat')) {
+        throw new Error(`fatal: bad object ${SHA}`);
+      }
+      return '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('No commits found in the analysis period'));
   });
 });
 
@@ -421,6 +528,104 @@ describe('collectLocalMetrics — successful run', () => {
     expect(typeof summary.message_quality_pct).toBe('string');
     expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
       .toContain(summary.dora_archetype);
+  });
+
+  test('writes local_metrics_summary.json with project_lifecycle detected as initial-build when the analyzed window includes the repository\'s root commit (code-quality-metrics-31w)', async () => {
+    // SHA is the sole analyzed commit (this describe block's default fixture). Answering
+    // `git rev-list --max-parents=0 --all` with that same SHA is the structural fact this
+    // toolkit's greenfield detection acts on: the analyzed window includes the repository's
+    // own first commit.
+    mockExecSequenceWithRootCommits(
+      SHA,
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('initial-build');
+  });
+
+  // [guard] proven by mutation: reverting analyzeCommit's empty-commit fix in lib/git.js
+  // (code-quality-metrics-p4c) so the numstat command's empty stdout is again treated as
+  // a dropped commit fails this test -- not with 'established' as might be guessed, but
+  // with `RangeError: Invalid time value` from local-code-metrics.js's
+  // `new Date(Math.min(...timestamps)).toISOString()`, since the sole analyzed commit is
+  // now dropped, `metrics` is empty, and `Math.min()` over an empty array is `Infinity`.
+  // Reverted after confirming. django's actual root commit is an empty SVN-import
+  // artifact with a zero-byte numstat, which is why this case matters beyond a synthetic
+  // --allow-empty commit: without the fix, the root commit vanishes from `metrics`
+  // entirely, windowIncludesRepositoryRoot never sees its sha, and (on a repository with
+  // more than one analyzed commit, so this particular crash does not mask it) a
+  // genuinely greenfield window reads as established.
+  test('[guard] detects initial-build when the repository\'s root commit is itself empty, not only when it carries changes (code-quality-metrics-p4c)', async () => {
+    mockExecSequenceWithRootCommits(
+      SHA,
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      ''   // empty numstat: a genuinely empty commit (e.g. an SVN-import root), not a
+           // failed git command
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(1);
+    expect(summary.project_lifecycle).toBe('initial-build');
+  });
+
+  // [guard] proven by mutation: hardcoding includesRepositoryRoot to true in
+  // local-code-metrics.js fails this test, expecting 'established' but receiving
+  // 'initial-build' -- reverted after confirming.
+  test('[guard] writes project_lifecycle as established when the root-commit query matches none of the analyzed commits (default fixture)', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('established');
+    expect(summary.project_lifecycle_signals).toEqual({
+      window_includes_repository_root: false,
+      repository_root_commit_count: 0,
+      root_commit_detection_failed: false
+    });
+  });
+
+  // A genuine `git rev-list --max-parents=0 --all` failure (bad ref, git unavailable,
+  // corrupt repo) previously returned '' through runGitCommand -- indistinguishable from
+  // the command succeeding with no root commits, the exact case the guard above covers.
+  // project_lifecycle then read as 'established' with no visible sign anything had gone
+  // wrong, silently defeating the greenfield detection this field exists for on exactly
+  // the repository it is supposed to protect: a real initial build whose root-commit query
+  // happens to fail. project_lifecycle must instead read as 'undetermined', distinct from
+  // both 'established' and 'initial-build', with the failure visible in
+  // project_lifecycle_signals (code-quality-metrics-dqri).
+  test('records project_lifecycle as undetermined, not established, when the repository-root-commit query fails (code-quality-metrics-dqri)', async () => {
+    mockExecSequenceWithRootCommitFailure(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('undetermined');
+    expect(summary.project_lifecycle_signals).toEqual({
+      window_includes_repository_root: false,
+      repository_root_commit_count: 0,
+      root_commit_detection_failed: true
+    });
   });
 
   test('writes local_metrics_summary.json with history_granularity detected as granular when no squash signals are present', () => {

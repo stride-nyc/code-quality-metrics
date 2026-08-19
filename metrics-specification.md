@@ -109,10 +109,12 @@ mismatches are real:
 | `P90_FILES_CHANGED.healthy` | 8 | ~90% of changes touch fewer than **10 files**, over ~9M changes | Sadowski et al., "Modern Code Review: A Case Study at Google", ICSE-SEIP 2018, §5.2 |
 | | | gcc p90 ≈ **8 files** (derived from published frequency table) | Alali, Kagdi & Maletic, ICPC 2008, Table 2 |
 
-The 260/261 agreement is partly coincidental rather than a clean replication: Kolassa excludes
-blank lines and includes test files; this toolkit counts production lines only via
+The 260/261 agreement is consistency within unit uncertainty rather than a clean replication:
+Kolassa excludes blank lines and includes test files; this toolkit counts production lines only via
 `git numstat`, which includes blank lines. The two biases pull in opposite directions and
-happen to land close together. Neither source proposes these as healthy lines -- both are
+land close together. Alali et al.'s gcc data puts the same percentile nearer 160 lines, so on
+lines the anchor is one large corpus's position rather than a convergent constant; the file-count
+anchor is the better-corroborated of the two. Neither source proposes these as healthy lines -- both are
 descriptive percentiles of a population with no health claim attached. What they support is a
 restatement, not a stronger claim: "this repository sits above the 90th percentile of published
 open-source commit-size distributions" is citable; "this repository exceeds a review-effectiveness
@@ -136,16 +138,19 @@ Thirteen reservations are recorded alongside the observations in
 
 - **Granular history only.** The bands do not transfer to squash-merge repositories, which
   will look worse on every size metric for reasons unrelated to practice.
-- **Circular definition.** The references were chosen because they are considered
-  disciplined, and healthy was then defined as what they do. This supports "no worse than
-  these six" rather than "healthy", and reputation is not a measured outcome.
+- **Unvalidated reference choice.** The references were chosen because they are considered
+  disciplined, and healthy was then defined as what they do. Choosing references and reading
+  bands off their quantiles is how a reference benchmark works (it is Alves et al.'s own
+  procedure), but nothing validates the choice itself, and reputation is not a measured
+  outcome. This supports "no worse than these six" rather than "healthy".
 - **Cross-project non-transfer.** Kamei, Fukushima, McIntosh, Yamashita, Ubayashi and Hassan
   (EMSE 2016, DOI 10.1007/s10664-015-9400-x, Table 6) found within-project just-in-time defect
   models score 0.74-0.83 AUC on their own project but fall as low as 0.38 AUC -- worse than
-  random -- applied cross-project to the same eleven projects. An unfitted scalar band from six
-  repositories has less claim to transfer to an unseen project than a fitted, multi-feature
-  model does, so these bands describe these six repositories rather than generalizing beyond
-  them.
+  random -- applied cross-project to the same eleven projects. That result bounds fitted
+  prediction models; a benchmark quantile predicts nothing, so on an unseen project it fails
+  by going uninformative rather than by scoring worse than chance. It remains the clearest
+  published warning against carrying a project-derived number to a dissimilar project, so
+  these bands describe these six repositories rather than generalizing beyond them.
 - **Context-dependence** (medium severity). Zhang, Mockus, Zou, Khomh and Hassan (ICSM 2013,
   DOI 10.1109/ICSM.2013.46) measured 320 SourceForge systems across 39 metrics and found every
   one of six context factors they studied (domain, language, age, lifespan, number of changes,
@@ -287,6 +292,125 @@ it. Trunk analysis of a repository that genuinely squash-merges is unaffected: t
 main really are whole pull requests, and the gate does not apply outside
 `workflow_type: feature_branch`.
 
+**Reporting the decision, not the discarded guess (code-quality-metrics-aoo).** The masthead's
+history line used to pair the *resolved* value with the raw detector's own confidence — e.g.
+"History: granular (low confidence)" — even on a `workflow_type: feature_branch` run, where the
+resolved value came from the structural gate above, not from the low-confidence guess sitting
+next to it. That reads as unsure about a fact that was never in doubt. `lib/report-template.js`'s
+`resolveGranularitySentence` now states a plain-language sentence per state, naming a confidence
+only when a detection genuinely produced the resolved value (`workflow_type: trunk`); a
+`workflow_type: feature_branch` run states the structural fact with no confidence hedge at all.
+The raw guess that gate discarded is not lost — `renderHistoryProvenanceLine` surfaces it in
+Analysis Scope as provenance (e.g. "Detection guessed squashed pull requests... overridden
+because the analyzed commits are unique to unmerged branches"), where it serves as an audit trail
+rather than sitting in the masthead beside a value it does not describe. A human-supplied
+`--history` override is unaffected by this change and keeps stating what was forced and what
+detection itself found.
+
+### Project Lifecycle and Change-Size Withholding
+
+Four of the metrics above (large and sprawling commit percentage, p90 lines/files changed) and
+duplication density carry a further bias, on an axis independent of history granularity: their
+bands were calibrated against maintenance-era windows on six decades-old codebases
+(`calibration/observations.json`'s `brownfield-only-lifecycle` reservation, high severity).
+Lifecycle (greenfield vs. brownfield) and era (pre-AI vs. current) are separate axes, and only
+era is represented in the calibration data. Large commits are disproportionately forward
+engineering, and an initial build carries scaffolding, vendored dependencies and generated
+files (Hattori and Lanza, EVOL 2008) — biasing `LARGE_COMMITS_PCT` and `P90_LINES_CHANGED`
+toward a worse verdict; `DUPLICATION_PCT` is biased on arithmetic, since a small total-lines
+denominator swings on a few blocks. `P90_FILES_CHANGED` sits in the same tile group for the same
+underlying reason (an initial build's commits are unusually large and multi-file) even though
+no single cited study isolates the files-changed count the way Hattori and Lanza isolate lines.
+
+**Measured, not hypothetical.** flight-info-spike, a three-week greenfield spike (45 commits,
+2026-04-27 to 2026-05-15), was labelled `legacy-bottleneck` with 48.89% large commits and 42.22%
+sprawling commits before this change — graded against six mature projects doing maintenance.
+
+**The decision (code-quality-metrics-31w): display the value, withhold the verdict.** Hiding
+the tile was ruled out on the same evidence code-quality-metrics-tjn already established:
+duplication vanished from an Elixir report because jscpd could not parse the language, and the
+natural reading was a clean bill of health when nothing had actually been measured. `lib/report.js`'s
+`buildMetricCatalog` reuses `withholdEntry` — the same function squashed history and a class B
+config override already use — rather than adding a fourth shape. The note states that the
+bands are quantiles of maintenance-era windows on decades-old codebases and do not transfer to
+an initial build.
+
+**Detection is a structural fact, not a tuned number.** `windowIncludesRepositoryRoot`
+(`lib/git.js`) checks whether any analyzed commit's SHA is one of the repository's own root
+commit(s), found by `git rev-list --max-parents=0 --all` in `local-code-metrics.js` and compared
+against the whole analyzed set regardless of `workflow_type`. Unlike history granularity, no
+feature-branch special case is needed: a commit's SHA either is one of the repository's roots or
+it is not, independent of which ref found it — a genuinely new project bootstrapped directly on
+an unmerged branch is still detected. `local-code-metrics.js` resolves this to
+`project_lifecycle: 'initial-build' | 'established' | 'undetermined'`, reported alongside
+`project_lifecycle_signals` (`window_includes_repository_root`, `repository_root_commit_count`,
+`root_commit_detection_failed`) for audit.
+
+**A failed root-commit query must not read as "established" (code-quality-metrics-dqri).**
+`git rev-list --max-parents=0 --all` and `runGitCommand` both return `''` on success-with-no-output
+and on failure, the same ambiguity code-quality-metrics-p4c fixed for `analyzeCommit`'s numstat
+query. Left unfixed here, a failed rev-list read as "no root commit found," which is exactly
+`established` -- silently defeating this section's own detection in the one case it exists to
+protect: a genuine initial build whose root-commit query happens to fail. `findRepositoryRootShas`
+(`lib/git.js`) calls `execSync` directly and reports whether the command itself threw, distinct
+from whether its output was empty; `local-code-metrics.js` resolves that into a third
+`project_lifecycle` value, `'undetermined'`, rather than defaulting to either `'established'` or
+`'initial-build'`, neither of which the failed query ever confirmed. `lib/report.js` is
+unmodified: its `WITHHELD_WHEN_GREENFIELD` gate checks for `'initial-build'` specifically, so
+`'undetermined'` is treated the same as `'established'` for banding purposes (bands are applied,
+not withheld) -- consistent with how `resolveHistoryGranularityForWithholding` above already
+treats an undetermined history-granularity signal as the less-withholding default. What changes
+is visibility: the failure is now legible in `project_lifecycle` and
+`project_lifecycle_signals.root_commit_detection_failed` and logged to the console, rather than
+reading as a confident, silent verdict either way.
+
+**This detection depends on the root commit surviving analysis at all (code-quality-metrics-p4c).**
+`windowIncludesRepositoryRoot` can only see a root commit's sha in `analyzedShas`, which is
+built from `analyzeCommit`'s results; a root commit `analyzeCommit` drops never reaches the
+check. django's actual root commit is an empty SVN-import artifact with a zero-byte
+`git show --numstat` diff, and `analyzeCommit` used to treat that the same as a failed git
+invocation — both produced empty stdout through `runGitCommand` — so it returned `null` and
+the commit disappeared from `metrics` entirely. A window that structurally reached the
+repository's own first commit then read as `established`, issuing band verdicts against a
+greenfield window rather than withholding them, the exact failure this section exists to
+prevent. `analyzeCommit` now asks whether `git show --numstat` itself succeeded (via a direct
+`execSync` call, distinct from whether its output is empty) rather than treating empty
+output as failure, so a genuinely empty commit is counted with zero additions, deletions and
+files instead of dropped. See Metric 1's data-source note below for the corresponding
+denominator decision.
+
+**Why this rule over the other three candidates.** Repository age from first commit, total
+commit count, and the ratio of the window's span to the repository's whole history were all
+considered and rejected: each needs an invented age, count, or ratio boundary with no natural
+place to draw it, joining the six figures this project has already withdrawn as unsourced or
+untraceable. Whether the window includes the repository's root commit needs no such number —
+it rests on a structural fact, the same reasoning `workflow_type` already applied to history
+granularity above.
+
+**Which way this rule errs, and why that is the right way round.** Withholding every tile this
+gate touches (large/sprawling commit %, p90 lines/files changed, duplication density) costs a
+reader most of the "Change size and scope" group; asserting a verdict against bands that do not
+apply costs them a wrong one. This rule is built to almost never do the first to a real,
+established repository: `local-code-metrics.js` is HEAD-anchored by default (the newest
+`CONFIG.MAX_COMMITS`, 50, commits), so a mature repository's root commit is reachable inside the
+window only once its whole recorded history is smaller than the window itself. Measured against
+the four repositories copied for this ticket's own verification: 73V and remote_retro each carry
+3,174+ total commits, daloopa 357, dotnetdependencytracer 1,321 — all far above 50, so none of
+them trips the rule. The rule's failure mode is therefore a false negative, not a false
+positive: a greenfield window that starts partway into a still-small project's history (an
+explicit `--since` older than the repository but not old enough to reach commit zero, for
+instance) is graded normally, exactly as it was before this change. That is the pre-existing,
+already-documented bias this ticket opened against, not a new harm this rule introduces — so a
+missed greenfield window costs nothing beyond leaving today's known bias in place, while a false
+positive would cost a reader looking at a genuinely mature codebase every band on the page.
+
+**The report says plainly what it is still for.** Withholding four of six "Change size and
+scope" tiles plus duplication density leaves most of that group as ungraded numbers — honest,
+but also the point a reader asks what the report is still for. `lib/report-template.js`'s
+`renderLifecycleLine` states the answer in the masthead rather than leaving it to be inferred
+from a screen of ungraded tiles: "This report shows shape and trend for those tiles, not a
+grade."
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -303,6 +427,22 @@ large_commit_pct = (commits where additions + deletions > LARGE_COMMIT_THRESHOLD
 **Why production lines only**: counting test lines meant that adding tests could push a change over the threshold. A 90 line production change shipped with 30 lines of tests scored 120 and was flagged large, while the same change with no tests was not, so the metric penalised the practice this toolkit identifies as the strongest protection against drift. `uncovered_prod_rate` already covers the untested case as a separate signal.
 
 **Note**: `total_additions` and `total_deletions` in the output remain whole-diff, including test lines, because the size distributions describe how much a reviewer actually reads. `prod_additions` and `prod_deletions` carry the production-only totals that drive this flag.
+
+**A genuinely empty commit counts in `total_commits` (code-quality-metrics-p4c)**: a
+`git commit --allow-empty` commit, or a root commit that is itself an empty artifact (see
+Project Lifecycle above), is a real commit the team or a migration tool made, which is
+information rather than an error, so `analyzeCommit` reports it with `total_additions: 0`,
+`total_deletions: 0`, `files_changed: 0`, `large_commit: false`, `sprawling_commit: false`
+rather than dropping it. It therefore counts in the denominator of every commit-shape rate
+in this file (large/sprawling commit %, the three-way test-coverage rates, and the
+lines/files-changed distributions), which pulls those rates down slightly rather than
+leaving them unaffected. That is the deliberate choice: excluding it would silently shrink
+every rate's denominator the same way a dropped merge commit or a failed git invocation
+does, and unlike those two cases an empty commit is not an error to exclude, it is a
+zero-sized unit of work like any other. A merge commit (skipped to avoid double-counting
+against its first parent, see the code comment in `analyzeCommit`) and a commit whose
+`git show --numstat` invocation itself fails are the only cases still dropped from
+`total_commits` entirely.
 
 **CONFIG key**: `LARGE_COMMIT_THRESHOLD` (default: 100 lines)
 
@@ -502,9 +642,10 @@ carries a verdict; the percentiles below carry the load this band used to carry.
 **External anchor for `p90_lines_changed`**: Kolassa, Riehle and Salim (SOFSEM 2013, Table 1;
 arXiv:1408.4974), an Ohloh.net snapshot of 8,705,118 commits across 11,143 projects, report a p90
 of 261 LoC/commit -- one unit from the 260 derived here from an unrelated, six-repository dataset.
-The agreement is partly coincidental: Kolassa excludes blank lines and includes test files, this
-toolkit counts production lines only and includes blank lines, and the two biases pull in
-opposite directions. Neither source proposes 260 or 261 as a healthy line; both are descriptive
+The agreement is consistency within unit uncertainty: Kolassa excludes blank lines and includes
+test files, this toolkit counts production lines only and includes blank lines, and the two biases
+pull in opposite directions. Alali et al.'s gcc data puts the same percentile nearer 160 lines, so
+this is one large corpus's position, not a convergent constant. Neither source proposes 260 or 261 as a healthy line; both are descriptive
 percentiles. What is citable is a position, not a boundary: this repository sits above the 90th
 percentile of a large published open-source commit-size distribution, not that it has crossed a
 review-effectiveness threshold.
@@ -932,12 +1073,32 @@ test-discipline path.
 
 **Interpretation**:
 
-| Archetype | What It Suggests |
+| Archetype | Which rule fired |
 |-----------|-----------------|
-| `harmonious-high-achiever` | Strong foundation; AI tools likely amplifying positive outcomes |
-| `foundational-challenges` | Elevated large-commit rate alone; AI tools likely accelerating debt |
-| `legacy-bottleneck` | Architectural scatter combined with large commits; AI making cross-cutting changes worse |
-| `mixed-signals` | Inconsistent patterns; investigate specific outliers |
+| `harmonious-high-achiever` | All four signals above stayed at or below (or, for test coverage, at or above) their healthy line |
+| `foundational-challenges` | Large commits alone crossed its critical line |
+| `legacy-bottleneck` | Sprawling commits and large commits both crossed their critical lines |
+| `mixed-signals` | No combination above matched |
+
+Earlier text in this section described what each archetype "suggests" about AI tool impact
+(e.g. "AI tools likely amplifying positive outcomes," "AI making cross-cutting changes worse").
+No source cited anywhere in this project supports that causal reading — DORA does not derive
+these archetypes from commit shape at all (see "What it measures" above), and this toolkit's own
+classification is four commit-shape percentages evaluated against calibrated bands, nothing more.
+The table above states only which rule fired, matching the wording the rendered report itself now
+uses (see below).
+
+**Report placement (code-quality-metrics-bmg).** This classification used to render in the
+report's masthead, above every metric tile — the first interpretive claim a reader met, and the
+most prominent position on the page, for a construct with no validation behind its four-way
+grouping (measured absurdity: a three-week-old greenfield spike, flight-info-spike, classified as
+`legacy-bottleneck`). `lib/report-template.js`'s `renderArchetypeSection` now renders it below the
+"Commit messages" metric group, in a block explicitly marked "under development," with two
+changes to the text itself: it names which of the four signals crossed which line
+(`archetypeSignalPhrase`) rather than asserting what the combination "points to," and it states
+plainly, in the block itself, that the four-way grouping is this toolkit's own invention, not
+something DORA publishes from commit data. The classification is still computed exactly as
+described above; only its report weight and wording changed.
 
 **Limitation**: This classification is based on a 30-day window of at most 50 commits. It is a directional signal, not a definitive assessment. Teams near archetype boundaries should look at individual metric thresholds, not just the archetype label.
 
@@ -1040,32 +1201,46 @@ At the default `AI_ANALYSIS_MAX_COMMITS: 5` with 4000-char diffs, a typical run 
 
 ## Persistent Measurement Gaps
 
-These signals are not addressable by this toolkit. Each gap is noted with the best alternative approach:
+Two kinds of gap, and the difference matters: some signals need data this toolkit never sees,
+others need only analysis nobody has built yet on data already in reach. A gap of the second
+kind is a statement about this toolkit's backlog, not about the data sources.
 
-1. **Copy-paste and code cloning detection**: Requires AST-level diff analysis to detect when code is duplicated with minor modifications. GitClear is the specialized commercial solution. This toolkit's additions-ratio metric is a proxy for the outcome (more code added than removed) but cannot detect the structural pattern directly.
+### Gaps in the data (the toolkit never sees it)
 
-2. **DORA delivery metrics** (deployment frequency, lead time, change failure rate, MTTR): Require integration with CI/CD pipelines and incident tracking systems. DX and LinearB provide these for organizations that want full lifecycle visibility alongside git-level analysis.
+1. **DORA delivery metrics** (deployment frequency, lead time, change failure rate, MTTR): Require integration with CI/CD pipelines and incident tracking systems. DX and LinearB provide these for organizations that want full lifecycle visibility alongside git-level analysis.
 
-3. **Code review quality**: Reviewer count, comment depth, and review turnaround time are available via GitHub API. The GitHub workflow variant of this toolkit (`pr-metrics.yml`) surfaces PR-level signals, but the local script has no access to review data.
+2. **AI tool usage specifics**: Which AI tools are being used, how frequently suggestions are accepted, and which patterns come from which models require IDE telemetry. This is not available in git history.
 
-4. **Architectural boundary violations without Claude**: Detecting whether code crosses architectural boundaries (service layers, domain boundaries, module dependencies) without semantic analysis requires a dependency graph of the codebase. Without Claude API enabled, this toolkit can detect structural patterns (sprawl, large commits) but not semantic architectural violations.
+3. **DORA capabilities 1, 2, 3, 6, 7**: Organizational AI stance, data ecosystem quality, internal knowledge accessibility, user-centric focus, and platform quality all require organizational survey data or infrastructure telemetry. DORA measures these through their survey instrument.
 
-5. **AI tool usage specifics**: Which AI tools are being used, how frequently suggestions are accepted, and which patterns come from which models require IDE telemetry. This is not available in git history.
+4. **Developer well-being and burnout**: DORA research shows that AI adoption affects developer well-being, which in turn affects all other metrics. This requires survey data.
 
-6. **DORA capabilities 1, 2, 3, 6, 7**: Organizational AI stance, data ecosystem quality, internal knowledge accessibility, user-centric focus, and platform quality all require organizational survey data or infrastructure telemetry. DORA measures these through their survey instrument.
+### Gaps in the analysis (the data is in reach; the analysis is unbuilt or partial)
 
-7. **Developer well-being and burnout**: DORA research shows that AI adoption affects developer well-being, which in turn affects all other metrics. This requires survey data.
+1. **Structural clone detection**: Token-level duplication is measured (jscpd at SonarQube's minimum clone size, over the production files the analyzed commits touched; see Duplication Density above), and the optional Claude pass catches some duplicates rebuilt with different names or structure. What remains unbuilt is AST-level detection of restructured clones; GitClear is the specialized commercial solution.
+
+2. **Code review quality**: Reviewer count, comment depth, and review turnaround time are available via the GitHub API, and `pr-metrics.yml` already runs with API access in the same context that posts the PR comment. Unmeasured rather than unreachable (`code-quality-metrics-5w1`). The local script has no access to review data.
+
+3. **Architectural boundary violations**: Detecting whether code crosses architectural boundaries (service layers, domain boundaries, module dependencies) requires a dependency graph over source that is already checked out. With the Claude API enabled the toolkit gets a semantic approximation; without it, only the structural proxies (sprawl, large commits).
 
 ---
 
 ## Configuration Reference
 
-All thresholds are set in the `CONFIG` object at the top of `local-code-metrics.js`. The GitHub workflows have equivalent values hard-coded in their shell/jq logic. Update both locations when adjusting thresholds.
+Detector and analysis settings live in the `CONFIG` object in `lib/config.js`; the calibrated
+verdict bands live in `THRESHOLDS` in `lib/thresholds.js`. Each file is the single source of
+truth for its kind of value: the local script and both GitHub workflows `require()` them
+directly, so a change propagates everywhere with no second location to update. Per-repo
+overrides go in the target repository's `.codemetrics.json` (see AGENTS.md, "Per-Repo
+Configuration Overrides"); overriding a class B key withholds the affected verdict. Key
+`CONFIG` defaults:
 
 ```javascript
 const CONFIG = {
-  // Analysis window
-  ANALYSIS_DAYS: 30,                  // days of history to analyze
+  // Analysis window. The default is HEAD-anchored: the newest MAX_COMMITS commits
+  // regardless of calendar date (code-quality-metrics-g10). ANALYSIS_DAYS applies
+  // only when --days sets an explicit calendar window.
+  ANALYSIS_DAYS: 30,                  // calendar window when --days is passed explicitly
   MAX_COMMITS: 50,                    // maximum commits to analyze (most recent first)
 
   // Commit size thresholds
@@ -1206,6 +1381,19 @@ Single summary object for the analysis run:
     merge_commit_count: number
   },
   history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
+
+  // Project lifecycle (code-quality-metrics-31w): see "Project Lifecycle and Change-Size
+  // Withholding" above. A purely structural detection -- no confidence axis and no override,
+  // unlike history_granularity above, since there is no raw guess to resolve or overrule.
+  // "undetermined" (code-quality-metrics-dqri) is a third, distinct value: the repository-root
+  // query itself failed, so neither "initial-build" nor "established" was ever confirmed.
+  project_lifecycle: "initial-build" | "established" | "undetermined",
+  project_lifecycle_signals: {
+    window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict
+    repository_root_commit_count: number,      // `git rev-list --max-parents=0 --all`'s count
+    root_commit_detection_failed: boolean       // true when that command itself failed, not
+                                                 // when it succeeded and simply found none
+  },
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
   // is the same defect class as the silent inclusion code-quality-metrics-y8j fixes.
@@ -1491,6 +1679,52 @@ rejection behavior are; this file records the intent, and the rejection rate
 measured across real repository runs (unchanged or improved, never worse, is
 the bar) is what confirms the prompt change did not trade readability for
 fabrication.
+
+### Report Layout (code-quality-metrics-g39, -aoo, -bmg)
+
+Rendered top to bottom, `lib/report-template.js`'s `renderReportHtml` now produces: masthead
+(title, `workflow_type`, commit count and branch-spread count, actual span, history-granularity
+sentence) → a deterministic top summary → the five metric groups (Metrics 1-8's headings) →
+the archetype block, marked under development → Flight Log → Duplicate Code → Findings → Analysis
+Scope → footer. Three things moved out of the masthead to get there: the branch name list and
+the archetype verdict (both used to render there, before a reader reached a single metric), and
+Analysis Scope itself (used to render immediately after the masthead, before every metric tile).
+The commit count, branch-spread count, and actual span stay in the masthead — code-quality-
+metrics-8sq's own reasoning for keeping the branch-spread count next to the commit count
+(a thin sample across many idle branches is real information) still applies regardless of where
+the branch names themselves render.
+
+**Top summary.** A short paragraph, right after the masthead, links down to Findings via a
+`#findings` fragment matching an `id="findings"` on the Findings heading. Built by
+`renderTopSummary` deterministically from the already-computed catalog -- no model call, no
+free-form text -- so it carries the same non-fabrication guarantee `validateNarrative` enforces
+for the LLM-generated Findings narrative, by construction rather than by a runtime check: every
+word is fixed template text, and every number either comes directly from a catalog entry
+(`value`/`label`/`status`) or `summary.vendored_generated_share`, or is a count of catalog
+entries matching a status already computed from that same catalog (the one arithmetic step this
+function performs, and a provably correct tally rather than new information). Because it never
+reads the findings narrative argument, its content is identical whether that narrative below was
+accepted or fell back to `fallbackFindings`, and it never states more than `fallbackFindings`
+already would for the same catalog. When `summary.vendored_generated_share.lines_pct` is at or
+above 25% (a documented design choice, not a calibrated boundary -- see
+`VENDORED_SHARE_CALLOUT_THRESHOLD`), the summary calls it out explicitly, since Analysis Scope no
+longer sits near the top where a reader would otherwise see it (measured: flight-info-spike
+reports 72%, reframing its large-commit and sprawl figures).
+
+**Archetype block.** See "DORA Archetype Classification" above for the reworded text itself;
+this section covers only its position. It renders below the "Commit messages" metric group, in a
+block headed "Team archetype (under development)," rather than in the masthead.
+
+**Analysis Scope.** Still built by `renderExclusionsSection`, carrying `analysis_exclusions` and
+`vendored_generated_share` exactly as before, plus two additions: the branch name list
+(`branches_analyzed`, relocated from the masthead) and, when `workflow_type: feature_branch`
+structurally overrode a non-granular raw detection, a provenance line naming what detection
+guessed and why it was overridden (`renderHistoryProvenanceLine`, see "History Granularity and
+Commit-Unit Withholding" above). Because the section now always has the branch list to show on
+any real run, it is omitted only when a summary has none of its four possible contents at all
+(exclusions, vendored share, branches, or a discarded detection) -- previously it was omitted
+whenever exclusions and vendored share were both absent, which does not describe what the
+section renders any more.
 
 ---
 

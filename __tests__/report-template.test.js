@@ -83,6 +83,17 @@ function duplicateSection(html) {
   return html.slice(start, end);
 }
 
+// Scopes an assertion to the masthead only (code-quality-metrics-g39): the branch list moved
+// out of it into Analysis Scope, so a test asserting the masthead does NOT carry the branch
+// list would pass vacuously against the whole page (the names still appear further down) if it
+// were not scoped to just this element.
+function mastheadSection(html) {
+  const start = html.indexOf('<header class="masthead">');
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = html.indexOf('</header>', start) + '</header>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -97,14 +108,25 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/<title>[^<]+<\/title>/);
   });
 
-  it('renders masthead context from the summary: branches, workflow type, and commit counts', () => {
+  it('renders workflow type and commit counts in the masthead', () => {
     const html = renderReportHtml(fixtureArgs());
+    const masthead = mastheadSection(html);
 
-    expect(html).toContain('feature_branch');
-    expect(html).toContain('main');
-    expect(html).toContain('feature/foo');
-    expect(html).toContain('42');
-    expect(html).toContain('30');
+    expect(masthead).toContain('feature_branch');
+    expect(masthead).toContain('42');
+    expect(masthead).toContain('30');
+  });
+
+  // code-quality-metrics-g39: a reader on a many-branch repository (measured: remote_retro,
+  // 30 branch names before a single number) met a wall of branch names before the commit count
+  // or the span. The names move to Analysis Scope; the masthead keeps only the count of
+  // contributing branches ("across N branches"), already covered by the test below.
+  it('does not render the branch name list in the masthead', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'feature/a-third-branch'] }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).not.toContain('feature/foo');
+    expect(masthead).not.toContain('feature/a-third-branch');
   });
 
   // code-quality-metrics-g10 hard requirement: a HEAD-anchored run never applied a day-based
@@ -169,16 +191,93 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/widened/i);
   });
 
-  it('renders the detected history granularity and confidence in the masthead', () => {
+  // code-quality-metrics-aoo state 1 (4 of 5 repositories analysed: 73V, remote_retro,
+  // daloopa, dotnetdependencytracer): workflow_type feature_branch settles the unit
+  // structurally regardless of what the raw detector guessed, so the line must state the
+  // resolved fact in plain words and must not pair it with the confidence of the discarded
+  // guess (the exact bug: "History: granular (low confidence)" reads as unsure about a
+  // value that was never actually in doubt).
+  it('states individual commits with no confidence hedge when workflow_type settles the unit structurally (state 1)', () => {
     const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'feature_branch',
       history_granularity: 'granular',
-      history_granularity_detected: 'granular',
-      history_granularity_confidence: 'high',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
       history_granularity_override: null
     }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
 
-    expect(html).toContain('granular');
-    expect(html).toContain('high confidence');
+    expect(line).toContain('Comparing individual commits');
+    expect(line).toContain('unmerged branches');
+    expect(line).not.toContain('confidence');
+  });
+
+  // [guard] not a called-shot RED: resolveGranularitySentence's full five-state switch was
+  // written in one pass alongside state 1 above, so states 2-5 below pin down behavior that
+  // already existed rather than driving new production code. Proven by mutation: swapping the
+  // 'high' branch's return for the 'low' branch's text (so a high-confidence trunk-granular
+  // result reads "though the signal is weak") failed this test, expecting "keeps them intact"
+  // but receiving "though the signal is weak: a few subjects reference pull requests" -- reverted
+  // after confirming.
+  it('[guard] states individual commits with no hedge when trunk detection settles granular at high confidence (state 2)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'high'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('Comparing individual commits');
+    expect(line).toContain('keeps them intact');
+  });
+
+  // [guard] proven by mutation: swapping the 'low' branch's text for the 'high' branch's
+  // ("keeps them intact rather than squashing on merge") failed this test, expecting "the signal
+  // is weak" but receiving the high-confidence wording -- reverted after confirming.
+  it('[guard] names the signal as weak when trunk detection settles granular at low confidence (state 3)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'low'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('the signal is weak');
+  });
+
+  // [guard] proven by mutation: dropping state 4's trailing withholding-consequence clause
+  // (leaving only 'Comparing squashed pull requests, not individual commits.') failed this test's
+  // /withheld/ assertion -- reverted after confirming.
+  it('[guard] states squashed pull requests and names the withholding consequence when trunk detection settles squashed (state 4)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'squashed',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'high'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('squashed pull requests, not individual commits');
+    expect(line).toMatch(/withheld/);
+  });
+
+  // [guard] proven by mutation: deleting the `history_granularity_detected === 'unknown'` check
+  // (falling through to the state-4 text unconditionally) failed this test, expecting "The unit
+  // could not be determined" but receiving the state-4 "squashed pull requests, not individual
+  // commits" wording -- reverted after confirming.
+  it('[guard] states the unit could not be determined when trunk detection itself returns unknown (state 5)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'squashed',
+      history_granularity_detected: 'unknown',
+      history_granularity_confidence: 'low'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('The unit could not be determined');
+    expect(line).toMatch(/withheld/);
   });
 
   it('records that a human overrode the heuristic, and what the heuristic itself found, in the masthead', () => {
@@ -193,6 +292,69 @@ describe('renderReportHtml', () => {
     expect(html).toContain('squashed');
   });
 
+  // code-quality-metrics-31w: flight-info-spike, a three-week greenfield spike, is currently
+  // graded against bands calibrated on maintenance-era windows of decades-old codebases and
+  // comes out labelled legacy-bottleneck. Withholding four-of-six change-size tiles plus
+  // duplication leaves most of a group as ungraded numbers; the masthead has to say plainly
+  // what the report is still for in that state, rather than leaving a reader to infer it from a
+  // screen of ungraded tiles.
+  it('states plainly, in the masthead, that the report shows shape and trend rather than a grade when project_lifecycle is initial-build', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toMatch(/initial build/);
+    expect(masthead).toMatch(/shape and trend/);
+  });
+
+  // [guard] an established repository's masthead must not carry the initial-build sentence at
+  // all -- proven by mutation: see the production-code cycle for this line.
+  it('[guard] says nothing about an initial build in the masthead when project_lifecycle is established', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'established' }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).not.toMatch(/initial build/);
+  });
+
+  // code-quality-metrics-bmg: the archetype verdict headlined the report, above every metric
+  // tile, classifying an entire team from four commit-shape percentages (measured absurdity:
+  // a three-week-old greenfield spike labelled legacy-bottleneck). It moves below the "Commit
+  // messages" group, in a block marked under development, and out of the masthead entirely.
+  it('moves the archetype verdict out of the masthead, into a section after Commit messages marked under development', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
+    const masthead = mastheadSection(html);
+    expect(masthead).not.toContain('class="verdict"');
+
+    const commitMessagesHeading = html.indexOf('<h2 class="metric-category-heading">Commit messages</h2>');
+    const flightLogHeading = html.indexOf('<h2>Flight Log</h2>');
+    const verdictPosition = html.indexOf('class="verdict"');
+    expect(commitMessagesHeading).toBeGreaterThanOrEqual(0);
+    expect(flightLogHeading).toBeGreaterThan(commitMessagesHeading);
+    expect(verdictPosition).toBeGreaterThan(commitMessagesHeading);
+    expect(verdictPosition).toBeLessThan(flightLogHeading);
+    expect(html).toMatch(/under development/i);
+  });
+
+  // [guard] proven by mutation: reintroducing the old ARCHETYPE_VERDICTS-style string
+  // ('High sprawl and large-commit rates point to legacy-bottleneck patterns.') in place of
+  // describeArchetypeBody's factual per-signal breakdown made this test's "not to contain
+  // 'point to'" assertion fail, and its "crossed the critical line" assertion also fail since
+  // the old string names no line at all -- reverted after confirming both failures.
+  it('[guard] describes which archetype signals crossed which line, and states the grouping is this toolkit\'s own invention', () => {
+    const html = renderReportHtml(fixtureArgs({
+      large_commits_pct: '45.00',
+      sprawling_commits_pct: '25.00',
+      dora_archetype: 'legacy-bottleneck'
+    }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).not.toMatch(/points? to/i);
+    expect(section).toContain('crossed the critical line');
+    expect(section.toLowerCase()).toContain("toolkit's own");
+    expect(section).toMatch(/DORA/);
+    expect(section).toMatch(/does not publish|no such grouping|not from commit shape/i);
+  });
+
   it('renders a verdict line derived from summary.dora_archetype', () => {
     const harmonious = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(harmonious).toMatch(/class="verdict"/);
@@ -200,6 +362,22 @@ describe('renderReportHtml', () => {
 
     const bottleneck = renderReportHtml(fixtureArgs({ dora_archetype: 'legacy-bottleneck' }));
     expect(bottleneck).toContain('legacy-bottleneck');
+  });
+
+  // code-quality-metrics-rpw: the verdict line named its own archetype twice -- once as a
+  // "label: " prefix and again inside describeArchetypeBody's explanatory sentence ('...this
+  // toolkit's rule labels that combination "legacy-bottleneck" because...'). Redundant, not
+  // incorrect, but a single occurrence reads as clean prose. Scoped to the verdict paragraph
+  // alone (not the whole page) so a second, unrelated mention elsewhere in the report can never
+  // make this assertion pass for the wrong reason.
+  it('[guard] names the archetype label only once in the verdict line, not as a repeated prefix', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'legacy-bottleneck' }));
+    const verdictStart = html.indexOf('class="verdict"');
+    const verdictEnd = html.indexOf('</p>', verdictStart);
+    const verdict = html.slice(verdictStart, verdictEnd);
+
+    const occurrences = verdict.split('legacy-bottleneck').length - 1;
+    expect(occurrences).toBe(1);
   });
 
   // The four dora_archetype values are boundaries this toolkit invented from
@@ -416,9 +594,83 @@ describe('renderReportHtml', () => {
     expect(html).toContain('**/vendor/**');
   });
 
-  it('omits the exclusion section entirely, without throwing, when the summary predates this feature (both fields absent)', () => {
-    expect(() => renderReportHtml(fixtureArgs())).not.toThrow();
-    const html = renderReportHtml(fixtureArgs());
+  // code-quality-metrics-g39: the branch name list moved out of the masthead (see the masthead
+  // tests above) into Analysis Scope, which already answers "what was measured" rather than
+  // "what was found" and already carries branches_with_analyzed_commits.
+  it('renders the branch names in Analysis Scope', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'release/9'] }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    expect(scopeStart).toBeGreaterThanOrEqual(0);
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('main');
+    expect(scope).toContain('feature/foo');
+    expect(scope).toContain('release/9');
+  });
+
+  // code-quality-metrics-rpw: "Branches analyzed" here and "across N branches" in the masthead
+  // used the same word for two different sets -- this bullet lists branches_analyzed (every
+  // branch considered, measured 51 on 73V), the masthead counts
+  // branches_with_analyzed_commits (only those that contributed a commit, measured 4). Asserts
+  // both halves: the new label naming the actual set is present, and the old label implying
+  // the masthead's set is gone -- the first alone would pass even if the old, misleading label
+  // were left standing alongside it.
+  it('labels the Analysis Scope branch bullet with the set it lists, not the masthead\'s contributing-branch wording', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'release/9'] }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('Branches considered');
+    expect(scope).not.toContain('Branches analyzed:');
+  });
+
+  // code-quality-metrics-rpw: the two counts (branches considered vs. branches that actually
+  // contributed a commit) sat on the same page with no way to see them together -- a reader had
+  // to count the branch list by hand and separately recall the masthead's "across N branches" to
+  // notice a thin slice (code-quality-metrics-8sq). Putting "N of M" in the bullet itself makes
+  // the gap visible without that arithmetic.
+  it('shows how many of the considered branches contributed a commit to the analyzed sample, next to the branch list', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('2 of 4');
+  });
+
+  // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
+  // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
+  // Analysis Scope as provenance, so the audit trail survives even though the masthead no
+  // longer contradicts itself.
+  it('surfaces the discarded raw detection in Analysis Scope as provenance when workflow_type structurally overrode it', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'feature_branch',
+      history_granularity: 'granular',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
+      history_granularity_signals: { pr_reference_share: 0.0345, squash_committer_share: 0, merge_commit_count: 0 },
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 0, lines_count: 0, lines_pct: '0.00' }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('Detection guessed');
+    expect(scope).toContain('squashed pull requests');
+    expect(scope).toContain('unmerged branches');
+  });
+
+  // code-quality-metrics-g39 changed what "nothing to show" means: Analysis Scope now also
+  // carries the branch list, so a real run (which always has branches_analyzed) always has
+  // something to show. The section is omitted, without throwing, only when a summary carries
+  // none of the four things it can render: exclusions, vendored share, branches, or a discarded
+  // history-granularity detection -- the genuinely oldest-vintage case.
+  it('omits the Analysis Scope section entirely, without throwing, when the summary has nothing to show', () => {
+    const args = fixtureArgs({ branches_analyzed: undefined });
+    expect(() => renderReportHtml(args)).not.toThrow();
+    const html = renderReportHtml(args);
     expect(html).not.toContain('Analysis Scope');
   });
 
@@ -840,6 +1092,199 @@ describe('renderReportHtml', () => {
     });
 
     expect(html).toMatch(/truncat|fail/i);
+  });
+
+  // code-quality-metrics-g39: Analysis Scope answers "what was measured", which matters once a
+  // reader questions a number, not before they have seen one. It moves to the end of the
+  // content (still above the footer), after Findings rather than right after the masthead.
+  it('renders Analysis Scope after Findings, as the final content section before the footer', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: ['**/bin/**'], excluded_files_count: 1, excluded_lines_count: 10, excluded_lines_pct: '1.00' }
+    }));
+
+    const findingsPosition = html.indexOf('<section class="findings">');
+    const scopePosition = html.indexOf('<section class="analysis-scope">');
+    const footerPosition = html.indexOf('<footer>');
+
+    expect(findingsPosition).toBeGreaterThanOrEqual(0);
+    expect(scopePosition).toBeGreaterThan(findingsPosition);
+    expect(footerPosition).toBeGreaterThan(scopePosition);
+  });
+
+  // code-quality-metrics-g39 full rendered order, top to bottom: masthead, the new top summary,
+  // the metric groups, the archetype (under development), Flight Log, Duplicate Code, Findings,
+  // then Analysis Scope last, before the footer. Asserts relative position, not just presence --
+  // a heading existing somewhere on the page proves nothing about where it sits.
+  it('renders every top-level section in the documented order', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: ['**/bin/**'], excluded_files_count: 1, excluded_lines_count: 10, excluded_lines_pct: '1.00' }
+    }));
+
+    const positions = {
+      masthead: html.indexOf('<header class="masthead">'),
+      summary: html.indexOf('<section class="report-summary">'),
+      metricGrid: html.indexOf('<h2 class="metric-category-heading">'),
+      archetype: html.indexOf('<section class="archetype-note">'),
+      flightLog: html.indexOf('<h2>Flight Log</h2>'),
+      findings: html.indexOf('<section class="findings">'),
+      analysisScope: html.indexOf('<section class="analysis-scope">'),
+      footer: html.indexOf('<footer>')
+    };
+
+    for (const position of Object.values(positions)) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    const order = ['masthead', 'summary', 'metricGrid', 'archetype', 'flightLog', 'findings', 'analysisScope', 'footer'];
+    const orderedPositions = order.map(name => positions[name]);
+    const sorted = [...orderedPositions].sort((a, b) => a - b);
+    expect(orderedPositions).toEqual(sorted);
+  });
+
+  function summarySection(html) {
+    const start = html.indexOf('<section class="report-summary">');
+    expect(start).toBeGreaterThanOrEqual(0);
+    return html.slice(start, html.indexOf('</section>', start));
+  }
+
+  // [guard] not a called-shot RED: renderTopSummary already counted concerns and named the top
+  // one when it was written in the prior commit. Proven by mutation: shadowing criticalCount
+  // and warningCount to 0 inside the concerns branch (so neither count is ever pushed) failed
+  // this test's /\d+ critical/ assertion, rendering "This run flags  signal, led by Large
+  // commits at 40 (critical)." with an empty count clause -- reverted after confirming.
+  it('[guard] states the count of concerns and names the top one by label and value', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '40.00' }));
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/\d+ critical/);
+    expect(summary).toContain('Large commits');
+    expect(summary).toContain('40');
+  });
+
+  // [guard] proven by mutation: forcing the `concerns.length === 0` branch condition to `false`
+  // (so the "no measured signal" branch can never be taken, even when concerns is actually
+  // empty) failed this test with a thrown TypeError ("Cannot read properties of undefined
+  // (reading 'label')") from `concerns[0]` being undefined -- reverted after confirming.
+  it('[guard] states no signal crossed a threshold when the catalog has no concerns', () => {
+    const html = renderReportHtml(fixtureArgs({
+      large_commits_pct: '5.00', sprawling_commits_pct: '5.00', uncovered_prod_rate: '1.00', test_coverage_rate: '90.00'
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toContain('No measured signal in this run crossed a warning or critical threshold.');
+  });
+
+  // code-quality-metrics-g39: "Consider whether the top summary should mention a high vendored
+  // share explicitly, since a reader who never scrolls would otherwise miss the one fact that
+  // changes how everything else reads" -- measured: flight-info-spike at 72%.
+  it('calls out a high vendored/generated share explicitly in the top summary', () => {
+    const html = renderReportHtml(fixtureArgs({
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 40, lines_count: 9000, lines_pct: '72.00' }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toContain('72');
+    expect(summary).toMatch(/vendored|generated/);
+    expect(summary).toMatch(/Analysis Scope/);
+  });
+
+  // [guard] proven by mutation: lowering VENDORED_SHARE_CALLOUT_THRESHOLD to 0 (so any nonzero
+  // share triggers the callout) failed this test, which found the callout text present for an
+  // 8% share it expects to be silent about -- reverted after confirming.
+  it('[guard] does not call out a vendored share below the callout threshold', () => {
+    const html = renderReportHtml(fixtureArgs({
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 2, lines_count: 100, lines_pct: '8.00' }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/vendored|generated/);
+  });
+
+  // The anchor mechanism a file:// page actually uses is fragment-to-id matching: the browser
+  // finds the element whose id exactly equals the URL fragment. This is what would break if the
+  // href and the id text drifted apart (e.g. a rename on one side only) even though "the markup
+  // contains an href" would still be true -- the failure mode this test targets, not just
+  // presence of an anchor tag.
+  it('the anchor from the summary to Findings resolves to the Findings heading, uniquely, the way a file:// fragment link would', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const summary = summarySection(html);
+
+    const hrefMatch = summary.match(/<a href="#([^"]+)">/);
+    expect(hrefMatch).not.toBeNull();
+    const fragment = hrefMatch[1];
+
+    const idPattern = new RegExp(`id="${fragment}"`, 'g');
+    const idMatches = html.match(idPattern) || [];
+    // A file:// page resolves a fragment link by finding the element whose id equals the
+    // fragment, per the HTML living-standard fragment-navigation algorithm -- the same
+    // mechanism plain http:// pages use, unaffected by the file: scheme. Uniqueness matters:
+    // if two elements shared this id, the target would be ambiguous depending on which one a
+    // real browser's tree-order search reaches first, an ambiguity this report must not have.
+    expect(idMatches).toHaveLength(1);
+
+    const idIndex = html.indexOf(`id="${fragment}"`);
+    const headingStart = html.lastIndexOf('<h2', idIndex);
+    const headingText = html.slice(headingStart, html.indexOf('</h2>', headingStart));
+    expect(headingText).toContain('Findings');
+
+    // Exercises the exact same URL-fragment resolution a browser performs when the report is
+    // opened from disk (a file: URL), rather than only inspecting the markup as strings: the
+    // WHATWG URL parser resolves the fragment component identically regardless of scheme, so
+    // constructing a file: URL with this href and reading its .hash back out proves the
+    // fragment round-trips exactly, with no percent-encoding surprise from special characters.
+    const fileUrl = new URL(`report.html#${fragment}`, 'file:///Users/example/repo/');
+    expect(fileUrl.hash).toBe(`#${fragment}`);
+  });
+
+  // Non-fabrication proof (code-quality-metrics-g39's central constraint): every numeral the
+  // top summary prints must be traceable to the catalog it was built from, or to
+  // vendored_generated_share -- the same number-presence discipline lib/narrative.js's
+  // validateNarrative applies to the LLM-generated Findings narrative, applied here to prove
+  // the deterministic summary cannot fabricate a number even by accident, not just that it
+  // currently does not.
+  it('never prints a number in the top summary that does not trace to the catalog or the vendored share', () => {
+    const summary = fixtureSummary({
+      large_commits_pct: '37.50',
+      sprawling_commits_pct: '22.00',
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 9, lines_count: 500, lines_pct: '31.00' }
+    });
+    const catalog = buildMetricCatalog(summary);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData() });
+    const summaryHtml = summarySection(html);
+
+    // Same allowed-number universe validateNarrative builds for the LLM narrative: every
+    // number appearing anywhere in the catalog's own values/boundaries, or in
+    // vendored_generated_share, canonicalized (percent sign and thousands separators
+    // stripped) the same way a number written into prose would be.
+    const numberPattern = /-?\d+(?:\.\d+)?/g;
+    const payloadText = JSON.stringify(catalog) + JSON.stringify(summary.vendored_generated_share);
+    const rawTokens = payloadText.match(numberPattern) || [];
+    // renderTopSummary reads vendored_generated_share.lines_pct through parseFloat then
+    // formatValue (the same "40.00" -> "40" trailing-zero trim every metric card already
+    // performs -- see the "formats metric values by rounding..." test above), so a raw
+    // payload token like "31.00" and the printed "31" are the same number reformatted, not two
+    // different numbers. The allowed set has to include both spellings for the same reason
+    // lib/narrative.js's own payload-building step (narrativeValue) exists: comparing prose
+    // against a payload's raw string precision would reject a legitimate reformat as fabricated.
+    const allowed = new Set(rawTokens);
+    for (const token of rawTokens) {
+      const parsed = parseFloat(token);
+      if (!Number.isNaN(parsed)) allowed.add(String(Math.round(parsed * 100) / 100));
+    }
+    // renderTopSummary performs exactly one arithmetic derivation beyond echoing a payload
+    // field verbatim: counting how many catalog entries carry status 'critical' or 'warning'.
+    // That count is not a fabrication risk the way a free-form-prose number is -- it is a
+    // provably correct tally over data already in the catalog, not new information -- so it is
+    // added to the allowed set explicitly, by the same counting rule, rather than expected to
+    // appear as a literal elsewhere in the payload by coincidence.
+    const criticalCount = catalog.filter(entry => entry.status === 'critical').length;
+    const warningCount = catalog.filter(entry => entry.status === 'warning').length;
+    allowed.add(String(criticalCount));
+    allowed.add(String(warningCount));
+
+    const printed = summaryHtml.match(numberPattern) || [];
+    for (const token of printed) {
+      expect(allowed.has(token)).toBe(true);
+    }
   });
 
 });

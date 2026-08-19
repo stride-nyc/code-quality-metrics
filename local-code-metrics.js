@@ -15,6 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 // Load .env file if present — allows ANTHROPIC_API_KEY to be set without exporting to the
 // shell. Resolved relative to this script's own directory (not process.cwd()), since this
@@ -24,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -186,6 +187,21 @@ function resolveHistoryGranularityForWithholding(detectedGranularity, workflowTy
 }
 
 /**
+ * Reports the single graceful "nothing to analyze" outcome, used at both points that can
+ * reach it: no commits were found in the window at all (uniqueCommits.length === 0), and
+ * commits were found but every one of them failed analysis (metrics.length === 0 despite a
+ * non-empty uniqueCommits -- code-quality-metrics-1g6j). Both are the same outcome from the
+ * report's point of view -- zero analyzable commits -- so they share one message rather than
+ * inventing a second way of saying it.
+ */
+function logNoCommitsAnalyzed() {
+  console.log('⚠️ No commits found in the analysis period.');
+  console.log('This could mean:');
+  console.log('  • No development activity in the analysis period');
+  console.log(`  • Try a wider window: node local-code-metrics.js --days 90`);
+}
+
+/**
  * Main analysis function
  * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
@@ -241,10 +257,24 @@ async function collectLocalMetrics(options = {}) {
   console.log('');
 
   // Get all local and remote branches except main/master
-  const branchesOutput = runGitCommand('git branch -a');
-  if (!branchesOutput) {
+  //
+  // runGitCommand collapses "the command failed" and "the command succeeded with empty
+  // stdout" into the same '' return, which is exactly the wrong thing here (code-quality-
+  // metrics-wzy2): a freshly initialised repository with no branches yet has `git branch -a`
+  // succeed with legitimately empty output, and that must not be reported as the tool being
+  // unable to list branches. execSync's own success/failure is asked directly instead,
+  // bypassing runGitCommand, the same way analyzeCommit's own numstat call does
+  // (code-quality-metrics-p4c) -- a genuinely broken git invocation still exits below, while
+  // an empty-but-successful one falls through to the no-feature-branches trunk fallback.
+  let branchesOutput;
+  try {
+    branchesOutput = execSync('git branch -a', { encoding: 'utf8' }).trim();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
     console.error('❌ Unable to list Git branches');
+    console.error(`Error: ${msg}`);
     process.exit(1);
+    return;
   }
 
   const branchLines = parseBranchList(branchesOutput);
@@ -398,10 +428,7 @@ async function collectLocalMetrics(options = {}) {
   }
 
   if (uniqueCommits.length === 0) {
-    console.log('⚠️ No commits found in the analysis period.');
-    console.log('This could mean:');
-    console.log('  • No development activity in the analysis period');
-    console.log(`  • Try a wider window: node local-code-metrics.js --days 90`);
+    logNoCommitsAnalyzed();
     return;
   }
 
@@ -425,6 +452,24 @@ async function collectLocalMetrics(options = {}) {
   const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
   const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
   const historyGranularity = options.history ?? detectedForWithholding;
+
+  // Project lifecycle (code-quality-metrics-31w): purely structural, no tuned number. Every
+  // reference window this toolkit's bands were calibrated on measures maintenance-era work on
+  // a decades-old codebase (calibration/observations.json's brownfield-only-lifecycle
+  // reservation, high severity), and several bands are biased against a genuine initial build
+  // in the same direction, toward a worse verdict (see lib/report.js's WITHHELD_WHEN_GREENFIELD
+  // comment for the citations). Rather than invent an age or commit-count cutoff, this checks
+  // one fact: does the analyzed window include the repository's own first commit(s)?
+  // `git rev-list --max-parents=0 --all` finds those roots across every ref, not just
+  // branchesToAnalyze, since the question is about the repository's whole history, independent
+  // of workflow_type -- unlike history_granularity above, no feature-branch special case is
+  // needed here: a commit's SHA either is one of the repository's roots or it is not,
+  // regardless of which ref found it.
+  const { shas: rootCommitShas, failed: rootCommitDetectionFailed } = findRepositoryRootShas();
+  if (rootCommitDetectionFailed) {
+    console.log('⚠️ Unable to determine the repository\'s root commit(s); project_lifecycle will report as undetermined rather than established.');
+    console.log('');
+  }
 
   // Analyze commits in detail. uniqueCommits is a concatenation of per-branch results in
   // branch-iteration order, not a globally date-sorted list, so slicing it directly would keep
@@ -464,6 +509,22 @@ async function collectLocalMetrics(options = {}) {
   }
 
   console.log('\n');
+
+  // code-quality-metrics-1g6j: uniqueCommits was non-empty (the guard above already ruled
+  // out zero commits found), but every one of them can still fail analyzeCommit (lib/git.js)
+  // -- a true merge commit by its own parent-count check, or a genuinely failed `git show
+  // --numstat` -- leaving metrics empty regardless. Math.min(...[]) is Infinity and
+  // Math.max(...[]) is -Infinity, so computing analyzedSpanStart/End below would throw
+  // `RangeError: Invalid time value` rather than reporting the same "nothing to analyze"
+  // outcome the zero-commits guard above already reports gracefully. Absent, not null or a
+  // placeholder, is the right shape for analyzed_span_start/end here: a span over zero
+  // commits does not exist, and returning before the summary is built (as the zero-commits
+  // guard above already does) keeps the report and local_metrics_summary.json in agreement
+  // by both omitting it identically, rather than one inventing a placeholder the other lacks.
+  if (metrics.length === 0) {
+    logNoCommitsAnalyzed();
+    return;
+  }
 
   // Statistical distributions
   const lineSizes = metrics.map(m => m.total_additions + m.total_deletions);
@@ -621,6 +682,23 @@ async function collectLocalMetrics(options = {}) {
   }
   const branches_with_analyzed_commits = Object.keys(analyzed_branch_commit_counts).length;
 
+  // See the rootCommitShas comment above: this is the actual structural check, run once the
+  // final analyzed commit set (metrics) is known, against the whole repository's root
+  // commit(s) fetched earlier.
+  const includesRepositoryRoot = windowIncludesRepositoryRoot({
+    analyzedShas: metrics.map(m => m.full_sha),
+    rootShas: rootCommitShas
+  });
+  // 'undetermined' when the root-commit query itself failed: neither 'established' (which
+  // would silently assert brownfield bands apply, exactly the defect this guards against)
+  // nor 'initial-build' (which would assert a fact the failed query never confirmed).
+  // Distinct from both, and paired with root_commit_detection_failed below so the failure
+  // is visible in the written summary rather than reading as a confident verdict either way
+  // (code-quality-metrics-dqri).
+  const project_lifecycle = rootCommitDetectionFailed
+    ? 'undetermined'
+    : (includesRepositoryRoot ? 'initial-build' : 'established');
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -645,6 +723,19 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_confidence: detectedGranularity.confidence,
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
+    // Project lifecycle (code-quality-metrics-31w): see the rootCommitShas/includesRepositoryRoot
+    // comments above. project_lifecycle_signals is reported for audit/debugging even though
+    // includesRepositoryRoot alone decides project_lifecycle -- there is no confidence axis to
+    // track here, unlike history_granularity, since this is a structural fact rather than a
+    // detection with a raw guess that might be overridden.
+    project_lifecycle,
+    project_lifecycle_signals: {
+      window_includes_repository_root: includesRepositoryRoot,
+      repository_root_commit_count: rootCommitShas.length,
+      // True when `git rev-list --max-parents=0 --all` itself failed rather than
+      // succeeding with no roots -- see project_lifecycle's own comment above.
+      root_commit_detection_failed: rootCommitDetectionFailed
+    },
     config_sources,
     analysis_exclusions,
     vendored_generated_share,

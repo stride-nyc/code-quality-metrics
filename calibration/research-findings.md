@@ -27,10 +27,16 @@ itself against something outside its own six reference repositories, and the ben
 
 The more consequential result is the one the brief asked to be reported as prominently as a
 confirmation. **Several of the toolkit's premises are contradicted, not merely unsupported.** The
-duplication metric measures a quantity the clone literature says is not a defect signal; the
+duplication metric measures a quantity the clone literature has not established as a defect signal
+(its direct tests split, and the documented harm mechanism, divergence between clones, is one a
+line-matching scanner cannot see); the
 net-additions ratio uses the one denominator the churn literature tried and discarded; the
-test co-change metric is a heuristic a 2023 TOSEM paper exists specifically to refute; and the
-commit message metric scores the losing side of a comparison the field has already run.
+test co-change metric's test-first reading rests on a heuristic a 2023 TOSEM paper exists
+specifically to refute (the descriptive co-change rate itself survives); and the
+commit message metric scores the losing side of a comparison the field has already run. Each of
+these contradicts a claim a metric was making, not the act of measuring the quantity, and all four
+have since been answered in kind: the claims were demoted, renamed or re-derived while the
+quantities are still measured and reported.
 
 ## Verdicts
 
@@ -38,9 +44,9 @@ commit message metric scores the losing side of a comparison the field has alrea
 |---|---|---|---|
 | 1 | Reviewable change size | direction only | The 200-400 line ceiling is one vendor's telemetry about its own product, and it contradicts itself. Nothing supports 100 lines or the 23/30 band. |
 | 2 | Change scatter across files | nothing found | The only published "5 files" line is explicitly arbitrary. 19% is the observed base rate, not a health line. |
-| 3 | Duplication rate | nothing found | No boundary exists, and the premise is contradicted: the strongest studies find clones no more, or less, defect-prone. |
+| 3 | Duplication rate | nothing found | No boundary exists, and the direct density-to-defect tests split: the strongest find clones no more, or less, defect-prone, while the documented harm (divergence between clones) is one jscpd cannot see. |
 | 4 | Churn and net-new ratio | direction only | Churn is well established; *this form of it* is the weakest measure in the canonical paper and was dropped from the model. |
-| 5 | Test/production co-change | direction only, near-refutation | Same-commit co-occurrence is a published-noisy proxy. The healthy line of 50 exceeds what any measured population reaches. |
+| 5 | Test/production co-change | direction only | The test-first reading is refuted: same-commit co-occurrence is a published-noisy proxy for sequencing. The descriptive co-change rate survives. The healthy line of 50 exceeds what any measured population reaches. |
 | 6 | Commit message quality | nothing found | Three distributions available. The 10-word bar sits above the population median; the metric mostly measures Conventional Commits adoption. |
 | 7 | Distribution boundaries | **boundary available** (distributions) | p90 lines 261 over 8.7M commits; p90 files ≈10 over 9M changes. The toolkit's 260 and 9.5 have external corroboration. |
 | 8 | Pre-AI comparison | direction only | No same-repository before/after exists. Commit size rises; duplication, sprawl and test discipline do not. |
@@ -54,12 +60,16 @@ derivation of a *boundary*.
 | Threshold | Current | External comparison | Source |
 |---|---|---|---|
 | `P90_LINES_CHANGED.healthy` | 260 | p90 = **261 LoC/commit** over 8,705,118 commits in 11,143 projects | Kolassa, Riehle & Salim, SOFSEM 2013, Table 1 |
+| | | gcc p90 ≈ **160 lines** (derived from published frequencies), a dissenting position | Alali et al., ICPC 2008, Table 2 |
 | `P90_FILES_CHANGED.healthy` | 9.5 | ~90% of changes modify fewer than **10 files**, over ~9M changes | Sadowski et al., ICSE-SEIP 2018, §5.2 |
 | | | gcc p90 ≈ **8 files** (derived from published frequencies) | Alali et al., ICPC 2008, Table 2 |
 
-Two cautions before this is treated as a win. The 260/261 agreement is partly coincidental: Kolassa
-excludes blank lines and includes test files, the toolkit does the reverse, and the two biases pull
-in opposite directions. And neither source proposes these as healthy lines; they are descriptive
+Three cautions before this is treated as a win. The 260/261 agreement is consistency within unit
+uncertainty, not a clean replication: Kolassa excludes blank lines and includes test files, the
+toolkit does the reverse, and the two biases pull in opposite directions. Alali's gcc data puts the
+same percentile nearer 160 lines, so on lines the anchor is one large corpus's position, not a
+convergent constant (the file-count anchor is the better one: two independent corpora bracket it).
+And no source proposes these as healthy lines; they are descriptive
 percentiles of a population. What they legitimately support is a **restatement of the claim**: "this
 repository's commits sit above the 90th percentile of published open-source distributions" is
 citable. "This repository exceeds a review-effectiveness threshold" is not.
@@ -98,13 +108,18 @@ validation has not been done by this project or, at commit-shape granularity, by
 The brief asked for these to be reported as prominently as confirmations. There are eight that
 matter, ordered by how much they should change what the toolkit does.
 
-**1. Duplication rate is not established as a quality signal, and the best evidence runs the other
-way.** Rahman, Bird and Devanbu (MSR 2010, four C projects, 116-155 monthly snapshots each): "we
+**1. Duplication rate is not established as a quality signal, and the direct tests of it are
+mixed.** Rahman, Bird and Devanbu (MSR 2010, four C projects, 116-155 monthly snapshots each): "we
 find that clones may be less defect prone than non-cloned code… Our findings do not support the
 claim that clones are really a 'bad smell'." Significant across all four projects and both parameter
 settings. Wagner et al. (SANER 2016) found clone length does not predict faultiness (ρ = 0.268,
 p = 0.120). What the harm literature actually implicates is *inconsistency between* clones over
-time, which jscpd does not measure. Separately, the 3% healthy band is numerically SonarQube's
+time, and there the harm-side number is strong: Juergens et al. (ICSE 2009) conclude that "nearly
+every second unintentionally inconsistent change to a clone leads to a fault". jscpd measures
+presence, not divergence, so it sees neither the exoneration nor the harm. (Three harm-side
+primaries, Monden 2002, Lozano and Wermelinger, and Krinke, were not retrieved and appear in RQ3
+only secondhand, so "the best evidence runs the other way" would overstate what was read.)
+Separately, the 3% healthy band is numerically SonarQube's
 default gate but measured at half Sonar's minimum block size, and Wagner et al. quantify what
 halving the minimum does: roughly 3×.
 
@@ -214,7 +229,11 @@ foundational challenges". Neither was located in any DORA report.
 
 ## Recommendations
 
-Ordered by value. None of these is applied yet; they are proposals.
+Ordered by value. Written as proposals on 2026-08-18. (Status, 2026-08-19: adopted in substance.
+The reframe, the two external anchors, the verdict changes for the three contradicted metrics, the
+test-coverage re-derivation and rename, and the measured pre-2022 baseline are in place. The mean
+is still reported but demoted to informational rather than removed. Changing what the churn and
+message metrics compute remains open as `code-quality-metrics-6ni` and `code-quality-metrics-tym`.)
 
 **Reframe rather than renumber.** The single highest-value change costs no threshold movement: state
 what the bands are. Adopt Alves's formulation — benchmark quantiles that mean "unusual relative to
@@ -650,8 +669,9 @@ source here is quoted from an abstract.
    Paulk found no significant difference between 0-100 and 100-200 LOC/hr, nor between 50-LOC
    bins. McIntosh et al. found halving the threshold "had little impact on our models." Two
    independent teams probing the same number found it flat on both sides. A toolkit that
-   classifies at 23 versus 30 percent asserts a precision the underlying literature explicitly
-   disclaims.
+   classifies at 23 versus 30 percent must therefore present those figures as what they are, exact
+   quantiles of its own benchmark: the precision the underlying literature disclaims is any
+   review-effectiveness cliff at such values, not the description itself.
 6. **Modern projects do not record what would be needed to validate a size threshold.** Rigby
    and Bird: 87 percent of AMD reviews record zero defects; CodeFlow has no defect field;
    Gerrit has none. Cohen 2006 is likely to remain the last of its kind, which is precisely why
@@ -1230,6 +1250,19 @@ Unit and population: clone groups throughout. Table 2: `|IC|/|C|` mean 0.52, `|U
 > "About half of the clones (52%) contain inconsistencies. … From these inconsistencies over a
 > quarter (28%) has been introduced unintentionally." (Section 6)
 
+The paper's headline is the conditional rate, which the ratios above imply (0.15 / 0.28 ≈ 0.54)
+and the authors state directly, twice:
+
+> "From our results it seems that about every second to third unintentional change to a clone
+> leads to a fault." (Section 7)
+>
+> "In this paper we provide strong evidence that inconsistent clones constitute a major source of
+> faults … Our results suggest that nearly every second unintentionally inconsistent change to a
+> clone leads to a fault." (Section 9)
+
+This is the strongest published harm-side number in the clone literature, and it concerns
+*divergence between* clones, not how much duplication exists.
+
 The one cost-linked number: fault density in kLOC⁻¹ = 43 / 91.4 / 52.7 / 3.4 / 50.1, mean 48.1,
 computed as faults divided by the *inconsistent logical lines only* (3,371 lines across all five
 systems), against Endres and Rombach's typical whole-system range of "0.1-50 faults per kLOC"
@@ -1397,8 +1430,13 @@ INACCESSIBLE:
 
 ### Contradictions
 
-**The premise that duplication rate is a quality signal is contradicted, not merely unsupported,
-by the strongest studies in this literature.** This goes further than "no boundary exists."
+**The premise that duplication rate is a defect signal is unsupported, and the strongest direct
+tests of it point the other way; the harm the literature does document (divergence between clones)
+is one this scanner cannot see.** Two bounds on that statement: the harm-side primaries Monden
+(2002), Lozano and Wermelinger, and Krinke were not retrieved (see INACCESSIBLE above) and appear
+here only through the no-harm papers' summaries of them; and Juergens et al. found unintentional
+divergence between clones faulty roughly every second time (item 3 below), which is a substantial
+harm finding, just not one about density.
 
 1. **Rahman, Bird and Devanbu found clones are *less* defect-prone than non-cloned code.**
    Abstract:
@@ -1422,7 +1460,10 @@ by the strongest studies in this literature.** This goes further than "no bounda
    p = 0.120, null accepted. The intuition that bigger duplicate blocks are worse has no support.
 
 3. **What the harm literature implicates is *inconsistency between* clones, which jscpd does not
-   measure.** Juergens found faults in 15 % of inconsistent clone groups; Wagner found documented
+   measure.** Juergens found faults in 15 % of inconsistent clone groups, and conditional on the
+   inconsistency being unintentional the rate roughly triples: "nearly every second unintentionally
+   inconsistent change to a clone leads to a fault" (Section 9), the strongest harm-side number in
+   this literature. Wagner found documented
    faults in 17 % of type-3 clone groups and traced between-system variance to developer
    *awareness* of the clones rather than to how much duplication existed. Wagner et al.,
    Section VI.C:
@@ -1446,7 +1487,8 @@ by the strongest studies in this literature.** This goes further than "no bounda
 **Implication for the toolkit.** `DUPLICATION_PCT` should be presented as a descriptive
 size-and-repetition indicator whose absolute value is a function of the scanner's parameters, not
 as a defect-risk verdict. The two derived-from-the-author's-own-repos numbers are not merely
-under-sourced; the risk claim they carry is contradicted by the best available evidence. If a
+under-sourced; the risk claim they carry is unsupported by the direct tests, which split, and the
+documented harm mechanism is one the scanner cannot measure. If a
 verdict is retained, it should be capped at warning, on the same reasoning already applied to
 `dora_archetype`.
 
@@ -2847,8 +2889,8 @@ recommendations.
 
 The headline: **Kolassa, Riehle and Salim report a 90th percentile of 261 LoC per commit over 8.7
 million commits. The toolkit's `P90_LINES_CHANGED` healthy bound is 260, derived independently from
-twelve local windows.** That is the external, non-circular anchor this project has been looking for,
-with unit caveats spelled out below.
+twelve local windows.** That is the external anchor, outside this project's own benchmark, that it
+has been looking for, with unit caveats spelled out below.
 
 ### Sources
 
@@ -2899,7 +2941,9 @@ Comparability to the toolkit's p90 of 260. The mismatches are real but bounded a
 | Size formula | midpoint of max(a,r) and a+r | a + d | toolkit reads higher |
 | Merges | not addressed | known open defect | toolkit reads higher |
 
-So 261 and 260 are close for reasons that are partly coincidental. Treat it as a **sanity check
+So 261 and 260 agree within a unit uncertainty that the exact-match closeness overstates: the
+biases are real, they pull in opposite directions, and how completely they cancel is not knowable
+from the published data. Treat it as a **sanity check
 that the toolkit's band is in the right order of magnitude and in the right place relative to a
 real population**, not as a derivation. It is nonetheless the strongest external evidence in this
 review that the band is not arbitrary.
@@ -3225,12 +3269,15 @@ micro-commit prevalence (7.45-17.95%), no percentiles.
 commits are quite small" is guaranteed by their categorisation: extra-small is Q₀-Q₁ and small is
 Q₁-Q₃, so the two always sum to 75%. Do not cite it as evidence.
 
-**2. A published paper argues against exactly the method the toolkit uses.** Hattori and Lanza (§3,
-p. 4) state that Pareto-distributed commit sizes make quartile splits meaningless because one-file
-commits already sit near the 50th percentile, and that a per-project distributional division does
-not generalise. The toolkit's `derive-bands.js` takes the p75 of twelve per-repo p90 observations —
-a percentile of a percentile — precisely the sort of construction they say is not portable. Should
-be acknowledged in `calibration/README.md`.
+**2. A published paper argues against a related, though not identical, construction.** Hattori and
+Lanza (§3, p. 4) state that Pareto-distributed commit sizes make quartile splits meaningless because
+one-file commits already sit near the 50th percentile, and that a per-project distributional
+division does not generalise. The toolkit's `derive-bands.js` takes the p75 of twelve per-repo p90
+observations, a percentile of a percentile. That is not the construction they argue against (theirs
+is quartile classification of individual commits inside one project; this is a cross-project
+quantile of per-repository aggregates, which is Alves et al.'s published approach), but their
+warning transfers in one respect: a percentile of a percentile inherits the sampling fragility of
+both layers, and that should be acknowledged in `calibration/README.md`.
 
 **3. The toolkit's mean-based band sits on a distribution that may have no mean.**
 `AVG_LINES_CHANGED: { healthy: 150 }` and the `stddev` field in `lib/statistics.js` assume finite
@@ -3628,9 +3675,11 @@ Calibration these figures could inform (filed as `code-quality-metrics-4qr`):
   AI-assisted Q3 (114). **It is not a neutral boundary; it selects roughly the top decile of human
   commits and roughly the top quartile of AI-assisted ones.**
 - `SPRAWLING_COMMIT_THRESHOLD: 5` sits above Q3 for **both** populations (human Q3 = 3 files, AI Q3 =
-  4). A sprawl rate under 10% is near-automatic under this distribution, so the metric discriminates
-  poorly. Median files per commit is 2 for both populations — **AI changes commit *length* far more
-  than commit *breadth*.**
+  4). A sprawl rate under 10% is near-automatic under this distribution, so the flag discriminates
+  poorly *between human and AI authorship*; across repositories the rate still varies enough to band
+  (benchmark p75 = 18, worst 20), so it keeps descriptive value as a practice measure while being
+  the weakest dimension for detecting AI drift. Median files per commit is 2 for both populations —
+  **AI changes commit *length* far more than commit *breadth*.**
 
 Does not support:
 
@@ -4259,17 +4308,24 @@ and 3-37% in OpenStack. **A band frozen in `lib/thresholds.js` is exactly the ar
 against.**
 
 **4. Models fitted on one project routinely perform worse than random on another.** Kamei et al. 2016
-Table 6: 0.38 AUC for the Bugzilla model on Maven-2, against 0.74-0.83 within-project. **If a fitted
-multivariate model fails to transfer between two mature OSS projects, a single scalar band derived from
-six reference repositories has substantially less claim to transfer to an arbitrary seventh.**
+Table 6: 0.38 AUC for the Bugzilla model on Maven-2, against 0.74-0.83 within-project. One category
+qualifier before this is applied to the toolkit: the result bounds fitted *prediction models*. A
+benchmark quantile claims less ("unusual relative to these peers") and predicts nothing, so it
+cannot fail by scoring worse than random; what it can do on a repository unlike the references is
+go uninformative. The finding is still the field's clearest warning against carrying any
+project-derived number to a dissimilar project, and it should be cited as that rather than as a
+direct bound on these bands.
 
 **5. The outcome label itself is roughly 58% noise under the algorithm most of this work used.** Rosa
 et al.: the original B-SZZ achieves 0.42 precision against a developer-informed oracle of 1,930 fixes.
 
-**6. This project's calibration is not just circular — it is under-powered relative to the published
-method it resembles.** Alves used 100 systems and ~12 MLOC; this project uses six repositories. The
+**6. This project's calibration is a small-n instance of a published method, under-powered relative
+to the original.** Alves used 100 systems and ~12 MLOC; this project uses six repositories. The
 method is legitimate; this instantiation of it supports a much weaker claim than Alves's does, and
-Alves's own claim is already explicitly *not* an outcome claim.
+Alves's own claim is already explicitly *not* an outcome claim. Note that choosing references
+judged disciplined and reading bands off their quantiles is Alves's own procedure, not a
+circularity: the real exposures are the small n and the unvalidated reference choice, and "circular"
+overstates the defect while naming the wrong one.
 
 **7. An unsourced DORA attribution remains in the specification.** `metrics-specification.md` line 298
 describes the net-additions-ratio metric as capturing "the systematic batch-acceptance pattern DORA
@@ -4278,7 +4334,8 @@ during this review. It has the shape of the four figures already withdrawn from 
 be traced or dropped. Noted on `code-quality-metrics-w6g`.
 
 **Bottom line for the calibration question.** Linking a practice metric to a measured outcome would
-indeed break the circularity, and the JIT literature is where that link exists. But it delivers
+indeed anchor the bands to something outside the benchmark, and the JIT literature is where that
+link exists. But it delivers
 coefficients over multi-year, multi-thousand-commit corpora with ~58%-noisy labels, and it reports that
 those coefficients neither transfer between projects nor hold still within one. It cannot be converted
 into a band for a small repository over 30 to 90 days. **The honest position is Alves's: publish the
