@@ -27,7 +27,7 @@ jobs:
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
             const { THRESHOLDS } = require('./lib/thresholds');
-            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath } = require('./lib/metrics');
+            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath, isBotCommit } = require('./lib/metrics');
             const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
             const { getAnthropicClient, analyzeDuplicatesWithClaude } = require('./lib/claude');
 
@@ -85,7 +85,29 @@ jobs:
               per_page: 100
             });
 
-            console.log(`Analyzing ${commits.length} commits and ${files.length} files in PR`);
+            // Dependency/CI bot exclusion (issue #62): a bot commit (dependabot, renovate,
+            // github-actions, release/version-bump bots, other [bot] accounts) mixed into an
+            // otherwise human PR is excluded from the per-commit analysis below, mirroring
+            // code-metrics.yml's identical filter. isBotCommit checks the AI-agent exemption
+            // first and unconditionally (lib/metrics.js), so a commit attributable to an AI
+            // coding agent (Claude Code, Copilot, Cursor, Devin, Aider, ...) by author,
+            // committer, or Co-Authored-By trailer is never excluded here, however
+            // bot-flavored its account name looks. Bot commits are counted and reported below
+            // ("Bot commits excluded"), never silently dropped. The job-level
+            // `if: github.actor != 'dependabot[bot]'` guard above only skips a PR whose
+            // *actor* is dependabot; this covers the narrower case of a bot commit riding
+            // along inside a human-opened PR.
+            function commitClassificationInput(commit) {
+              return {
+                author: commit.commit.author.name,
+                committer: commit.commit.committer && commit.commit.committer.name,
+                full_message: commit.commit.message
+              };
+            }
+            const botCommitCount = commits.filter(commit => isBotCommit(commitClassificationInput(commit))).length;
+            const humanCommitsOnly = commits.filter(commit => !isBotCommit(commitClassificationInput(commit)));
+
+            console.log(`Analyzing ${humanCommitsOnly.length} commits and ${files.length} files in PR`);
 
             // A path matching ANALYSIS_IGNORE_PATTERNS counts as neither test nor production
             // (code-quality-metrics-4fc, mirroring lib/git.js's analyzeCommit under
@@ -100,7 +122,7 @@ jobs:
             // ---------------------------------------------------------------
 
             const commitMetrics = [];
-            for (const commit of commits) {
+            for (const commit of humanCommitsOnly) {
               try {
                 const detail = await github.rest.repos.getCommit({
                   owner: context.repo.owner,
@@ -465,6 +487,7 @@ jobs:
               '## Commit Analysis',
               '',
               `**Total Commits:** ${commitMetrics.length}`,
+              botCommitCount > 0 ? `**Bot commits excluded:** ${botCommitCount} (dependency/CI, not counted above)` : '',
               `**Average Commit Size:** ${avgCommitSize.toFixed(0)} production lines`,
               `**Average Files per Commit:** ${avgFilesPerCommit.toFixed(1)}`,
               '',

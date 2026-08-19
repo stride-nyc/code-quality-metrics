@@ -5000,6 +5000,12 @@
       "implication": "Every observation recorded before this fix's tool_commit selected commits under author-date sorting and is retired for the same reason measurement-changed-mid-calibration retires the first 12: the commit set a window claims to cover is not reliably the commit set that was actually analyzed. Re-measurement is bundled into the same pass as code-quality-metrics-69 and -62 per issue #75's own notes, rather than run as a separate calibration pass."
     },
     {
+      "id": "bot-filter-changed-mid-calibration",
+      "severity": "low",
+      "concern": "code-quality-metrics-9bj5 (issue #62) turned on default exclusion of dependency/CI bot commits (dependabot, renovate, github-actions, release/version-bump bots, other [bot] accounts) from every metric's denominator, while never excluding a commit attributable to an AI coding agent. This changes what every commit-shape metric counts on any reference repository where such bots contributed commits in the analyzed window -- the bot-traffic reservation above already documents one measured case (an ember window, 8 of 49 commits from Renovate) where bot volume set the observed floor for message quality; with the filter on, that floor no longer exists and every metric computed over that window's denominator would measure differently.",
+      "implication": "Every observation recorded before this tool_commit was measured without bot exclusion and is not comparable to a measurement taken after it, independent of the measurement-changed-mid-calibration reservation above (a different tool defect). Re-measuring the six reference repositories at the new setting is tracked as follow-up work, sequenced together with code-quality-metrics-69's vendored/generated exclusion (also observation-invalidating) so both land in one re-measurement campaign rather than two."
+    },
+    {
       "id": "context-dependence",
       "severity": "medium",
       "concern": "Zhang, Mockus, Zou, Khomh and Hassan ('How Does Context Affect the Distribution of Software Maintainability Metrics?', ICSM 2013, DOI 10.1109/ICSM.2013.46) measured 320 SourceForge systems across 39 metrics and found that every one of six studied context factors (domain, language, age, lifespan, number of changes, number of downloads) shifts metric distributions; language alone shifted 35 of the 39 metrics. The six repositories behind these bands are one context (mature, granular-history, C/C++/JS/Python infrastructure projects with heavy public review cultures), not a population sample.",
