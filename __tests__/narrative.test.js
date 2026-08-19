@@ -507,4 +507,30 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // code-quality-metrics-38h: found in the same session. Real generated bullet: '...with 924
+  // duplicated lines out of 14,803 scanned...'. The payload's duplication_lines value is the
+  // composite string "924 / 14803" (no thousands separator). NUMBER_PATTERN requires a digit run
+  // bordered by non-word characters on both sides, so "14,803" tokenizes as two separate numbers,
+  // "14" and "803", neither of which appears standalone in the payload -- the correctly-cited
+  // figure is rejected as fabricated because of formatting, not content. Uses "Positive:" rather
+  // than "Concern:" to isolate the number-matching defect from the informational-label check
+  // above (mirrors the existing composite-string-value test's structure).
+  test('canonicalizes a thousands-separator comma before comparing a cited number against the payload', () => {
+    const payload = [{
+      key: 'duplication_lines',
+      label: 'Duplicated lines',
+      value: '924 / 14803',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Positive: 924 duplicated lines were found across 14,803 scanned lines.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
