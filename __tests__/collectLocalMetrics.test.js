@@ -57,7 +57,7 @@ function mockExecSequence(...values) {
     // the same way, defaulting to "no merges, no committer names" so detection
     // still runs (as granular) without every prior test needing a positional value.
     if (typeof command === 'string' && command.includes('--merges')) return '';
-    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('format:"%cn"')) return '';
     // Tests predating the merge-commit double-count guard supply no value for
     // analyzeCommit's own parent-count check (`git show --no-patch --format=%P`).
     // Answer it out of band too, with a single parent -- i.e. "not a merge" --
@@ -98,7 +98,7 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
   execSync.mockImplementation(command => {
     if (typeof command === 'string' && command.includes('--merged')) return mergedOutput;
     if (typeof command === 'string' && command.includes('--merges')) return '';
-    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('format:"%cn"')) return '';
     // Tests predating the merge-commit double-count guard supply no value for
     // analyzeCommit's own parent-count check (`git show --no-patch --format=%P`).
     // Answer it out of band too, with a single parent -- i.e. "not a merge" --
@@ -128,7 +128,7 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
   execSync.mockImplementation(command => {
     if (typeof command === 'string' && command.includes('--merged')) return '';
     if (typeof command === 'string' && command.includes('--merges')) return mergesOutput;
-    if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
+    if (typeof command === 'string' && command.includes('format:"%cn"')) return committerNamesOutput;
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
     // Tests predating scaffold-root detection (code-quality-metrics-fex3) supply no value
@@ -153,7 +153,7 @@ function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
   execSync.mockImplementation(command => {
     if (typeof command === 'string' && command.includes('--merged')) return '';
     if (typeof command === 'string' && command.includes('--merges')) return '';
-    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('format:"%cn"')) return '';
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     if (typeof command === 'string' && command.includes('--max-parents=0')) return rootCommitsOutput;
     // Answered out of band, defaulting to a production file present, so findEffectiveRootSha's
@@ -178,7 +178,7 @@ function mockExecSequenceWithRootCommitFailure(...values) {
   execSync.mockImplementation(command => {
     if (typeof command === 'string' && command.includes('--merged')) return '';
     if (typeof command === 'string' && command.includes('--merges')) return '';
-    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('format:"%cn"')) return '';
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     if (typeof command === 'string' && command.includes('--max-parents=0')) {
       throw new Error('fatal: unable to read tree');
@@ -388,7 +388,7 @@ describe('collectLocalMetrics — window reproducibility guard (code-quality-met
       if (cmd.includes('remote get-url')) return FAKE_REMOTE;
       if (cmd.includes('--merged')) return '';
       if (cmd.includes('--merges')) return '';
-      if (cmd.includes('%cn')) return '';
+      if (cmd.includes('format:"%cn"')) return '';
       if (cmd.includes('%P')) return 'p'.repeat(40);
       // Independent cross-check under test: git itself reports far more commits reachable in
       // the window than the tool's own git log fetch below will return (1). Matched together
@@ -523,7 +523,7 @@ describe('collectLocalMetrics — early exits', () => {
       if (cmd === 'git branch -a') return '  feature/x';
       if (cmd.includes('--merged')) return '';
       if (cmd.includes('--merges')) return '';
-      if (cmd.includes('%cn')) return '';
+      if (cmd.includes('format:"%cn"')) return '';
       if (cmd.includes('%P')) return 'p'.repeat(40); // single parent: not a merge commit
       if (cmd.includes('--max-parents=0')) return '';
       if (cmd.includes('%H|%ci')) return `${SHA}|2026-08-10T10:00:00Z|Dev|feat: add thing`;
@@ -767,7 +767,7 @@ describe('collectLocalMetrics — successful run', () => {
       if (typeof command !== 'string') return '';
       if (command.includes('--merged')) return '';
       if (command.includes('--merges')) return '';
-      if (command.includes('%cn')) return '';
+      if (command.includes('format:"%cn"')) return '';
       if (command.includes('%P')) return 'p'.repeat(40);
       if (command.includes('--max-parents=0')) return ROOT_SHA;
       if (command.includes('--name-only')) {
@@ -1856,5 +1856,40 @@ describe('collectLocalMetrics — branch spread visibility (code-quality-metrics
     expect(summary.total_commits).toBe(3);
     expect(summary.analyzed_branch_commit_counts).toEqual({ 'feature/a': 2, 'feature/b': 1 });
     expect(summary.branches_with_analyzed_commits).toBe(2);
+  });
+});
+
+describe('collectLocalMetrics — bot commit exclusion (issue #62)', () => {
+  test('excludes a dependabot commit from the analyzed metrics and reports it separately in the summary', async () => {
+    const SHA_HUMAN = 'a'.repeat(40);
+    const SHA_BOT = 'b'.repeat(40);
+    // commitsToAnalyze is re-sorted oldest-first before analysis, so the bot commit (older)
+    // would be processed first if it were not filtered out before the analyzeCommit loop --
+    // it must never reach `git show --numstat` at all, so only one numstat value is supplied.
+    const gitLog = [
+      `${SHA_BOT}|2024-01-14T10:00:00Z|dependabot[bot]|chore(deps): bump lodash from 4.17.20 to 4.17.21`,
+      `${SHA_HUMAN}|2024-01-15T10:00:00Z|Dev|feat: add thing`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      gitLog,
+      `10\t5\tsrc/app.js` // numstat for the human commit only
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+    const metrics = JSON.parse(metricsCall[1]);
+    expect(metrics).toHaveLength(1);
+    expect(metrics[0].sha).toBe(SHA_HUMAN.substring(0, 8));
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(1);
+    expect(summary.bot_commits_count).toBe(1);
+    expect(summary.bot_commits_pct).toBe('50.00');
   });
 });

@@ -27,7 +27,7 @@ const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
 const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
-const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
+const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
@@ -47,7 +47,7 @@ const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
 });
 
 /**
- * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
+ * @typedef {{ sha: string, full_sha: string, date: string, author: string, committer: string, message: string, full_message: string, source_branch?: string }} CommitInfo
  * date is committer date (git %ci), not author date -- see fetchBranchCommits' own comment
  * (code-quality-metrics-75 / mbiw) for why: it matches --since's own filtering semantics.
  * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
@@ -124,8 +124,12 @@ function parseBranchList(output) {
  */
 function fetchBranchCommits(ref, sinceStr) {
   const boundsArg = sinceStr ? `--since="${sinceStr}"` : `--max-count=${CONFIG.MAX_COMMITS}`;
+  // %B\x1f%cn: committer name appended after the body, needed so isBotCommit/isAIAgentCommit
+  // (issue #62) can check committer identity, not just author. See lib/git.js's
+  // COMMITTER_SEPARATOR comment for why this is a trailing \x1f-delimited suffix rather than
+  // a new pipe-delimited field.
   const logOutput = runGitCommand(
-    `git log --no-merges ${boundsArg} --pretty=format:"%H|%ci|%an|%B%x1e" ${ref}`
+    `git log --no-merges ${boundsArg} --pretty=format:"%H|%ci|%an|%B\x1f%cn%x1e" ${ref}`
   );
   return parseGitLog(logOutput);
 }
@@ -506,19 +510,40 @@ async function collectLocalMetrics(options = {}) {
     ? getExpectedCommitCount(branchesToAnalyze, effectiveSinceStr)
     : null;
 
-  // Analyze commits in detail. uniqueCommits is a concatenation of per-branch results in
-  // branch-iteration order, not a globally date-sorted list, so slicing it directly would keep
-  // whichever MAX_COMMITS commits were encountered first rather than the newest MAX_COMMITS
-  // across all branches -- the opposite of what a HEAD-anchored window claims to select
-  // (code-quality-metrics-g10). Select newest-first, then re-sort the selected set oldest-first
-  // before use: computeStatistics's trend calculation (lib/statistics.js) assumes its
-  // `timestamps` argument arrives oldest-first and does not re-sort internally, unlike
-  // computeVelocity, which does.
+  // Dependency/CI bot exclusion (issue #62): dependabot, renovate, github-actions, release/
+  // version-bump bots and other [bot] accounts are excluded from the analyzed window entirely
+  // -- not merely flagged -- so they cannot crowd real human commits out of the MAX_COMMITS
+  // budget below, the same way calibration/observations.json's bot-traffic reservation
+  // describes an ember window where 8 of 49 commits were Renovate. isBotCommit checks the
+  // AI-agent exemption FIRST and unconditionally (lib/metrics.js), so a commit attributable
+  // to Claude Code, Copilot, Cursor, Devin, Aider etc. by author, committer, or a
+  // Co-Authored-By trailer is never excluded here, no matter what CONFIG.BOT_ACCOUNT_PATTERNS
+  // matches -- those commits are the subject this toolkit measures, not noise. Bot commits are
+  // counted and reported (bot_commits_count/bot_commits_pct below), not silently dropped.
+  const botCommits = CONFIG.EXCLUDE_BOT_COMMITS
+    ? uniqueCommits.filter(c => isBotCommit({ author: c.author, committer: c.committer, message: c.message, full_message: c.full_message }))
+    : [];
+  const humanCommits = CONFIG.EXCLUDE_BOT_COMMITS
+    ? uniqueCommits.filter(c => !isBotCommit({ author: c.author, committer: c.committer, message: c.message, full_message: c.full_message }))
+    : uniqueCommits;
+  if (botCommits.length > 0) {
+    console.log(`🤖 Excluded ${botCommits.length} dependency/CI bot commit(s) from the analyzed window (${((botCommits.length / uniqueCommits.length) * 100).toFixed(2)}% of ${uniqueCommits.length} found).`);
+    console.log('');
+  }
+
+  // Analyze commits in detail. humanCommits (bot commits already excluded above) is a
+  // concatenation of per-branch results in branch-iteration order, not a globally date-sorted
+  // list, so slicing it directly would keep whichever MAX_COMMITS commits were encountered
+  // first rather than the newest MAX_COMMITS across all branches -- the opposite of what a
+  // HEAD-anchored window claims to select (code-quality-metrics-g10). Select newest-first,
+  // then re-sort the selected set oldest-first before use: computeStatistics's trend
+  // calculation (lib/statistics.js) assumes its `timestamps` argument arrives oldest-first and
+  // does not re-sort internally, unlike computeVelocity, which does.
   //
   // "newest" here means newest by commit.date, which is committer date (fetchBranchCommits'
   // own comment, code-quality-metrics-75 / mbiw) -- the same clock --since filters on, so an
   // explicit window and the HEAD-anchored default both select the commit set they claim to.
-  const commitsToAnalyze = [...uniqueCommits]
+  const commitsToAnalyze = [...humanCommits]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, CONFIG.MAX_COMMITS)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -770,6 +795,12 @@ async function collectLocalMetrics(options = {}) {
     analysis_period_days: analysisDays,
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
+    // Dependency/CI bot commits excluded from the window above (issue #62), counted and
+    // reported rather than silently dropped: a window that is, say, 40 percent bot traffic is
+    // itself a finding, and a reader needs to know the human denominator every other
+    // percentage in this summary is computed against shrank because of it.
+    bot_commits_count: botCommits.length,
+    bot_commits_pct: uniqueCommits.length > 0 ? ((botCommits.length / uniqueCommits.length) * 100).toFixed(2) : '0.00',
     // The actual span covered by the analyzed commits (code-quality-metrics-g10), never the
     // requested window or "today" -- see analyzedSpanStart/End's own comment above for why.
     // Rendered in the HTML masthead too (lib/report-template.js's renderMasthead), not only here.
@@ -905,6 +936,9 @@ async function collectLocalMetrics(options = {}) {
   console.log('=== 📊 ANALYSIS RESULTS ===');
   console.log('');
   console.log(`📈 Total commits analyzed: ${summary.total_commits}`);
+  if (summary.bot_commits_count > 0) {
+    console.log(`🤖 Dependency/CI bot commits excluded: ${summary.bot_commits_count} (${summary.bot_commits_pct}% of ${summary.filtered_from} found)`);
+  }
   console.log(`📏 Large commits (>${CONFIG.LARGE_COMMIT_THRESHOLD} lines): ${summary.large_commits_pct}%`);
   console.log(`📁 Sprawling commits (>${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files): ${summary.sprawling_commits_pct}%`);
   console.log(`🧪 Test coverage (test+prod): ${summary.test_coverage_rate}%`);
