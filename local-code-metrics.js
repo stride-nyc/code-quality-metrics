@@ -593,6 +593,25 @@ async function collectLocalMetrics(options = {}) {
   const test_isolation_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_only_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const uncovered_prod_rate = metrics.length > 0 ? ((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
 
+  // How many of the analyzed commits actually came from each branch (code-quality-metrics-8sq),
+  // as opposed to branch_commit_counts above, which counts what was fetched from each branch
+  // before global selection and can no longer be read as "how much this branch contributed":
+  // in HEAD-anchored mode every branch fetch is capped at CONFIG.MAX_COMMITS regardless of how
+  // few of those commits survive into the analyzed set. A repository whose sample is spread
+  // across many long-abandoned branches (measured: remote_retro, 29 analyzed commits across 30
+  // branches; dotnetdependencytracer, 50 across 49) draws no shipped-practice signal from most
+  // of those branches at all, and a reader has no way to see that from total_commits alone.
+  // This does not filter anything out -- see this project's own notes on why an unjustified
+  // recency bound was rejected in favor of visibility -- it only makes the shape of the sample
+  // visible next to the count.
+  /** @type {Record<string, number>} */
+  const analyzed_branch_commit_counts = {};
+  for (const m of metrics) {
+    const branch = m.source_branch;
+    analyzed_branch_commit_counts[branch] = (analyzed_branch_commit_counts[branch] || 0) + 1;
+  }
+  const branches_with_analyzed_commits = Object.keys(analyzed_branch_commit_counts).length;
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -622,6 +641,8 @@ async function collectLocalMetrics(options = {}) {
     vendored_generated_share,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
+    analyzed_branch_commit_counts,
+    branches_with_analyzed_commits,
     large_commits_pct,
     sprawling_commits_pct,
     test_coverage_rate,

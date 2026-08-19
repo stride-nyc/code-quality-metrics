@@ -1257,3 +1257,36 @@ describe('collectLocalMetrics — HEAD-anchored window (code-quality-metrics-g10
     expect(summary.analyzed_span_end).toBe('2026-08-05');
   });
 });
+
+describe('collectLocalMetrics — branch spread visibility (code-quality-metrics-8sq)', () => {
+  test('reports how many distinct branches actually contributed to the analyzed commit set, alongside the raw commit count', async () => {
+    const SHA_A1 = 'a'.repeat(40);
+    const SHA_A2 = 'b'.repeat(40);
+    const SHA_B1 = 'c'.repeat(40);
+    // All branch `git log` calls happen first, in the branch loop; `git show --numstat` calls
+    // happen afterward, once per analyzed commit, in commitsToAnalyze's date-ascending order.
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/a\n  feature/b',
+      [
+        `${SHA_A1}|2026-08-01T10:00:00Z|Dev|feat: a one\x1e`,
+        `${SHA_A2}|2026-08-02T10:00:00Z|Dev|feat: a two\x1e`
+      ].join('\n'),                        // git log feature/a
+      `${SHA_B1}|2026-08-03T10:00:00Z|Dev|feat: b one`,  // git log feature/b
+      `1\t0\tsrc/a1.js`,  // numstat SHA_A1 (2026-08-01, analyzed first)
+      `1\t0\tsrc/a2.js`,  // numstat SHA_A2 (2026-08-02)
+      `1\t0\tsrc/b1.js`   // numstat SHA_B1 (2026-08-03, analyzed last)
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(3);
+    expect(summary.analyzed_branch_commit_counts).toEqual({ 'feature/a': 2, 'feature/b': 1 });
+    expect(summary.branches_with_analyzed_commits).toBe(2);
+  });
+});
