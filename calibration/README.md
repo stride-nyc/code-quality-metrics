@@ -67,13 +67,15 @@ commit, so a threshold change is always deliberate.
 
 ## Reservations
 
-`observations.json` carries a `reservations` array: fourteen recorded concerns
-about using this sample to set thresholds, two of them currently high severity
+`observations.json` carries a `reservations` array: fifteen recorded concerns
+about using this sample to set thresholds, three of them currently high severity
 (granular-history-only, pre-AI-baseline and brownfield-only-lifecycle were each
 downgraded from high to medium once their own suggested remedy was measured -- see
 below; three published transferability findings -- non-transferability across
 projects, context-dependence, and within-project drift over time -- were added
-afterward and one of those is itself high severity). They are kept with the
+afterward and one of those is itself high severity; a fourth,
+commit-selection-changed-to-committer-date, was added when code-quality-metrics-75/mbiw's
+fix to commit selection retired every existing observation). They are kept with the
 evidence rather than in `lib/thresholds.js` so
 the caveats travel with the data, and so adding a reference repository forces a
 reader to reconsider which still apply. `derive-bands.js` prints the high severity
