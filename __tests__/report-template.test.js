@@ -474,7 +474,7 @@ describe('renderReportHtml', () => {
     // numeric critical boundary that does not exist.
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
-    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
 
     expect(coverageCard).toBeDefined();
     expect(coverageCard).not.toMatch(/critical (above|below) \d/);
@@ -507,11 +507,45 @@ describe('renderReportHtml', () => {
     // bands (good, warning) and no gauge-critical path at all.
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
-    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
 
     expect(coverageCard).not.toContain('gauge-critical');
     const bandCount = (coverageCard.match(/class="gauge-band /g) || []).length;
     expect(bandCount).toBe(2);
+  });
+
+  // code-quality-metrics-4er: "Test coverage" reads as line/branch coverage from a coverage
+  // tool. It is not -- it is commits that touched tests and production code together. Renaming
+  // the user-facing label only; the underlying summary field test_coverage_rate is untouched.
+  it('labels the test-coverage tile so it does not read as coverage-tool output', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
+
+    expect(coverageCard).toBeDefined();
+    expect(html).not.toContain('>Test coverage</p>');
+  });
+
+  // code-quality-metrics-4er: "prod" is an abbreviation the reader has no reason to know.
+  it('labels the uncovered-prod tile without the unexplained "prod" abbreviation', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const uncoveredCard = cards.find(card => card.includes('>Uncovered production</p>'));
+
+    expect(uncoveredCard).toBeDefined();
+    expect(html).not.toContain('>Uncovered prod</p>');
+  });
+
+  // code-quality-metrics-4er: "Commit size, p90" puts the jargon "p90" in the label while its
+  // own description already explains it in plain words ("nine out of ten commits are smaller
+  // than this"). The label should say the same thing the description does.
+  it('labels the commit-size percentile tile without the "p90" jargon', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const sizeCard = cards.find(card => card.includes('>Commit size, high end</p>'));
+
+    expect(sizeCard).toBeDefined();
+    expect(html).not.toContain('>Commit size, p90</p>');
   });
 
   it('omits a threshold description for informational entries with no numeric boundary', () => {
@@ -548,6 +582,80 @@ describe('renderReportHtml', () => {
       expect(precedingIndex).toBeGreaterThanOrEqual(0);
       expect(descIndex).toBeGreaterThan(precedingIndex);
     }
+  });
+
+  // code-quality-metrics-4er: test_coverage_rate's description called co-changing tests and
+  // production "what healthy work usually looks like". That penalises landing a failing test
+  // and its implementation as two atomic commits -- the discipline this project's own working
+  // agreement requires -- and Sun et al. (TOSEM 2023) report pervasive noise in exactly this
+  // heuristic. The description should say what the metric counts and that it cannot tell
+  // test-first from test-after, not call one pattern healthy.
+  it('describes test-coverage co-change plainly, without calling it what healthy work looks like', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('a team that deliberately lands a failing test and its implementation as two separate commits looks identical, by this count, to a team that never wrote the test');
+    expect(html).not.toContain('what healthy work usually looks like');
+  });
+
+  // code-quality-metrics-4er: uncovered_prod_rate's description called itself "the strongest
+  // drift signal in the report", a ranking claim with nothing behind it -- no study cited
+  // anywhere in this project ranks these signals against each other. The description should
+  // say what the metric counts, and that it inherits the large-commit and test-coverage
+  // checks' own open questions, instead of ranking it above the other tiles.
+  it('describes uncovered-prod plainly, without ranking it above the other tiles', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('It is built from the large-commit check and the test/prod co-change check above');
+    expect(html).not.toContain('the strongest drift signal in the report');
+  });
+
+  // code-quality-metrics-4er: large_commits_pct's description called large commits "the
+  // clearest sign of code accepted wholesale rather than reviewed" -- an unranked superlative.
+  // The direction (harder to review) is supported, but the boundary is a selectivity choice
+  // and the tail is confounded by vendoring, which this project's own calibration data hit.
+  it('describes large commits plainly, without calling them the clearest sign of anything', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('where the line falls is a selectivity choice, not a validated health boundary');
+    expect(html).not.toContain('the clearest sign of code accepted wholesale rather than reviewed');
+  });
+
+  // code-quality-metrics-4er: test_isolation_rate carries direction 'special' and no verdict
+  // (lib/report.js never assigns it a calibrated healthy/critical band), but its description
+  // flatly asserted "This is a good sign", and offered only two explanations for a test-only
+  // commit as though they were the only ones -- it can equally be a test deleted or disabled.
+  it('describes test-isolation commits without calling them a good sign', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('it can just as easily mean a test was deleted or disabled');
+    expect(html).not.toContain('This is a good sign');
+  });
+
+  // code-quality-metrics-4er (spotted separately, not in the issue's own quoted text):
+  // message_quality_pct's description claimed "Vague messages pile up when suggested text is
+  // accepted without editing it", a causal claim about AI tools with nothing behind it. The
+  // metric's own descriptiveNote (lib/report.js) already says this rate mostly reflects
+  // Conventional Commits adoption, not message quality; the description should say the same
+  // supported thing rather than an unsupported causal story.
+  it('describes commit-message quality without an unsupported causal claim about AI tools', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('mostly tracks whether the project has adopted the Conventional Commits format');
+    expect(html).not.toContain('Vague messages pile up when suggested text is accepted without editing it');
+  });
+
+  // code-quality-metrics-4er (found during the sweep for the same pattern, not in the issue's
+  // own quoted text): sprawling_commits_pct claimed a change that ripples through unrelated
+  // files "usually means it was applied by pattern rather than understood" -- an unsupported
+  // causal claim contradicted by metrics-specification.md's own Metric 2 section, which
+  // reports the threshold sits close to automatic for most commits regardless of practice and
+  // that the largest, most file-spanning commits are dominated by license sweeps, generated
+  // documentation, and merges rather than drift.
+  it('describes sprawling commits as a proxy, without asserting what caused them', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('used as a proxy for a fix rippling through unrelated files');
+    expect(html).not.toContain('usually means it was applied by pattern rather than understood');
   });
 
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
