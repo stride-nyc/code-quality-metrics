@@ -72,6 +72,17 @@ function fixtureArgs(summaryOverrides) {
   return { summary, metrics, catalog, fontData };
 }
 
+// Scopes an assertion to the Duplicate Code detail section only, so a match against the
+// unrelated "Not measurable" metric tile elsewhere in the document can never make a
+// duplicate-section assertion pass for the wrong reason (the vacuous-green trap this ticket
+// warns about: a fixture that produces no duplicates for an unrelated reason).
+function duplicateSection(html) {
+  const start = html.indexOf('<section class="duplicate-code">');
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = html.indexOf('</section>', start) + '</section>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -583,6 +594,22 @@ describe('renderReportHtml', () => {
     expect(html).toContain('Duplicate Code');
     expect(html).not.toContain('No semantic findings');
     expect(html.toLowerCase()).toContain('not measured');
+  });
+
+  it('makes no claim that Layer 1 ran or that no static duplicates were found when layers_run.static is "unmeasured"', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 2,
+      static_duplicates: [],
+      semantic_findings: [],
+      unsupported_extensions: ['.ex', '.exs'],
+      layers_run: { static: 'unmeasured', semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).not.toContain('Layer 1 (static) ran');
+    expect(section).not.toContain('No static duplicates found');
   });
 
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
