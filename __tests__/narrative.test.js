@@ -652,4 +652,32 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/578\.5/);
   });
+
+  // GUARD, not a called-shot RED: code-quality-metrics-i39's third measured shape-1 rejection was
+  // a real remote_retro run, rejected with 'presents "test isolation" as a Concern'.
+  // test_isolation_rate (direction: 'special') is scored 'good' or 'neutral' only -- lib/report.js
+  // never assigns it 'warning' or 'critical', so unlike commit_size_trend/velocity_trend it can
+  // never legitimately be presented as a Concern, whatever its value. Unlike the "velocity"
+  // collision, "test isolation" is not a substring of any other payload label, so this was
+  // already a correct rejection before this ticket's fixes and remains one after: the acceptance
+  // criteria's "still rejected" half, for the third metric the ticket names alongside
+  // commit_size_trend and velocity_trend.
+  test('still rejects a Concern bullet naming test_isolation_rate, which can never reach warning/critical status', () => {
+    const payload = [{
+      key: 'test_isolation_rate',
+      label: 'Test isolation',
+      value: '0',
+      direction: 'special',
+      status: 'neutral',
+      healthyBoundary: '10',
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Test isolation sits at 0%, meaning no commits show a red-then-green test pattern.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/test isolation/i);
+  });
 });
