@@ -181,3 +181,21 @@ describe('resolveConfigOverrides — no override file present', () => {
     expect(result.classBOverridden).toBe(false);
   });
 });
+
+// code-quality-metrics-ap7: --config <path> lets a scripted run supply an override from
+// outside the analysis target, for repositories the operator does not control (cannot
+// commit a .codemetrics.json into someone else's repo). The explicit path is passed as a
+// third argument, resolved independent of targetDir.
+describe('resolveConfigOverrides — explicit config path (code-quality-metrics-ap7)', () => {
+  test('applies overrides from an explicit config path when given, independent of targetDir', () => {
+    const targetDir = makeTempDir('cqm-explicit-target-'); // no .codemetrics.json here
+    const configDir = makeTempDir('cqm-explicit-configdir-');
+    const explicitConfigPath = path.join(configDir, 'shared.json');
+    fs.writeFileSync(explicitConfigPath, JSON.stringify({ DUPLICATE_MIN_LINES: 5 }));
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, explicitConfigPath);
+
+    expect(result.effective.DUPLICATE_MIN_LINES).toBe(5);
+    expect(result.classBOverridden).toBe(true);
+  });
+});
