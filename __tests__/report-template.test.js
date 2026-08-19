@@ -738,6 +738,50 @@ function fullDuplicatesForGrouping() {
 }
 
 describe('renderReportHtml metric group headings (code-quality-metrics-yte)', () => {
+  // [guard] not a called-shot RED: renderMetricGrid already groups by entry.group alone, so
+  // a withheld (concern -Infinity, informational) entry keeps its heading with no extra
+  // code. Proven by mutation: filtering `entry.concern !== -Infinity` into the group filter
+  // (the exact mistake this guard exists to catch -- conflating "withheld/informational"
+  // with "should be hidden") made the entire "Change size and scope" heading vanish under
+  // squashed history, since every one of its members is informational in that state; the
+  // test failed on the missing heading itself before the fix was reverted.
+  it('[guard] keeps a withheld tile (squashed history) under its documented heading, in the "Change size and scope" section, rather than moving or dropping it', () => {
+    const summary = fixtureSummary({ history_granularity: 'squashed', dora_archetype: undefined });
+    const catalog = buildMetricCatalog(summary);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData() });
+
+    const sizeHeadingStart = html.indexOf('<h2 class="metric-category-heading">Change size and scope</h2>');
+    expect(sizeHeadingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingStart = html.indexOf('<h2 class="metric-category-heading">', sizeHeadingStart + 1);
+    const sizeSection = html.slice(sizeHeadingStart, nextHeadingStart === -1 ? html.length : nextHeadingStart);
+
+    // large_commits_pct is withheld under squashed history (no verdict, informational), but
+    // it still measures commit size and must stay under this heading, not move to an
+    // "other"/withheld section or vanish.
+    expect(sizeSection).toContain('>Large commits</p>');
+    expect(sizeSection.toLowerCase()).toContain('no verdict');
+  });
+
+  // [guard] not a called-shot RED, same mechanism as the squashed-history guard above (group
+  // is keyed on entry.key alone, independent of any withheld/informational state a tile is
+  // in): a duplication tile marked "Not measurable" (jscpd cannot parse the scanned
+  // language, code-quality-metrics-tjn) still measures duplication and must stay under that
+  // heading rather than being omitted or filed elsewhere.
+  it('[guard] keeps the "Not measurable" duplication tile under the "Duplication" heading', () => {
+    const summary = fixtureSummary();
+    const duplicates = { files_scanned: 3, static_duplicates: [], semantic_findings: [], statistics: null, unsupported_extensions: ['.ex', '.exs'], layers_run: { static: 'unmeasured', semantic: false } };
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    const dupHeadingStart = html.indexOf('<h2 class="metric-category-heading">Duplication</h2>');
+    expect(dupHeadingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingStart = html.indexOf('<h2 class="metric-category-heading">', dupHeadingStart + 1);
+    const dupSection = html.slice(dupHeadingStart, nextHeadingStart === -1 ? html.length : nextHeadingStart);
+
+    expect(dupSection).toContain('>Duplication density</p>');
+    expect(dupSection).toContain('Not measurable');
+  });
+
   it('renders all five documented group headings, in the fixed order, even when a later group carries the highest concern this run', () => {
     // test_coverage_rate (Test practice) is driven to its critical-ish low end so a
     // concern-only sort would put the "Test practice" group first; the fixed group order
