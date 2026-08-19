@@ -311,6 +311,27 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/under development/i);
   });
 
+  // [guard] proven by mutation: reintroducing the old ARCHETYPE_VERDICTS-style string
+  // ('High sprawl and large-commit rates point to legacy-bottleneck patterns.') in place of
+  // describeArchetypeBody's factual per-signal breakdown made this test's "not to contain
+  // 'point to'" assertion fail, and its "crossed the critical line" assertion also fail since
+  // the old string names no line at all -- reverted after confirming both failures.
+  it('[guard] describes which archetype signals crossed which line, and states the grouping is this toolkit\'s own invention', () => {
+    const html = renderReportHtml(fixtureArgs({
+      large_commits_pct: '45.00',
+      sprawling_commits_pct: '25.00',
+      dora_archetype: 'legacy-bottleneck'
+    }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).not.toMatch(/points? to/i);
+    expect(section).toContain('crossed the critical line');
+    expect(section.toLowerCase()).toContain("toolkit's own");
+    expect(section).toMatch(/DORA/);
+    expect(section).toMatch(/does not publish|no such grouping|not from commit shape/i);
+  });
+
   it('renders a verdict line derived from summary.dora_archetype', () => {
     const harmonious = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(harmonious).toMatch(/class="verdict"/);
