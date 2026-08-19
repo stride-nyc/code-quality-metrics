@@ -10,4 +10,15 @@ describe('windowIncludesRepositoryRoot', () => {
     });
     expect(result).toBe(false);
   });
+
+  // [guard] proves the true-direction branch actually runs: a stub that always returns false
+  // (the mutation an untested true-direction would let slip through) fails this assertion.
+  test("returns true when one of the analyzed commits is the repository's root commit", () => {
+    const root = 'zzz9999999999999999999999999999999999999';
+    const result = windowIncludesRepositoryRoot({
+      analyzedShas: ['aaa1111111111111111111111111111111111111', root],
+      rootShas: [root]
+    });
+    expect(result).toBe(true);
+  });
 });
