@@ -644,6 +644,20 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('Vague messages pile up when suggested text is accepted without editing it');
   });
 
+  // code-quality-metrics-4er (found during the sweep for the same pattern, not in the issue's
+  // own quoted text): sprawling_commits_pct claimed a change that ripples through unrelated
+  // files "usually means it was applied by pattern rather than understood" -- an unsupported
+  // causal claim contradicted by metrics-specification.md's own Metric 2 section, which
+  // reports the threshold sits close to automatic for most commits regardless of practice and
+  // that the largest, most file-spanning commits are dominated by license sweeps, generated
+  // documentation, and merges rather than drift.
+  it('describes sprawling commits as a proxy, without asserting what caused them', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('used as a proxy for a fix rippling through unrelated files');
+    expect(html).not.toContain('usually means it was applied by pattern rather than understood');
+  });
+
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
     const duplicates = {
       files_scanned: 3,
