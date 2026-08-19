@@ -219,4 +219,28 @@ describe('resolveConfigOverrides — explicit config path (code-quality-metrics-
 
     expect(() => resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, configAsDir)).toThrow(/is a directory, not a file/);
   });
+
+  // GUARD: proven by making resolveConfigOverrides skip the target file's own
+  // applyOverrideFile call whenever explicitConfigPath is given (i.e. --config
+  // REPLACES the target file instead of composing with it) -- with that mutation,
+  // '**/target-only/**' is dropped from the result and this test starts failing.
+  // Compose, not replace, is the deliberate design choice (AGENTS.md's "Per-Repo
+  // Configuration Overrides": --config is a tier ABOVE the target file, not a
+  // substitute for it) -- an operator supplying --config for a scripted run must
+  // not silently lose a target repo's own already-committed .codemetrics.json
+  // conventions.
+  test('composes: a target-local .codemetrics.json and an explicit --config file both apply, unioning their class A patterns', () => {
+    const targetDir = makeTempDir('cqm-compose-target-');
+    writeConfigFile(targetDir, { DUPLICATE_IGNORE_PATTERNS: ['**/target-only/**'] });
+    const configDir = makeTempDir('cqm-compose-configdir-');
+    const explicitConfigPath = path.join(configDir, 'shared.json');
+    fs.writeFileSync(explicitConfigPath, JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/config-only/**'] }));
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, explicitConfigPath);
+
+    expect(result.effective.DUPLICATE_IGNORE_PATTERNS).toEqual(
+      expect.arrayContaining(['**/deps/**', '**/vendor/**', '**/target-only/**', '**/config-only/**'])
+    );
+    expect(result.sources).toHaveLength(2);
+  });
 });
