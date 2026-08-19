@@ -259,6 +259,40 @@ describe('buildNarrativePayload', () => {
     expect(testIsolation.direction).toBe('special');
     expect(testIsolation.verdict).toBe('none');
   });
+
+  // code-quality-metrics-i39: commit_size_trend and velocity_trend are direction: 'informational'
+  // even when lib/report.js's growingAndAccelerating rule has just scored them 'warning' -- a
+  // construct whose band was withdrawn on evidence (message_quality_pct, net_additions_ratio_median,
+  // avg_lines_changed -- always status 'neutral') is a different thing from a composite rule that
+  // reached a real status this run. Measured on 5 real repository runs, marking verdict from
+  // direction alone rejected the toolkit's own named drift signal in 4 of 5. The verdict mark must
+  // key on the entry's own status instead: 'warning'/'critical' leaves it unmarked (presentable),
+  // whatever its direction, while an entry whose status never leaves 'neutral' stays marked
+  // verdict: 'none' exactly as before.
+  test('keys the verdict mark on status, not direction: commit_size_trend and velocity_trend at warning status carry no verdict mark', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ commit_size_trend: 'growing', velocity_trend: 'accelerating' }));
+    const payload = buildNarrativePayload(catalog);
+    const commitSizeTrend = payload.find(entry => entry.key === 'commit_size_trend');
+    const velocityTrend = payload.find(entry => entry.key === 'velocity_trend');
+
+    expect(commitSizeTrend.status).toBe('warning');
+    expect(commitSizeTrend.verdict).toBeUndefined();
+    expect(velocityTrend.status).toBe('warning');
+    expect(velocityTrend.verdict).toBeUndefined();
+  });
+
+  // GUARD, not a called-shot RED: same status-keyed rule, checked from the other side -- an
+  // entry whose construct cannot support a verdict at all (message_quality_pct: status is fixed
+  // 'neutral' regardless of value, see lib/report.js) must stay marked verdict: 'none' even
+  // though it shares direction: 'informational' with commit_size_trend/velocity_trend above.
+  test('still marks message_quality_pct verdict: none, since its status never leaves neutral', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const messageQuality = payload.find(entry => entry.key === 'message_quality_pct');
+
+    expect(messageQuality.status).toBe('neutral');
+    expect(messageQuality.verdict).toBe('none');
+  });
 });
 
 describe('validateNarrative', () => {
