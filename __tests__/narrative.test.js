@@ -455,4 +455,30 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // Found running generate-drift-report.js against a fresh scratch clone of this repo (ll1's
+  // own "verify by running" step, after implementing the item-2 check above), not from a
+  // written test list: real production output was 'Positive: Commit size at the 90th
+  // percentile is 164.9 lines, below the healthy boundary of 260, so even the routinely large
+  // commits stay within a readable range.' -- a correct citation of p90_lines_changed's real
+  // healthyBoundary (260). The label-match step picked "Large commits" as the sole candidate,
+  // because that label's text happens to appear later in the sentence as ordinary English (the
+  // routinely large commits), not as a reference to the large_commits_pct metric, and then
+  // compared 260 against Large commits' own healthyBoundary (19) instead -- a false rejection of
+  // correct prose. p90_lines_changed's own label ("Commit size, p90") never literally appears in
+  // the bullet at all (the model paraphrased it), so no entry actually names itself before the
+  // phrase; the fix is to only credit a label match that appears BEFORE the boundary phrase it
+  // is being checked against, mirroring how the phrase is normally written (name the metric,
+  // then state its boundary), rather than anywhere in the bullet.
+  test('does not attribute a boundary phrase to a metric whose label only appears after the phrase, as incidental English rather than a citation', () => {
+    const payload = [
+      { key: 'p90_lines_changed', label: 'Commit size, p90', value: '164.9', direction: 'higher-is-worse', status: 'good', healthyBoundary: '260', criticalBoundary: null },
+      { key: 'large_commits_pct', label: 'Large commits', value: '15', direction: 'higher-is-worse', status: 'good', healthyBoundary: '19', criticalBoundary: '30' }
+    ];
+    const bullets = ['Positive: Commit size at the 90th percentile is 164.9 lines, below the healthy boundary of 260, so even the routinely large commits stay within a readable range.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
