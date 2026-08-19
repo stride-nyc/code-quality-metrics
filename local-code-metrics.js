@@ -496,6 +496,16 @@ async function collectLocalMetrics(options = {}) {
     console.log('');
   }
 
+  // Independent commit-count cross-check (code-quality-metrics-tde9): only meaningful for an
+  // explicit, non-widened window, where effectiveSinceStr is still the boundary that was
+  // actually requested -- a HEAD-anchored run (effectiveSinceStr null from the start) or a
+  // widened one (effectiveSinceStr reset to null above) has no comparable "--since window" for
+  // git rev-list to count against. null (not 0) signals "not applicable" here, distinct from a
+  // genuine 0-vs-0 count that would otherwise look identical to "never checked".
+  const windowExpectedCommitCount = (effectiveSinceStr && !windowWidened)
+    ? getExpectedCommitCount(branchesToAnalyze, effectiveSinceStr)
+    : null;
+
   // Analyze commits in detail. uniqueCommits is a concatenation of per-branch results in
   // branch-iteration order, not a globally date-sorted list, so slicing it directly would keep
   // whichever MAX_COMMITS commits were encountered first rather than the newest MAX_COMMITS
@@ -772,6 +782,10 @@ async function collectLocalMetrics(options = {}) {
     // the newest CONFIG.MAX_COMMITS regardless of date (see the widen block above). A
     // HEAD-anchored default run is never "widened": it had no date restriction to begin with.
     window_widened: windowWidened,
+    // Independent git rev-list count over the same resolved ref(s), for the loud-failure
+    // guard in generateInsights (code-quality-metrics-tde9). null when not applicable
+    // (HEAD-anchored or widened run) -- see windowExpectedCommitCount's own comment above.
+    window_expected_commit_count: windowExpectedCommitCount,
     workflow_type: workflowType,
     history_granularity: historyGranularity,
     history_granularity_detected: detectedGranularity.value,
