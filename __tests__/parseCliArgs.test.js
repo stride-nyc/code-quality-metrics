@@ -56,4 +56,18 @@ describe('parseCliArgs', () => {
   test('rejects --config given without a value', () => {
     expect(() => parseCliArgs(['--config'])).toThrow(/--config/);
   });
+
+  // code-quality-metrics-zkhq, GitHub #71 part 1: --lifecycle mirrors --history's own shape.
+  test('rejects a --lifecycle value other than initial-build or established', () => {
+    expect(() => parseCliArgs(['--lifecycle', 'sortof'])).toThrow(/--lifecycle/);
+  });
+
+  test('accepts a valid --lifecycle value', () => {
+    expect(parseCliArgs(['--lifecycle', 'initial-build'])).toEqual({ lifecycle: 'initial-build' });
+    expect(parseCliArgs(['--lifecycle', 'established'])).toEqual({ lifecycle: 'established' });
+  });
+
+  test('rejects --lifecycle given without a value', () => {
+    expect(() => parseCliArgs(['--lifecycle'])).toThrow(/--lifecycle/);
+  });
 });

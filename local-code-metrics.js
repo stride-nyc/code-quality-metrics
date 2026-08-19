@@ -25,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -118,10 +118,10 @@ function fetchBranchCommits(ref, sinceStr) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -149,6 +149,15 @@ function parseCliArgs(argv) {
         throw new Error(`--history must be 'granular' or 'squashed', got '${history}'`);
       }
       options.history = history;
+      i++;
+    } else if (argv[i] === '--lifecycle') {
+      // code-quality-metrics-zkhq, GitHub #71 part 1: mirrors --history's own shape exactly.
+      if (!argv[i + 1]) throw new Error("--lifecycle requires 'initial-build' or 'established'");
+      const lifecycle = argv[i + 1];
+      if (lifecycle !== 'initial-build' && lifecycle !== 'established') {
+        throw new Error(`--lifecycle must be 'initial-build' or 'established', got '${lifecycle}'`);
+      }
+      options.lifecycle = lifecycle;
       i++;
     } else if (argv[i] === '--config') {
       if (!argv[i + 1]) throw new Error('--config requires a path');
@@ -203,7 +212,7 @@ function logNoCommitsAnalyzed() {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -233,7 +242,7 @@ async function collectLocalMetrics(options = {}) {
   Object.assign(CONFIG, effectiveConfig);
   const config_sources = {
     files: configSources.map(source => source.file),
-    overrides: configSources.reduce((acc, source) => Object.assign(acc, source.overrides), {}),
+    overrides: configSources.reduce((acc, source) => Object.assign(acc, source.overrides), /** @type {Record<string, unknown>} */ ({})),
     class_b_overridden: classBOverridden
   };
 
@@ -682,12 +691,22 @@ async function collectLocalMetrics(options = {}) {
   }
   const branches_with_analyzed_commits = Object.keys(analyzed_branch_commit_counts).length;
 
+  // Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71 part 2): a root
+  // commit that introduces no production files (e.g. a GitHub repo-reservation scaffold of
+  // just LICENSE + README) is not the true start of the build. Map each raw root sha to its
+  // effective counterpart -- itself, unless it is a scaffold, in which case the first later
+  // commit that does introduce a production file -- before checking whether the analyzed
+  // window includes "the start of history". See lib/git.js's findEffectiveRootSha for the
+  // full mechanism and its caveats.
+  const effectiveRootShas = rootCommitShas.map(findEffectiveRootSha);
+  const scaffoldRootDetected = rootCommitShas.some((sha, i) => sha !== effectiveRootShas[i]);
+
   // See the rootCommitShas comment above: this is the actual structural check, run once the
-  // final analyzed commit set (metrics) is known, against the whole repository's root
-  // commit(s) fetched earlier.
+  // final analyzed commit set (metrics) is known, against the whole repository's (effective)
+  // root commit(s) fetched earlier.
   const includesRepositoryRoot = windowIncludesRepositoryRoot({
     analyzedShas: metrics.map(m => m.full_sha),
-    rootShas: rootCommitShas
+    rootShas: effectiveRootShas
   });
   // 'undetermined' when the root-commit query itself failed: neither 'established' (which
   // would silently assert brownfield bands apply, exactly the defect this guards against)
@@ -695,9 +714,18 @@ async function collectLocalMetrics(options = {}) {
   // Distinct from both, and paired with root_commit_detection_failed below so the failure
   // is visible in the written summary rather than reading as a confident verdict either way
   // (code-quality-metrics-dqri).
-  const project_lifecycle = rootCommitDetectionFailed
+  const detectedLifecycle = rootCommitDetectionFailed
     ? 'undetermined'
     : (includesRepositoryRoot ? 'initial-build' : 'established');
+
+  // Operator override (code-quality-metrics-zkhq, GitHub #71 part 1): mirrors --history's own
+  // shape exactly. CLI (options.lifecycle) takes precedence over a repo-local
+  // .codemetrics.json's own `lifecycle` key (config_sources.overrides.lifecycle, already
+  // resolved to the correct file-precedence winner by resolveConfigOverrides/lib/repoConfig.js
+  // -- 'lifecycle' is a META key there, recognized but never merged into `effective`, since it
+  // is not a CONFIG value), which in turn takes precedence over the structural detection above.
+  const project_lifecycle_override = options.lifecycle ?? config_sources.overrides.lifecycle ?? null;
+  const project_lifecycle = project_lifecycle_override ?? detectedLifecycle;
 
   // Generate summary statistics
   const summary = {
@@ -724,17 +752,25 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
     // Project lifecycle (code-quality-metrics-31w): see the rootCommitShas/includesRepositoryRoot
-    // comments above. project_lifecycle_signals is reported for audit/debugging even though
-    // includesRepositoryRoot alone decides project_lifecycle -- there is no confidence axis to
-    // track here, unlike history_granularity, since this is a structural fact rather than a
-    // detection with a raw guess that might be overridden.
+    // comments above. project_lifecycle is the effective value (project_lifecycle_override when
+    // one is given, the structural detection otherwise); project_lifecycle_detected is always the
+    // raw structural result regardless of any override -- the same shape history_granularity /
+    // history_granularity_detected / history_granularity_override already follow
+    // (code-quality-metrics-zkhq, GitHub #71 part 1), so the detected value stays visible
+    // alongside the override rather than being replaced by it.
     project_lifecycle,
+    project_lifecycle_detected: detectedLifecycle,
+    project_lifecycle_override,
     project_lifecycle_signals: {
       window_includes_repository_root: includesRepositoryRoot,
       repository_root_commit_count: rootCommitShas.length,
       // True when `git rev-list --max-parents=0 --all` itself failed rather than
       // succeeding with no roots -- see project_lifecycle's own comment above.
-      root_commit_detection_failed: rootCommitDetectionFailed
+      root_commit_detection_failed: rootCommitDetectionFailed,
+      // True when at least one raw root commit introduced zero production files and was
+      // replaced by a later effective root (code-quality-metrics-fex3, GitHub #71 part 2) --
+      // see findEffectiveRootSha's own comment for the mechanism and its caveats.
+      scaffold_root_detected: scaffoldRootDetected
     },
     config_sources,
     analysis_exclusions,
@@ -918,7 +954,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -926,7 +962,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--config <path>]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>]');
     process.exit(1);
   }
 
