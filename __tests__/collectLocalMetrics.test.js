@@ -134,6 +134,28 @@ function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
   });
 }
 
+/**
+ * Like mockExecSequence, but the repository-root-commit query (`git rev-list
+ * --max-parents=0 --all`) throws instead of returning a string -- a genuine command
+ * failure, distinct from a command that succeeds with empty stdout (code-quality-metrics-dqri).
+ * Positional values cover every other command.
+ */
+function mockExecSequenceWithRootCommitFailure(...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) {
+      throw new Error('fatal: unable to read tree');
+    }
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
 describe('collectLocalMetrics — trunk fallback', () => {
   test('falls back to trunk analysis when no feature branches exist', async () => {
     const SHA = 'a'.repeat(40);
@@ -512,7 +534,38 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.project_lifecycle).toBe('established');
     expect(summary.project_lifecycle_signals).toEqual({
       window_includes_repository_root: false,
-      repository_root_commit_count: 0
+      repository_root_commit_count: 0,
+      root_commit_detection_failed: false
+    });
+  });
+
+  // A genuine `git rev-list --max-parents=0 --all` failure (bad ref, git unavailable,
+  // corrupt repo) previously returned '' through runGitCommand -- indistinguishable from
+  // the command succeeding with no root commits, the exact case the guard above covers.
+  // project_lifecycle then read as 'established' with no visible sign anything had gone
+  // wrong, silently defeating the greenfield detection this field exists for on exactly
+  // the repository it is supposed to protect: a real initial build whose root-commit query
+  // happens to fail. project_lifecycle must instead read as 'undetermined', distinct from
+  // both 'established' and 'initial-build', with the failure visible in
+  // project_lifecycle_signals (code-quality-metrics-dqri).
+  test('records project_lifecycle as undetermined, not established, when the repository-root-commit query fails (code-quality-metrics-dqri)', async () => {
+    mockExecSequenceWithRootCommitFailure(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('undetermined');
+    expect(summary.project_lifecycle_signals).toEqual({
+      window_includes_repository_root: false,
+      repository_root_commit_count: 0,
+      root_commit_detection_failed: true
     });
   });
 

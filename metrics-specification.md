@@ -342,9 +342,27 @@ against the whole analyzed set regardless of `workflow_type`. Unlike history gra
 feature-branch special case is needed: a commit's SHA either is one of the repository's roots or
 it is not, independent of which ref found it — a genuinely new project bootstrapped directly on
 an unmerged branch is still detected. `local-code-metrics.js` resolves this to
-`project_lifecycle: 'initial-build' | 'established'`, reported alongside
-`project_lifecycle_signals` (`window_includes_repository_root`, `repository_root_commit_count`)
-for audit.
+`project_lifecycle: 'initial-build' | 'established' | 'undetermined'`, reported alongside
+`project_lifecycle_signals` (`window_includes_repository_root`, `repository_root_commit_count`,
+`root_commit_detection_failed`) for audit.
+
+**A failed root-commit query must not read as "established" (code-quality-metrics-dqri).**
+`git rev-list --max-parents=0 --all` and `runGitCommand` both return `''` on success-with-no-output
+and on failure, the same ambiguity code-quality-metrics-p4c fixed for `analyzeCommit`'s numstat
+query. Left unfixed here, a failed rev-list read as "no root commit found," which is exactly
+`established` -- silently defeating this section's own detection in the one case it exists to
+protect: a genuine initial build whose root-commit query happens to fail. `findRepositoryRootShas`
+(`lib/git.js`) calls `execSync` directly and reports whether the command itself threw, distinct
+from whether its output was empty; `local-code-metrics.js` resolves that into a third
+`project_lifecycle` value, `'undetermined'`, rather than defaulting to either `'established'` or
+`'initial-build'`, neither of which the failed query ever confirmed. `lib/report.js` is
+unmodified: its `WITHHELD_WHEN_GREENFIELD` gate checks for `'initial-build'` specifically, so
+`'undetermined'` is treated the same as `'established'` for banding purposes (bands are applied,
+not withheld) -- consistent with how `resolveHistoryGranularityForWithholding` above already
+treats an undetermined history-granularity signal as the less-withholding default. What changes
+is visibility: the failure is now legible in `project_lifecycle` and
+`project_lifecycle_signals.root_commit_detection_failed` and logged to the console, rather than
+reading as a confident, silent verdict either way.
 
 **This detection depends on the root commit surviving analysis at all (code-quality-metrics-p4c).**
 `windowIncludesRepositoryRoot` can only see a root commit's sha in `analyzedShas`, which is
@@ -1367,10 +1385,14 @@ Single summary object for the analysis run:
   // Project lifecycle (code-quality-metrics-31w): see "Project Lifecycle and Change-Size
   // Withholding" above. A purely structural detection -- no confidence axis and no override,
   // unlike history_granularity above, since there is no raw guess to resolve or overrule.
-  project_lifecycle: "initial-build" | "established",
+  // "undetermined" (code-quality-metrics-dqri) is a third, distinct value: the repository-root
+  // query itself failed, so neither "initial-build" nor "established" was ever confirmed.
+  project_lifecycle: "initial-build" | "established" | "undetermined",
   project_lifecycle_signals: {
     window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict
-    repository_root_commit_count: number       // `git rev-list --max-parents=0 --all`'s count
+    repository_root_commit_count: number,      // `git rev-list --max-parents=0 --all`'s count
+    root_commit_detection_failed: boolean       // true when that command itself failed, not
+                                                 // when it succeeded and simply found none
   },
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
