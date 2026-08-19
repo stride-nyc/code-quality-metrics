@@ -609,4 +609,47 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/velocity/i);
   });
+
+  // code-quality-metrics-i39, shape 2: measured against a real daloopa run, rejected with
+  // 'cites a healthy boundary of 260 for "Commit size trend", but the payload's healthyBoundary
+  // for that metric is absent'. commit_size_trend has no boundary of any kind (it is a
+  // composite-rule status, not a threshold), but its label is the only one that literally
+  // precedes the boundary phrase -- the model paraphrased p90_lines_changed as "p90 lines
+  // changed" rather than echoing its exact label "Commit size, p90". The role check credited
+  // commit_size_trend as the phrase's sole subject purely because its label happened to appear
+  // first, without asking whether commit_size_trend could ever legitimately own a healthy
+  // boundary at all. 260 is p90_lines_changed's real healthyBoundary and genuinely appears in
+  // the payload, so the correct behavior is to accept this bullet.
+  test('does not attribute a healthy-boundary phrase to a preceding metric that has no healthy boundary of its own, when the true subject is only paraphrased', () => {
+    const payload = [
+      { key: 'commit_size_trend', label: 'Commit size trend', value: 'growing', direction: 'informational', status: 'warning', healthyBoundary: null, criticalBoundary: null },
+      { key: 'p90_lines_changed', label: 'Commit size, p90', value: '578.5', direction: 'higher-is-worse', status: 'critical', healthyBoundary: '260', criticalBoundary: null }
+    ];
+    const bullets = ['Concern: Commit size trend is growing, and p90 lines changed sits at 578.5, above the healthy boundary of 260.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // Also a called-shot RED, not a guard: before the fix, BOTH labels precede the phrase here (the
+  // case above has only one), so the pre-fix check finds 2 candidates, treats that as ambiguous,
+  // and skips -- letting 578.5 (p90_lines_changed's own value) slide through uncaught as though it
+  // were that metric's healthy boundary (really 260). Filtering by boundary existence removes
+  // commit_size_trend (no healthy boundary to be eligible with) from the candidate pool, leaving
+  // exactly one -- p90_lines_changed -- so the check newly becomes able to catch this
+  // misattribution instead of treating it as unresolvable ambiguity. Predicted and verified RED
+  // against the pre-fix code: Expected: false, Received: true.
+  test('still rejects a metric\'s own value cited as its healthy boundary, even when a second, boundary-less metric also precedes the phrase', () => {
+    const payload = [
+      { key: 'commit_size_trend', label: 'Commit size trend', value: 'growing', direction: 'informational', status: 'warning', healthyBoundary: null, criticalBoundary: null },
+      { key: 'p90_lines_changed', label: 'Commit size, p90', value: '578.5', direction: 'higher-is-worse', status: 'critical', healthyBoundary: '260', criticalBoundary: null }
+    ];
+    const bullets = ['Concern: Commit size trend is growing, and commit size, p90 sits at 578.5, above the healthy boundary of 578.5.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/578\.5/);
+  });
 });
