@@ -1,0 +1,8 @@
+{
+  "ANALYSIS_IGNORE_PATTERNS": [
+    "**/deps/**",
+    "test/wpt/**",
+    "tools/v8_gypfiles/**",
+    "tools/inspector_protocol/**"
+  ]
+}
