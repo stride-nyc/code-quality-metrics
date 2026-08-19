@@ -655,24 +655,19 @@ describe('collectLocalMetrics — successful run', () => {
     });
   });
 
-  // Real case (code-quality-metrics-fex3, GitHub #71 part 2): stride-nyc/73V's root commit
-  // ec1026c4 (2022-01-26) adds only LICENSE and README, then nothing for three years, then
-  // 2,928 commits in 2025. That root commit is a GitHub repo-reservation scaffold, not the
-  // start of the build: windowIncludesRepositoryRoot must be checked against the first commit
-  // that DOES introduce a production file, not the literal (scaffold) root sha, or this
-  // repository classifies established forever and is graded against maintenance-era bands it
-  // never earned.
+  // Real case (code-quality-metrics-fex3, GitHub #71): stride-nyc/73V's root commit ec1026c4
+  // (2022-01-26) adds only LICENSE and README, then nothing for three years, then 2,928
+  // commits in 2025. That root commit is a GitHub repo-reservation scaffold, not the start of
+  // the build: windowIncludesRepositoryRoot must be checked against the first commit that DOES
+  // introduce a production file, not the literal (scaffold) root sha, or this repository
+  // classifies established forever and is graded against maintenance-era bands it never earned.
   //
-  // ANALYSIS_IGNORE_PATTERNS is configured here to exclude LICENSE/README the same way a real
-  // 73V-shaped repository's own .codemetrics.json would need to: under CONFIG's own empty
-  // default, neither file is excluded or a test file, so both read as "production" by the same
-  // rule analyzeCommit's own prodFiles count uses, and this scaffold would not be caught. See
-  // lib/git.js's commitIntroducesProductionFiles doc comment for this same caveat.
+  // DEFAULT configuration throughout -- no .codemetrics.json, no ANALYSIS_IGNORE_PATTERNS
+  // override. LICENSE and README.md are repo furniture (isRepoFurniture,
+  // CONFIG.REPO_FURNITURE_PATTERNS in lib/config.js), matched structurally regardless of any
+  // operator configuration, so this is the common case caught automatically.
   test('classifies project_lifecycle as initial-build when the repository\'s root commit is a scaffold, using the first production-bearing commit as the effective start of history (code-quality-metrics-fex3, GitHub #71)', async () => {
     const ROOT_SHA = 'c'.repeat(40); // stands in for 73V's ec1026c4 (LICENSE + README only)
-
-    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
-    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['LICENSE', 'README.md'] }));
 
     execSync.mockImplementation(command => {
       if (typeof command !== 'string') return '';

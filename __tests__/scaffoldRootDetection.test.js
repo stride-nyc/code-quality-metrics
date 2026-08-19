@@ -3,7 +3,6 @@
 jest.mock('child_process');
 
 const { execSync } = require('child_process');
-const { CONFIG } = require('../lib/config');
 const { commitIntroducesProductionFiles, findEffectiveRootSha } = require('../lib/git');
 
 beforeEach(() => {
@@ -36,6 +35,28 @@ describe('commitIntroducesProductionFiles (code-quality-metrics-fex3, GitHub #71
 
     expect(result).toBe(false);
   });
+
+  // Real case (code-quality-metrics-fex3, GitHub #71): stride-nyc/73V's actual root commit
+  // touches only LICENSE and README.md. Default configuration throughout -- no
+  // ANALYSIS_IGNORE_PATTERNS mutation -- since a scaffold this common must be caught without
+  // any operator configuration.
+  test('returns false when a commit only touches repo-furniture files (LICENSE, README.md), using default configuration', () => {
+    execSync.mockReturnValue('LICENSE\nREADME.md');
+
+    const result = commitIntroducesProductionFiles('a'.repeat(40));
+
+    expect(result).toBe(false);
+  });
+
+  // [guard] a root commit that happens to include one real source file alongside repo
+  // furniture is NOT a scaffold: production presence wins.
+  test('returns true when a commit mixes repo furniture with one real source file', () => {
+    execSync.mockReturnValue('LICENSE\nREADME.md\nsrc/app.js');
+
+    const result = commitIntroducesProductionFiles('a'.repeat(40));
+
+    expect(result).toBe(true);
+  });
 });
 
 describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
@@ -58,46 +79,28 @@ describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
   // commits in 2025. A scaffold root commit like this must not anchor the lifecycle test;
   // the first commit that DOES introduce a production file should stand in for it.
   //
-  // CAVEAT this test makes visible rather than hiding: LICENSE and README.md are not
-  // excluded by ANY pattern under CONFIG.ANALYSIS_IGNORE_PATTERNS' own empty default, so
-  // under bare defaults they read as "production" by the same rule analyzeCommit's prodFiles
-  // count uses, and this scaffold would not be caught. This test configures
-  // ANALYSIS_IGNORE_PATTERNS the same way a real 73V-shaped repository's own .codemetrics.json
-  // would need to (an existing, already-shipped override -- not a new default pattern this
-  // change adds to lib/config.js), so the walk-forward mechanism itself is exercised against
-  // the real shape. See commitIntroducesProductionFiles' own doc comment and
-  // metrics-specification.md's Scaffold Root Commit Detection section for the same caveat.
-  describe('with ANALYSIS_IGNORE_PATTERNS configured to exclude LICENSE/README (the 73V shape)', () => {
-    let original;
-
-    beforeEach(() => {
-      original = CONFIG.ANALYSIS_IGNORE_PATTERNS;
-      CONFIG.ANALYSIS_IGNORE_PATTERNS = ['LICENSE', 'README.md'];
+  // Default configuration throughout -- no ANALYSIS_IGNORE_PATTERNS mutation. LICENSE and
+  // README.md are repo furniture (isRepoFurniture, CONFIG.REPO_FURNITURE_PATTERNS), matched
+  // structurally regardless of ANALYSIS_IGNORE_PATTERNS, so this scaffold is caught with no
+  // operator configuration at all -- the common case this fix exists for.
+  test('walks forward to the first commit that introduces a production file when the root commit is a scaffold', () => {
+    const ROOT = 'a'.repeat(40);
+    const BUILD_START = 'b'.repeat(40);
+    execSync.mockImplementation(command => {
+      if (typeof command === 'string' && command.includes('--name-only')) {
+        if (command.includes(ROOT)) return 'LICENSE\nREADME.md';
+        if (command.includes(BUILD_START)) return 'src/app.js';
+        throw new Error(`unexpected sha in --name-only query: ${command}`);
+      }
+      if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) {
+        return `${ROOT}\n${BUILD_START}`;
+      }
+      throw new Error(`unexpected command in this test: ${command}`);
     });
 
-    afterEach(() => {
-      CONFIG.ANALYSIS_IGNORE_PATTERNS = original;
-    });
+    const result = findEffectiveRootSha(ROOT);
 
-    test('walks forward to the first commit that introduces a production file when the root commit is a scaffold', () => {
-      const ROOT = 'a'.repeat(40);
-      const BUILD_START = 'b'.repeat(40);
-      execSync.mockImplementation(command => {
-        if (typeof command === 'string' && command.includes('--name-only')) {
-          if (command.includes(ROOT)) return 'LICENSE\nREADME.md';
-          if (command.includes(BUILD_START)) return 'src/app.js';
-          throw new Error(`unexpected sha in --name-only query: ${command}`);
-        }
-        if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) {
-          return `${ROOT}\n${BUILD_START}`;
-        }
-        throw new Error(`unexpected command in this test: ${command}`);
-      });
-
-      const result = findEffectiveRootSha(ROOT);
-
-      expect(result).toBe(BUILD_START);
-    });
+    expect(result).toBe(BUILD_START);
   });
 
   // [guard] if every later commit is also scaffold-only (no production file anywhere in the
