@@ -131,6 +131,33 @@ function parseCliArgs(argv) {
 }
 
 /**
+ * Resolve detectHistoryGranularity()'s raw verdict into the value used to
+ * decide whether commit-unit verdicts are withheld (lib/report.js's
+ * WITHHELD_WHEN_SQUASHED_KEYS, gated on summary.history_granularity).
+ *
+ * Commits unique to unmerged feature branches (workflow_type: feature_branch)
+ * are granular by construction: they have not been squashed into anything
+ * yet, whatever a (#N)/(GH-N) subject suffix on one of them says. A single
+ * such commit among many otherwise-granular ones was previously enough to
+ * classify the whole sample squashed/low and silence every commit-unit
+ * verdict for the repository -- see code-quality-metrics-drv, measured on
+ * remote_retro (1 of 29 commits, share 0.034) and daloopa (7 of 50, share
+ * 0.140). This gate does not apply to workflow_type: trunk, where commits on
+ * main after a squash merge genuinely are whole pull requests and withholding
+ * is correct -- that case must not regress.
+ * @param {{ value: 'granular'|'squashed'|'unknown', confidence: 'high'|'low' }} detectedGranularity
+ * @param {'trunk'|'feature_branch'} workflowType
+ * @returns {'granular'|'squashed'}
+ */
+function resolveHistoryGranularityForWithholding(detectedGranularity, workflowType) {
+  if (workflowType === 'feature_branch') return 'granular';
+  // Undetermined defaults to squashed, not unknown: squash-merge-delete is the more common
+  // workflow, and asserting a verdict against bands that don't apply is a worse error than
+  // withholding one that would have been valid (code-quality-metrics-bnq's notes).
+  return detectedGranularity.value === 'unknown' ? 'squashed' : detectedGranularity.value;
+}
+
+/**
  * Main analysis function
  * @param {{ days?: number, since?: string, history?: 'granular'|'squashed' }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
@@ -652,6 +679,7 @@ async function collectLocalMetrics(options = {}) {
 module.exports = {
   collectLocalMetrics,
   parseCliArgs,
+  resolveHistoryGranularityForWithholding,
   CONFIG,
   // git
   runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff,
