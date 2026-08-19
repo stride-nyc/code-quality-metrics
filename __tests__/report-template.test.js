@@ -631,6 +631,19 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('This is a good sign');
   });
 
+  // code-quality-metrics-4er (spotted separately, not in the issue's own quoted text):
+  // message_quality_pct's description claimed "Vague messages pile up when suggested text is
+  // accepted without editing it", a causal claim about AI tools with nothing behind it. The
+  // metric's own descriptiveNote (lib/report.js) already says this rate mostly reflects
+  // Conventional Commits adoption, not message quality; the description should say the same
+  // supported thing rather than an unsupported causal story.
+  it('describes commit-message quality without an unsupported causal claim about AI tools', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('mostly tracks whether the project has adopted the Conventional Commits format');
+    expect(html).not.toContain('Vague messages pile up when suggested text is accepted without editing it');
+  });
+
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
     const duplicates = {
       files_scanned: 3,
