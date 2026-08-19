@@ -10,7 +10,7 @@ Most software teams measure code quality at the wrong point in the process. Post
 
 The culprit is `git merge --squash`. This standard workflow collapses an entire feature branch (potentially dozens of commits representing days of iterative development) into a single merge commit on main. The granular signals that reveal AI-assisted development patterns (large individual commits, test discipline on a commit-by-commit basis, the ratio of additions to deletions) are destroyed at merge time.
 
-The practical consequence, observed on this toolkit's own repositories rather than measured across a population [2]: local analysis of feature branches before merging surfaced roughly ten times as many flagged commits as analysis of the main branch after merging. Treat the multiplier as an illustration with a small denominator; the direction is the finding, and the mechanism (squash destroys the granular signals) guarantees the direction. By the time the problem is visible in your standard metrics, it's embedded across your codebase.
+The practical consequence, observed on this toolkit's own repositories rather than measured across a population [2]: local analysis of feature branches before merging surfaced roughly ten times as many flagged commits as analysis of the main branch after merging. Squash destroys the granular signals.
 
 The fix is instrumentation at the right moment: capturing commit-level metrics from feature branches before they're squashed and deleted.
 
@@ -27,26 +27,24 @@ Teams with high AI adoption reported measurable individual gains. Per 25% increa
 
 (*Accelerate State of DevOps 2024*, p. 37.)
 
-The randomised evidence complicates the productivity framing rather than supporting it. METR's trial of 16 experienced open-source developers across 246 tasks (arXiv:2507.09089) reported that "allowing AI actually increases completion time by 19%", a slowdown, not a gain. The GitHub Copilot trial (Peng et al., arXiv:2302.06590) found a 55.8% speedup, but on a single scripted task with freelance developers, which is a much narrower claim than a productivity gain in ongoing work.
+Research evidence complicates the productivity claim rather than supporting it. METR's trial of 16 experienced open-source developers across 246 tasks (arXiv:2507.09089) reported that "allowing AI actually increases completion time by 19%", a slowdown, not a gain. The GitHub Copilot trial (Peng et al., arXiv:2302.06590) found a 55.8% speedup, but on a single scripted task with freelance developers, which is a much narrower claim than a productivity gain in ongoing work.
 
-But one team-level delivery metric (the kind that reflects whether software is reaching users reliably) moved against the gains, and kept moving against them across both report years:
+But one delivery metric moved against the gains, and kept moving against them across both report years:
 
 - **7.2% increase in delivery instability** for every 25% increase in AI adoption (2024 report). The 2025 report confirms this persists: AI adoption "now improves software delivery throughput... However, it still increases delivery instability" (2025 report, p. 4).
-
-DORA does not discuss pull request size as a metric, publishes no bug or defect rate percentage tied to AI adoption, and its 2024 throughput finding (a 1.5% reduction per 25% increase in AI adoption) was superseded when the 2025 report found throughput improving.
 
 ### The AI Amplifier Effect
 
 DORA's central finding is that AI tools don't change a team's fundamental trajectory; they accelerate it. Teams with strong foundational practices (automated testing, CI/CD, version control discipline, working in small batches) found that AI amplified their existing strengths. Teams with weak foundations used AI tools to generate technical debt faster.
 
-The best-identified causal study of 2026 supports the amplifier reading from the code side: comparing 806 Cursor-adopting projects against 1,380 matched controls, most of the post-adoption rise in static-analysis warnings was explained by velocity (more code, produced faster) rather than by AI-authored code being intrinsically worse. The one residual that survived the velocity adjustment was complexity (He et al., MSR 2026).
+The best-identified causal study of 2026 supports the amplifier reading from the code side: comparing 806 Cursor-adopting projects against 1,380 matched controls, most of the post-adoption rise in static-analysis warnings was explained by velocity (more code, produced faster) rather than by AI-authored code being intrinsically worse. However, complexity increased even after adjusting for velocity (He et al., MSR 2026).
 
 DORA identifies seven organizational capabilities that amplify AI's positive outcomes [3]. Two of these are directly observable in commit history and form the foundation of the measurement approach described here:
 
 - **Strong version control practices** (Capability 4): frequent commits, mature rollback capability, disciplined branching
 - **Working in small batches** (Capability 5): a long-standing DORA principle that becomes even more critical in AI-assisted environments
 
-The remaining five capabilities (organizational AI policy, data ecosystem quality, internal knowledge systems, user-centric focus, and platform quality) require organizational and infrastructure data not available in git history.
+The remaining five capabilities (organizational AI policy, data ecosystem quality, internal knowledge systems, user-centric focus, and platform quality) require organizational and infrastructure data not available in git history and requires more extensive system integration, audits, and surveys.
 
 ### Team Archetypes
 
@@ -56,17 +54,17 @@ DORA identifies seven team archetypes from cluster analysis of survey responses 
 
 **Foundational challenges**: Weak practices + AI tools = compounding debt. The signature here: a large-commit rate past the critical band.
 
-DORA derives its archetypes from how people report their working conditions, and no git measure appears anywhere in its clustering. The signatures above are this toolkit's own construction, read from four calibrated commit-shape bands (message quality plays no part; its band was demoted to informational). Identifying which signature describes your team still helps calibrate which signals to prioritize first, as long as the toolkit's `dora_archetype` field is read as a compressed summary of those four bands, never as a DORA classification.
+DORA derives its archetypes from how people report their working conditions, and is not directly measurable through git related measures. This toolkit attempts to read signals based on four calibrated commit-shape bands. The signal is therefore directional and not presented as provable.
 
 ## Why This Matters: GitClear's Independent Evidence
 
-GitClear, a code intelligence platform specializing in AI drift detection, provides independent evidence pointing the same direction [4]. The two measure different quantities (DORA surveys delivery outcomes, GitClear classifies changed lines), so this is convergence, not corroboration. Their 2025 research documented a threshold crossed for the first time across their analyzed corpus: 2024 was the first year copy-pasted lines exceeded moved lines. Copy-paste at scale is a leading indicator of the kind of technical debt that compounds invisibly: code that appears to work but creates hidden coupling and increases maintenance cost over time.
+GitClear, a code intelligence platform specializing in AI drift detection, provides independent evidence pointing the same direction [4]. The two measure different quantities (DORA surveys delivery outcomes, GitClear classifies changed lines), so this is convergence, not corroboration. Their 2025 research documented that 2024 was the first year copy-pasted lines exceeded moved lines. Copy-paste at scale is a leading indicator of the kind of technical debt that compounds invisibly: code that appears to work but creates hidden coupling and increases maintenance cost over time.
 
 GitClear's analysis also shows churn rates (code written and then rewritten within two weeks) rising over the same period. Whether AI use causes that rise is contested: GitClear has no per-commit usage traces, and two independent peer-reviewed 2026 studies (He et al., MSR 2026; Robbes et al., 2026) fault its analysis on exactly that ground. The strongest causal design available (806 Cursor-adopting projects against 1,380 matched controls) found duplicated-line density rose about 7 percent, short of statistical significance. The distributional shift GitClear documents is real; the attribution to AI is an open question, and this toolkit treats duplication as a drift signal to investigate rather than a defect-risk verdict. One boundary to respect: DORA measures rising delivery instability, GitClear measures rising churn and duplicate-block prevalence, and any causal chain connecting the two is this article's inference, not a finding of either.
 
 ## What We Can Measure (and What We Can't)
 
-Git commit history is a rich data source for two of DORA's seven capabilities. It is silent on the other five.
+The lists below sort signals by where the data lives: in git history itself, in sources this toolkit can also reach (the checked-out source files, the GitHub API), or in systems it never touches (CI/CD pipelines, incident trackers, surveys).
 
 **What git reveals** (DORA Capabilities 4 and 5):
 - Commit size distribution and trends
@@ -75,13 +73,16 @@ Git commit history is a rich data source for two of DORA's seven capabilities. I
 - Commit velocity and velocity trends
 - Additions-to-deletions ratios (reported without a verdict: the churn literature tested and discarded this denominator, so the toolkit carries it as descriptive context only)
 - Commit message convention adoption (also reported without a verdict: the score tracks whether a team uses Conventional Commits far more than whether its messages are informative)
+- Duplication density (a companion scan rather than the log itself: jscpd runs over the production files the analyzed commits touched, at SonarQube's minimum clone size, with an optional Claude pass for duplicates rebuilt in a different shape)
 
-**What git cannot reveal**:
+**What git cannot reveal** (the data lives elsewhere):
 - The four core DORA delivery metrics (deployment frequency, lead time, change failure rate, MTTR): these require CI/CD and incident data
-- Copy-paste and code cloning detection: requires AST-level diff analysis (GitClear's approach)
-- Code review quality: reviewer count and comment depth require GitHub API data
-- Architectural boundary violations: requires dependency graph analysis; the Claude API integration described below partially addresses this
 - DORA capabilities 1, 2, 3, 6, 7: require organizational policy, data infrastructure, and product telemetry
+
+**Measurable, not yet measured** (the data is in reach through the checkout or the GitHub API; the analysis is unbuilt or partial):
+- Code review quality: reviewer count and comment depth live in the GitHub API, and the per-PR workflow already runs with API access (`code-quality-metrics-5w1`)
+- Structural clone detection: duplicates rebuilt with different names or structure need AST-level analysis (GitClear's approach); token matching cannot see them, and the optional Claude pass is a partial substitute
+- Architectural boundary violations: requires dependency graph analysis over source that is already checked out; the Claude API integration described below partially addresses this
 
 A detailed breakdown of measurable signals, gaps, and the tools that address each gap is available in the companion [Metrics Specification](metrics-specification.md).
 
@@ -103,7 +104,7 @@ The script enumerates all local feature branches and, by default, analyzes the n
 
 ### Option 3: Claude API Diff-Level Analysis (Emerging)
 
-Heuristics catch the shape of a problem; AI analysis can explain what's actually wrong. Sending high-risk commit diffs to a Claude API endpoint adds semantic pattern detection that rule-based metrics cannot replicate:
+Heuristics catch the shape of a problem; AI analysis attempts to interpret what's actually wrong. Sending high-risk commit diffs to a Claude API endpoint adds semantic pattern detection that rule-based metrics cannot replicate:
 
 - **AI-generated code signature detection**: generic variable names (`data`, `result`, `item`), boilerplate CRUD without error handling, identically structured adjacent functions, absent domain language in identifiers
 - **Architectural boundary violation detection**: code that crosses service or module boundaries in ways that violate established patterns in the codebase
