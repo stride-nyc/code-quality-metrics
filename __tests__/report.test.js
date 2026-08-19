@@ -261,6 +261,56 @@ describe('buildMetricCatalog when history_granularity is squashed', () => {
   });
 });
 
+describe('buildMetricCatalog when project_lifecycle is initial-build', () => {
+  const WITHHELD_KEYS = ['large_commits_pct', 'sprawling_commits_pct', 'p90_lines_changed', 'p90_files_changed'];
+
+  it('withholds the four change-size verdicts: no gauge, neutral status, sentinel concern, no boundary, and an explanation naming the initial build', () => {
+    const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'initial-build' }));
+    for (const key of WITHHELD_KEYS) {
+      const entry = entries.find(e => e.key === key);
+      expect(entry.hasGauge).toBe(false);
+      expect(entry.status).toBe('neutral');
+      expect(entry.concern).toBe(-Infinity);
+      expect(entry.healthyBoundary).toBeNull();
+      expect(entry.criticalBoundary).toBeNull();
+      expect(entry.descriptiveNote).toMatch(/initial build/);
+    }
+  });
+
+  it('withholds the duplication density verdict too, with the same initial-build explanation', () => {
+    const dup = {
+      statistics: { percentage: THRESHOLDS.DUPLICATION_PCT.healthy + 5, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
+      semantic_findings: [],
+      layers_run: { static: true, semantic: false }
+    };
+    const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'initial-build' }), dup);
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+    expect(density.hasGauge).toBe(false);
+    expect(density.status).toBe('neutral');
+    expect(density.healthyBoundary).toBeNull();
+    expect(density.criticalBoundary).toBeNull();
+    expect(density.descriptiveNote).toMatch(/initial build/);
+  });
+
+  // [guard] duplication being unmeasurable for an unrelated reason (unsupported language) must
+  // keep its own explanation, not be overwritten by the initial-build note -- the two reasons
+  // are different claims and only one of them is true here.
+  it('[guard] leaves the unsupported-language duplication note intact rather than overwriting it with the initial-build note', () => {
+    const dup = { unsupported_extensions: ['.ex', '.exs'] };
+    const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'initial-build' }), dup);
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+    expect(density.descriptiveNote).toMatch(/Not measurable/);
+    expect(density.descriptiveNote).not.toMatch(/initial build/);
+  });
+
+  it('[guard] leaves entries untouched when project_lifecycle is established', () => {
+    const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'established' }));
+    const large = entries.find(e => e.key === 'large_commits_pct');
+    expect(large.hasGauge).toBe(true);
+    expect(large.descriptiveNote).toBeUndefined();
+  });
+});
+
 describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
   it('never reports critical for a two-band metric, however far past healthy the value sits', () => {
     // p90_lines_changed is two-band (healthy 260, critical null): the extreme

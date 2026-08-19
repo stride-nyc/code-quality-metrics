@@ -292,6 +292,29 @@ describe('renderReportHtml', () => {
     expect(html).toContain('squashed');
   });
 
+  // code-quality-metrics-31w: flight-info-spike, a three-week greenfield spike, is currently
+  // graded against bands calibrated on maintenance-era windows of decades-old codebases and
+  // comes out labelled legacy-bottleneck. Withholding four-of-six change-size tiles plus
+  // duplication leaves most of a group as ungraded numbers; the masthead has to say plainly
+  // what the report is still for in that state, rather than leaving a reader to infer it from a
+  // screen of ungraded tiles.
+  it('states plainly, in the masthead, that the report shows shape and trend rather than a grade when project_lifecycle is initial-build', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toMatch(/initial build/);
+    expect(masthead).toMatch(/shape and trend/);
+  });
+
+  // [guard] an established repository's masthead must not carry the initial-build sentence at
+  // all -- proven by mutation: see the production-code cycle for this line.
+  it('[guard] says nothing about an initial build in the masthead when project_lifecycle is established', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'established' }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).not.toMatch(/initial build/);
+  });
+
   // code-quality-metrics-bmg: the archetype verdict headlined the report, above every metric
   // tile, classifying an entire team from four commit-shape percentages (measured absurdity:
   // a three-week-old greenfield spike labelled legacy-bottleneck). It moves below the "Commit
