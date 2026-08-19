@@ -1225,4 +1225,35 @@ describe('collectLocalMetrics — HEAD-anchored window (code-quality-metrics-g10
     expect(summary.analyzed_span_end).toBe('2025-10-20');
     expect(summary.window_widened).toBe(false);
   });
+
+  test('widens an explicit --since window that returns zero commits to the newest MAX_COMMITS, and reports window_widened', async () => {
+    const SHA1 = 'd'.repeat(40);
+    const SHA2 = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',   // git branch -a — no main/master, so defaultBranch is null, fallbackRef is 'HEAD'
+      '',              // git log feature/x --since=2020-01-01 — zero commits
+      '',              // git log HEAD --since=2020-01-01 (existing trunk fallback) — zero commits
+      [                // git log HEAD --max-count (the widen fallback) — real commits, ignoring the date
+        `${SHA1}|2026-07-30T10:00:00Z|Dev|feat: widened one\x1e`,
+        `${SHA2}|2026-08-05T10:00:00Z|Dev|feat: widened two\x1e`
+      ].join('\n'),
+      `1\t0\tsrc/one.js`,
+      `1\t0\tsrc/two.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ since: '2020-01-01' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    expect(summaryCall).toBeDefined();
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(2);
+    expect(summary.window_widened).toBe(true);
+    expect(summary.window_requested_since).toBe('2020-01-01');
+    expect(summary.analyzed_span_start).toBe('2026-07-30');
+    expect(summary.analyzed_span_end).toBe('2026-08-05');
+  });
 });
