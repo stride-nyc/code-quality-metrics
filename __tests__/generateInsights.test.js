@@ -195,6 +195,38 @@ describe('generateInsights', () => {
     expect(warnings.some(w => w.includes('mismatch'))).toBe(false);
   });
 
+  test('emits a warning when the analyzed span starts well after the requested --since date', () => {
+    const { warnings } = generateInsights(makeSummary({
+      window_requested_since: '2026-08-01',
+      window_widened: false,
+      analyzed_span_start: '2026-08-12',
+      analyzed_span_end: '2026-08-16'
+    }), []);
+    expect(warnings.some(w => w.includes('starts') && w.includes('after'))).toBe(true);
+  });
+
+  // Regression guard for the reproduction case verified against nodejs/node and curl/curl
+  // (code-quality-metrics-tde9): commit.date is author date, while --since filters on
+  // committer date, so a healthy, correctly-reproduced window can legitimately have an
+  // analyzed span that starts BEFORE the requested --since boundary. This must never warn.
+  test('does not warn when the analyzed span starts before the requested --since date', () => {
+    const { warnings } = generateInsights(makeSummary({
+      window_requested_since: '2026-08-01',
+      window_widened: false,
+      analyzed_span_start: '2026-07-15',
+      analyzed_span_end: '2026-08-11'
+    }), []);
+    expect(warnings.some(w => w.includes('starts') && w.includes('after'))).toBe(false);
+  });
+
+  test('does not warn about span lag when window_requested_since is absent (HEAD-anchored run)', () => {
+    const { warnings } = generateInsights(makeSummary({
+      analyzed_span_start: '2026-08-12',
+      analyzed_span_end: '2026-08-16'
+    }), []);
+    expect(warnings.some(w => w.includes('starts') && w.includes('after'))).toBe(false);
+  });
+
   test('does not emit AI pattern warning when fewer than 30% of commits are addition-heavy large commits', () => {
     const metrics = [
       makeMetric({ large_commit: true, total_additions: 300, total_deletions: 10 }),
