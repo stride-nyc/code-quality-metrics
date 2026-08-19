@@ -301,6 +301,44 @@ describe('short count provenance', () => {
 
     expect(findUnexplainedShortCounts(fixture)).toEqual([]);
   });
+
+  // [guard] emberjs/ember.js and curl/curl (code-quality-metrics-dxl) use a dedicated field
+  // rather than folding their explanation into notes prose, since their notes already discuss
+  // other things (top-commit dominance, duplication) unrelated to the shortfall. Proven by
+  // mutation: deleting the `!hasField` arm of the filter below turns this fixture back into a
+  // reported violation, the same failure the first guard test in this file exists to catch.
+  test('[guard] does not flag a short-count observation that carries a short_count_explanation field', () => {
+    const fixture = [{
+      repo: 'fixture/field-explains-it',
+      include_in_derivation: true,
+      commits_analyzed: 49,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2026-04-16' },
+      notes: 'Top commit is 40% of window volume, an ordinary refactor.',
+      short_count_explanation: 'One commit failed to fetch its blob and was dropped; reproduced.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([]);
+  });
+
+  // [guard] The gate above only checks observations with include_in_derivation: true, matching
+  // every other gate in this file (e.g. tool_commit provenance, observation provenance): an
+  // excluded observation feeds no band, and most excluded short counts already carry an
+  // exclusion_reason rather than this field. Proven by mutation: deleting the
+  // `.filter(o => o.include_in_derivation)` line turns this fixture back into a reported
+  // violation.
+  test('[guard] does not flag an excluded short-count observation', () => {
+    const fixture = [{
+      repo: 'fixture/excluded-short-count',
+      include_in_derivation: false,
+      commits_analyzed: 20,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2026-01-01' },
+      notes: 'Superseded window, kept per the append-only convention.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([]);
+  });
 });
 
 describe('workflow provenance', () => {
