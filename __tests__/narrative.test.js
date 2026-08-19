@@ -209,13 +209,13 @@ describe('buildNarrativePayload', () => {
     expect(sprawling.tier).toBeUndefined();
   });
 
-  // GUARD, not a called-shot RED: the rounding this asserts was already added in the
-  // previous cycle's implementation (formatValue is applied to value/healthyBoundary/
-  // criticalBoundary in the same edit that stripped concern/hasGauge/tier), so this test
-  // was green on arrival. Kept as its own case, separate from the field-stripping test
-  // above, because it pins the specific measured defect (code-quality-metrics-ll1's
-  // 0.4108463434675432) rather than relying on the other test to cover it incidentally.
-  test('rounds a long floating-point value the same way the report cards do', () => {
+  // GUARD, not a called-shot RED: pins the original measured defect (code-quality-metrics-ll1's
+  // raw 0.4108463434675432 reaching the model) rather than relying on the field-stripping test
+  // above to catch it incidentally. Since code-quality-metrics-5qn, the rounding rule is two
+  // significant figures rather than formatValue's fixed two decimal places (see the next test),
+  // but 0.4108463434675432 already has only two significant figures once rounded ("0.41"), so
+  // this specific value is green under both rules and the assertion is unchanged.
+  test('rounds a long floating-point value down to two significant figures', () => {
     const catalog = buildMetricCatalog(fixtureSummary(), {
       statistics: { percentage: 0.4108463434675432, duplicatedLines: 15, lines: 3651, clones: 1 }
     });
@@ -224,6 +224,60 @@ describe('buildNarrativePayload', () => {
 
     expect(JSON.stringify(payload)).not.toContain('0.4108463434675432');
     expect(duplication.value).toBe('0.41');
+  });
+
+  // CALLED SHOT (code-quality-metrics-5qn, RED 1): a rate this small a sample cannot support two
+  // decimal places -- "62.22%" reads as more precise than a 45-commit sample can back up (the
+  // issue's own quoted example). formatValue alone (Math.round(value*100)/100) would keep
+  // "62.22" unchanged, since it is already at 2 decimal places; this test pins the payload
+  // rounding to two SIGNIFICANT figures instead, so a large rate collapses to a whole number
+  // while a genuinely small value (see the ratio test below) keeps its meaningful digits.
+  // Predicted failure before implementing: toBe('62') fails with Received: "62.22", because
+  // buildNarrativePayload currently calls formatValue directly with no further rounding.
+  test('rounds a percentage-scale value to two significant figures rather than two decimal places', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ test_coverage_rate: '62.22' }));
+    const payload = buildNarrativePayload(catalog);
+    const testCoverage = payload.find(entry => entry.key === 'test_coverage_rate');
+
+    expect(testCoverage.value).toBe('62');
+  });
+
+  // CALLED SHOT (code-quality-metrics-5qn, RED 2): a p90 line count is itself an interpolated
+  // statistic, not a whole line -- "578.5" (a real quoted issue example) implies more precision
+  // than the underlying 45-commit sample supports. Two significant figures rounds it to the
+  // nearest ten (580) instead of reporting a fractional line. Predicted failure before
+  // implementing: toBe('580') fails with Received: "578.5", since formatValue's own rounding
+  // (2 decimal places) leaves a value already at 1 decimal place untouched.
+  test('rounds a p90 lines-changed value to two significant figures', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ p90_lines_changed: 578.5 }));
+    const payload = buildNarrativePayload(catalog);
+    const p90Lines = payload.find(entry => entry.key === 'p90_lines_changed');
+
+    expect(p90Lines.value).toBe('580');
+  });
+
+  // GUARD: two significant figures must not erase a ratio metric that is naturally below 1 --
+  // net_additions_ratio_median's own healthy/critical boundaries (0.63/0.79) are meaningless if
+  // rounded to a whole number. 0.2 already has one significant figure short of the rounding
+  // point, so this proves the same rule that collapses 62.22 to 62 leaves a small value's
+  // information intact rather than always dropping to an integer.
+  test('does not collapse a sub-1 ratio value to a whole number', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ net_additions_ratio_median: 0.2 }));
+    const payload = buildNarrativePayload(catalog);
+    const netAdditions = payload.find(entry => entry.key === 'net_additions_ratio_median');
+
+    expect(netAdditions.value).toBe('0.2');
+  });
+
+  // GUARD: a non-numeric value (a trend label, or duplication_lines' composite "15 / 3651"
+  // string) must keep passing through unrounded, exactly as before -- two-significant-figure
+  // rounding only ever applies to a genuine number.
+  test('leaves a non-numeric value untouched by the significant-figure rounding', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ commit_size_trend: 'growing' }));
+    const payload = buildNarrativePayload(catalog);
+    const trend = payload.find(entry => entry.key === 'commit_size_trend');
+
+    expect(trend.value).toBe('growing');
   });
 
   test("includes the metric's own explanatory prose from METRIC_DESCRIPTIONS", () => {
