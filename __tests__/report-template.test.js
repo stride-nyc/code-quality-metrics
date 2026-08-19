@@ -433,6 +433,25 @@ describe('renderReportHtml', () => {
   // crossing for a signal whose critical band was withheld, not evaluated. The archetype is a
   // classification built from withheld inputs, so it must be suppressed entirely (matching the
   // squashed-history precedent above) rather than rendered with a fabricated boundary.
+  // [guard] regression: an established target (project_lifecycle not 'initial-build') has real,
+  // non-withheld bands and must keep rendering the correct verb, bound and direction -- the
+  // exact sentence confirmed correct on remote_retro before this fix ("Large commits crossed
+  // the healthy line at 28 (healthy at or below 19)"). This is the byte-identical-for-
+  // established-targets half of code-quality-metrics-m7kt's acceptance criteria: the greenfield
+  // fix above must not touch this path at all.
+  it('[guard] still names the real bound and correct direction for an established target, not "null"', () => {
+    const html = renderReportHtml(fixtureArgs({
+      large_commits_pct: '28.00',
+      sprawling_commits_pct: '8.00',
+      dora_archetype: 'foundational-challenges'
+    }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).toContain('Large commits crossed the healthy line at 28 (healthy at or below 19)');
+    expect(section).not.toMatch(/null/);
+  });
+
   it('suppresses the archetype verdict and explains why when project_lifecycle is initial-build, instead of printing a withheld boundary as null', () => {
     const html = renderReportHtml(fixtureArgs({
       project_lifecycle: 'initial-build',
