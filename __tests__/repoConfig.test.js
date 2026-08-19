@@ -198,4 +198,14 @@ describe('resolveConfigOverrides — explicit config path (code-quality-metrics-
     expect(result.effective.DUPLICATE_MIN_LINES).toBe(5);
     expect(result.classBOverridden).toBe(true);
   });
+
+  // GUARD: proven by removing `if (mustExist) throw ...` inside applyOverrideFile's
+  // !fs.existsSync branch -- without it, a missing --config path silently returns
+  // null and this test starts failing (no throw at all).
+  test('throws when an explicit --config path does not exist, rather than silently falling back to targetDir or defaults', () => {
+    const targetDir = makeTempDir('cqm-explicit-missing-target-');
+    const missingConfigPath = path.join(targetDir, 'does-not-exist.json');
+
+    expect(() => resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, missingConfigPath)).toThrow(/not found/);
+  });
 });
