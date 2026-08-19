@@ -567,4 +567,46 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // code-quality-metrics-i39: measured against real flight-info-spike and dotnetdependencytracer
+  // runs, both rejected with 'presents "velocity" as a Concern'. velocity_commits_per_day (label
+  // "Velocity") never carries a verdict -- it is a raw rate with no calibrated band, like
+  // message_quality_pct. velocity_trend (label "Velocity trend") is a different entry that CAN
+  // be scored 'warning' (lib/report.js's growingAndAccelerating rule) once the prior cycle's
+  // status-keyed verdict mark is in place. "Velocity" is a strict text prefix of "Velocity
+  // trend", so a bullet that names the scored entry using the bare word "velocity" (without
+  // "trend") -- natural, since a model is not required to echo the label back verbatim --
+  // matches the informational entry's own label by substring and gets rejected as though it
+  // named the wrong metric, even though it is correctly reporting the composite entry's real
+  // warning status.
+  test('accepts a Concern bullet about velocity_trend written as bare "velocity", even though a separate always-informational entry shares that word as its whole label', () => {
+    const payload = [
+      { key: 'velocity_trend', label: 'Velocity trend', value: 'accelerating', direction: 'informational', status: 'warning', healthyBoundary: null, criticalBoundary: null },
+      { key: 'velocity_commits_per_day', label: 'Velocity', value: '3.2', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ['Concern: Velocity is accelerating while commit size stays flat, compounding review pressure.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // GUARD, not a called-shot RED: the substring-exclusion above only fires while velocity_trend
+  // is actually scored (verdict !== 'none'). When it is not -- both entries stay informational,
+  // as in most runs -- a Concern bullet naming "velocity" is still correctly rejected. Proves the
+  // fix narrows the check rather than disabling it: mutating the exclusion's `.some(...)` guard
+  // to always-true (as if velocity_trend were unconditionally exempt) would make this test pass
+  // when it should fail, so this is what pins the "only when currently scored" half of the rule.
+  test('still rejects a Concern bullet naming bare "velocity" when velocity_trend is not currently scored either', () => {
+    const payload = [
+      { key: 'velocity_trend', label: 'Velocity trend', value: 'stable', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'velocity_commits_per_day', label: 'Velocity', value: '3.2', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ['Concern: Velocity is unusually high this period.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/velocity/i);
+  });
 });
