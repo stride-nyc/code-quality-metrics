@@ -3,8 +3,9 @@
 const { parseGitLog } = require('../local-code-metrics');
 
 // %x1e, the record separator emitted between commits by the git log format this parser
-// consumes (%H|%ci|%an|%B%x1e -- committer date, not author date; code-quality-metrics-75 /
-// mbiw). %B is multi-line, so newline can no longer serve as the record boundary the way it
+// consumes (%H|%ci|%an|%B\x1f%cn%x1e -- committer date, not author date; code-quality-metrics-75
+// / mbiw -- with the committer name appended after a \x1f separator; code-quality-metrics-9bj5,
+// issue #62). %B is multi-line, so newline can no longer serve as the record boundary the way it
 // did when the format captured only %s (the subject line). parseGitLog itself only splits on
 // '|', so these tests below use plain date strings and are unaffected by which git format
 // token actually produced the second field in production.
@@ -86,5 +87,28 @@ describe('parseGitLog', () => {
 
     expect(result[0].message).toBe('subject line');
     expect(result[0].full_message).toBe(body);
+  });
+
+  // --- committer capture (issue #62): needed so bot/AI-agent classification can check
+  // committer identity, not just author. Appended after a \x1f (unit separator) following
+  // %B rather than inserted as a new pipe-delimited field, so every existing fixture above
+  // (with no \x1f) keeps parsing exactly as before -- committer defaults to '' when absent.
+  test('captures the committer name appended after a \\x1f separator, stripping it from full_message', () => {
+    const sha = 'e'.repeat(40);
+    const input = `${sha}|2024-01-01|Jane Dev|fix: correct logic\x1fJohn Committer${RS}`;
+
+    const result = parseGitLog(input);
+
+    expect(result[0].committer).toBe('John Committer');
+    expect(result[0].full_message).toBe('fix: correct logic');
+  });
+
+  test('defaults committer to an empty string when no \\x1f separator is present', () => {
+    const sha = 'f'.repeat(40);
+    const input = `${sha}|2024-01-01|Jane Dev|fix: correct logic${RS}`;
+
+    const result = parseGitLog(input);
+
+    expect(result[0].committer).toBe('');
   });
 });
