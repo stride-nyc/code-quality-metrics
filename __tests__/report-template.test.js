@@ -2,7 +2,7 @@
 
 const { renderReportHtml } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
-const { buildMetricCatalog } = require('../lib/report');
+const { buildMetricCatalog, METRIC_GROUP_ORDER } = require('../lib/report');
 const { THRESHOLDS } = require('../lib/thresholds');
 
 function fixtureSummary(overrides) {
@@ -243,7 +243,12 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
-  it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
+  it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {
+    // code-quality-metrics-yte: the page groups tiles under fixed headings, so the catalog's
+    // own concern-descending order no longer holds across the whole page -- only within a
+    // group. Expected order is therefore METRIC_GROUP_ORDER's groups in sequence, each
+    // group's own members left in the order they already arrive in (buildMetricCatalog's
+    // concern sort, unchanged by grouping -- see report.test.js's own coverage of that).
     const args = fixtureArgs();
     const html = renderReportHtml(args);
 
@@ -252,7 +257,9 @@ describe('renderReportHtml', () => {
       expect(html).toContain(entry.label);
     }
 
-    const indices = args.catalog.map(entry => html.indexOf(entry.label));
+    const expectedOrder = METRIC_GROUP_ORDER.flatMap(group => args.catalog.filter(entry => entry.group === group));
+    expect(expectedOrder).toHaveLength(args.catalog.length);
+    const indices = expectedOrder.map(entry => html.indexOf(entry.label));
     const sortedIndices = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sortedIndices);
   });
@@ -714,4 +721,37 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/truncat|fail/i);
   });
 
+});
+
+// code-quality-metrics-yte: the flat, single concern-sorted grid becomes five headed groups.
+// fullDuplicates supplies real data for every duplication tile so the "Duplication" heading
+// (otherwise absent when no duplicate analysis was supplied at all) is present in every test
+// below, letting these tests assert all five headings render together.
+function fullDuplicatesForGrouping() {
+  return {
+    files_scanned: 11,
+    static_duplicates: [],
+    semantic_findings: [],
+    statistics: { clones: 2, duplicatedLines: 12, duplicatedTokens: 90, lines: 1595, tokens: 6196, sources: 11, percentage: 0.75, percentageTokens: 2.07, newClones: 0, newDuplicatedLines: 0 },
+    layers_run: { static: true, semantic: true }
+  };
+}
+
+describe('renderReportHtml metric group headings (code-quality-metrics-yte)', () => {
+  it('renders all five documented group headings, in the fixed order, even when a later group carries the highest concern this run', () => {
+    // test_coverage_rate (Test practice) is driven to its critical-ish low end so a
+    // concern-only sort would put the "Test practice" group first; the fixed group order
+    // must win over that anyway.
+    const summary = fixtureSummary({ test_coverage_rate: '1.00', large_commits_pct: '5.00', sprawling_commits_pct: '5.00' });
+    const duplicates = fullDuplicatesForGrouping();
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    const positions = METRIC_GROUP_ORDER.map(group => html.indexOf(`<h2 class="metric-category-heading">${group}</h2>`));
+    for (const position of positions) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    const sortedPositions = [...positions].sort((a, b) => a - b);
+    expect(positions).toEqual(sortedPositions);
+  });
 });
