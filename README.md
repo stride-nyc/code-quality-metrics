@@ -88,11 +88,26 @@ node local-code-metrics.js
 # Optional: set ANTHROPIC_API_KEY for Claude diff analysis
 ```
 
+With no `--days` or `--since` flag, the analysis is HEAD-anchored, not anchored on today: it
+takes the newest `CONFIG.MAX_COMMITS` commits (merged across all analyzed branches and sorted
+globally, regardless of calendar date) rather than defaulting to a day count. A repository
+whose newest commit predates a calendar window would otherwise report zero commits and leave
+the operator guessing at a `--days` value.
+
 Override the analysis window per run with `--days` or `--since` (no config edit needed):
 ```bash
-node local-code-metrics.js --days 90          # look back 90 days instead of the CONFIG default (30)
+node local-code-metrics.js --days 90          # use an explicit 90-day boundary instead of the HEAD-anchored default
 node local-code-metrics.js --since 2026-04-01 # use an explicit boundary date instead of a day count
 ```
+
+If an explicit `--days`/`--since` window returns zero commits, the run widens automatically to
+the newest `CONFIG.MAX_COMMITS` commits rather than exiting empty. Whichever window actually
+ran, `local_metrics_summary.json` reports the real span analyzed (`analyzed_span_start`,
+`analyzed_span_end`), the boundary that was requested (`window_requested_since`, `null` when
+the run was HEAD-anchored from the start), and whether that boundary had to be widened
+(`window_widened`). `local_drift_report.html`'s masthead states the same span, and names the
+requested boundary explicitly when it was widened past, since a report is never presentable as
+covering recent activity when it does not.
 
 Repos with no feature branches (trunk-based repos, or a merge-without-delete
 workflow where everything effectively lives on `main`) are analyzed
@@ -313,7 +328,7 @@ workflow required `lib/thresholds.js` at all and printed separate hardcoded perc
 ```markdown
 ## AI Code Drift Metrics Report
 
-**Analysis Period:** Last 30 days
+**Period:** 2026-07-19T00:00:00.000Z to 2026-08-17T00:00:00.000Z (requested since 2026-07-19T00:00:00.000Z)
 **Commits Analyzed:** 42 (from 45 total)
 **Branches Analyzed:** feature/new-api, bugfix/memory-leak
 
@@ -412,9 +427,9 @@ your-repo/
 ## Troubleshooting
 
 **No commits found?**
-- Verify the analysis window includes your activity; widen it with `--days <n>` or set an explicit boundary with `--since <date>` (see [Option 2: Local Analysis](#option-2-local-analysis))
+- A run with no `--days`/`--since` flag is already HEAD-anchored (see [Option 2: Local Analysis](#option-2-local-analysis)), and an explicit `--days`/`--since` window that finds nothing widens automatically to the newest commits available, so an empty report means no commits at all are reachable from the analyzed branch(es), not a window that needs widening by hand
 - If you expected feature-branch analysis, check that branches haven't been auto-deleted and that remote branches have been fetched (`git fetch`)
-- A repo with no feature branches still gets analyzed via the `trunk` fallback (see [Trunk vs. Feature-Branch Analysis](#trunk-vs-feature-branch-analysis)), so an empty report now means no commits at all in the window, not a missing-branch problem
+- A repo with no feature branches still gets analyzed via the `trunk` fallback (see [Trunk vs. Feature-Branch Analysis](#trunk-vs-feature-branch-analysis)), so an empty report means no commits at all, not a missing-branch problem
 
 **Wrong test file counts?**
 - Adjust `TEST_FILE_PATTERNS` for your project conventions
