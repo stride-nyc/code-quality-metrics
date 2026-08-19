@@ -515,6 +515,20 @@ describe('renderReportHtml', () => {
     expect(html).toContain('**/vendor/**');
   });
 
+  // code-quality-metrics-g39: the branch name list moved out of the masthead (see the masthead
+  // tests above) into Analysis Scope, which already answers "what was measured" rather than
+  // "what was found" and already carries branches_with_analyzed_commits.
+  it('renders the branch names in Analysis Scope', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'release/9'] }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    expect(scopeStart).toBeGreaterThanOrEqual(0);
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('main');
+    expect(scope).toContain('feature/foo');
+    expect(scope).toContain('release/9');
+  });
+
   // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
   // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
   // Analysis Scope as provenance, so the audit trail survives even though the masthead no
@@ -537,9 +551,15 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('unmerged branches');
   });
 
-  it('omits the exclusion section entirely, without throwing, when the summary predates this feature (both fields absent)', () => {
-    expect(() => renderReportHtml(fixtureArgs())).not.toThrow();
-    const html = renderReportHtml(fixtureArgs());
+  // code-quality-metrics-g39 changed what "nothing to show" means: Analysis Scope now also
+  // carries the branch list, so a real run (which always has branches_analyzed) always has
+  // something to show. The section is omitted, without throwing, only when a summary carries
+  // none of the four things it can render: exclusions, vendored share, branches, or a discarded
+  // history-granularity detection -- the genuinely oldest-vintage case.
+  it('omits the Analysis Scope section entirely, without throwing, when the summary has nothing to show', () => {
+    const args = fixtureArgs({ branches_analyzed: undefined });
+    expect(() => renderReportHtml(args)).not.toThrow();
+    const html = renderReportHtml(args);
     expect(html).not.toContain('Analysis Scope');
   });
 
