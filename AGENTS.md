@@ -138,6 +138,32 @@ fixture:
 Anything a repository holds that you did not create is evidence until proven otherwise. Do not
 delete untracked files there to tidy up, and back them up before any run that could overwrite them.
 
+## Analysis Window and Branch Spread (code-quality-metrics-g10, code-quality-metrics-8sq)
+
+With no `--since`/`--days`, the default window is HEAD-anchored, not anchored on today: the
+newest `CONFIG.MAX_COMMITS` commits across all analyzed branches, globally sorted by date, not
+the first commits a branch loop happens to encounter. Anchoring on today made a repository
+whose newest commit predates the calendar window report zero and made the operator guess a
+`--days` value; every repository analyzed in this project's own sessions needed that guess.
+An explicit `--since`/`--days` window that still returns zero after the existing trunk
+fallback widens automatically to the newest `CONFIG.MAX_COMMITS`, ignoring the requested
+boundary, and the run states plainly (in both the JSON and the HTML) that it widened and from
+what boundary. The actual analyzed span is always reported, never the requested window or
+"today" -- see CLAUDE.md's "Analysis Window" section for the field names and the HTML masthead
+behavior.
+
+Fixing the window does not fix a sample spread thin across many abandoned branches (30 stale
+branches still contributes about one commit each to a HEAD-anchored top-N slice when none of
+them has more than a handful of commits total). These are separate defects. The chosen fix for
+the branch-spread case is visibility, not a filter: `analyzed_branch_commit_counts` and
+`branches_with_analyzed_commits` in the summary, and a masthead phrase pairing the commit count
+with the branch count, so a reader sees "50 commits ..., across 7 branches" and knows what they
+are looking at. No recency bound is invented for this; a repo owner wanting one would need to
+label it a convention, which is exactly what this project avoided doing here.
+
+Neither change touches `.github/workflows/code-metrics.yml` or `pr-metrics.yml`, which window
+against the GitHub REST API on their own schedule -- out of scope for this pair of issues.
+
 ## Per-Repo Configuration Overrides
 
 `lib/config.js`'s `CONFIG` is the defaults layer, shared by the local script and both GitHub

@@ -1132,12 +1132,33 @@ Single summary object for the analysis run:
 {
   // Run metadata
   analysis_date: string,            // ISO 8601
-  analysis_period_days: number,
+  analysis_period_days: number,     // options.days ?? CONFIG.ANALYSIS_DAYS; carried for backward compat, does not by itself mean a day-based boundary was applied -- see window_requested_since
   total_commits: number,
   filtered_from: number,            // unique commits before MAX_COMMITS cap
+
+  // Analysis window (code-quality-metrics-g10): the actual span covered by the analyzed
+  // commits, never the requested window or "today". null window_requested_since means the
+  // run was HEAD-anchored from the start (no --since/--days given); a non-null value with
+  // window_widened false means the requested date boundary is exactly what was used
+  // (backward-compatible with pre-g10 behavior); window_widened true means an explicit
+  // --since/--days window returned zero commits and was widened to the newest MAX_COMMITS,
+  // ignoring the requested boundary. See CLAUDE.md's "Analysis Window" section.
+  analyzed_span_start: string,      // "YYYY-MM-DD", the oldest analyzed commit's date
+  analyzed_span_end: string,        // "YYYY-MM-DD", the newest analyzed commit's date
+  window_requested_since: string | null,
+  window_widened: boolean,
+
   workflow_type: "feature_branch" | "trunk",  // "trunk" when no feature branches exist; the default branch was analyzed directly
   branches_analyzed: string[],      // feature branches found, or [resolved default branch] when workflow_type is "trunk"
-  branch_commit_counts: Record<string, number>,
+  branch_commit_counts: Record<string, number>,  // commits fetched per branch before global selection -- in HEAD-anchored mode this saturates at MAX_COMMITS for any branch with that many commits ever, so it no longer means "how much this branch contributed"; see analyzed_branch_commit_counts for that
+
+  // Branch spread (code-quality-metrics-8sq): how many of the analyzed commits actually came
+  // from each branch, and how many distinct branches that is. A sample spread across many
+  // long-abandoned branches (measured: remote_retro, 29 across 30; dotnetdependencytracer, 50
+  // across 49) holds no signal about shipped practice. No filter is applied; this is
+  // visibility only -- see CLAUDE.md's "Branch Spread" section.
+  analyzed_branch_commit_counts: Record<string, number>,
+  branches_with_analyzed_commits: number,
 
   // History granularity (code-quality-metrics-bnq, code-quality-metrics-drv): see "History
   // Granularity and Commit-Unit Withholding" below for what each field means and how
