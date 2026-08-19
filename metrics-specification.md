@@ -292,6 +292,21 @@ it. Trunk analysis of a repository that genuinely squash-merges is unaffected: t
 main really are whole pull requests, and the gate does not apply outside
 `workflow_type: feature_branch`.
 
+**Reporting the decision, not the discarded guess (code-quality-metrics-aoo).** The masthead's
+history line used to pair the *resolved* value with the raw detector's own confidence — e.g.
+"History: granular (low confidence)" — even on a `workflow_type: feature_branch` run, where the
+resolved value came from the structural gate above, not from the low-confidence guess sitting
+next to it. That reads as unsure about a fact that was never in doubt. `lib/report-template.js`'s
+`resolveGranularitySentence` now states a plain-language sentence per state, naming a confidence
+only when a detection genuinely produced the resolved value (`workflow_type: trunk`); a
+`workflow_type: feature_branch` run states the structural fact with no confidence hedge at all.
+The raw guess that gate discarded is not lost — `renderHistoryProvenanceLine` surfaces it in
+Analysis Scope as provenance (e.g. "Detection guessed squashed pull requests... overridden
+because the analyzed commits are unique to unmerged branches"), where it serves as an audit trail
+rather than sitting in the masthead beside a value it does not describe. A human-supplied
+`--history` override is unaffected by this change and keeps stating what was forced and what
+detection itself found.
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -938,12 +953,32 @@ test-discipline path.
 
 **Interpretation**:
 
-| Archetype | What It Suggests |
+| Archetype | Which rule fired |
 |-----------|-----------------|
-| `harmonious-high-achiever` | Strong foundation; AI tools likely amplifying positive outcomes |
-| `foundational-challenges` | Elevated large-commit rate alone; AI tools likely accelerating debt |
-| `legacy-bottleneck` | Architectural scatter combined with large commits; AI making cross-cutting changes worse |
-| `mixed-signals` | Inconsistent patterns; investigate specific outliers |
+| `harmonious-high-achiever` | All four signals above stayed at or below (or, for test coverage, at or above) their healthy line |
+| `foundational-challenges` | Large commits alone crossed its critical line |
+| `legacy-bottleneck` | Sprawling commits and large commits both crossed their critical lines |
+| `mixed-signals` | No combination above matched |
+
+Earlier text in this section described what each archetype "suggests" about AI tool impact
+(e.g. "AI tools likely amplifying positive outcomes," "AI making cross-cutting changes worse").
+No source cited anywhere in this project supports that causal reading — DORA does not derive
+these archetypes from commit shape at all (see "What it measures" above), and this toolkit's own
+classification is four commit-shape percentages evaluated against calibrated bands, nothing more.
+The table above states only which rule fired, matching the wording the rendered report itself now
+uses (see below).
+
+**Report placement (code-quality-metrics-bmg).** This classification used to render in the
+report's masthead, above every metric tile — the first interpretive claim a reader met, and the
+most prominent position on the page, for a construct with no validation behind its four-way
+grouping (measured absurdity: a three-week-old greenfield spike, flight-info-spike, classified as
+`legacy-bottleneck`). `lib/report-template.js`'s `renderArchetypeSection` now renders it below the
+"Commit messages" metric group, in a block explicitly marked "under development," with two
+changes to the text itself: it names which of the four signals crossed which line
+(`archetypeSignalPhrase`) rather than asserting what the combination "points to," and it states
+plainly, in the block itself, that the four-way grouping is this toolkit's own invention, not
+something DORA publishes from commit data. The classification is still computed exactly as
+described above; only its report weight and wording changed.
 
 **Limitation**: This classification is based on a 30-day window of at most 50 commits. It is a directional signal, not a definitive assessment. Teams near archetype boundaries should look at individual metric thresholds, not just the archetype label.
 
@@ -1497,6 +1532,52 @@ rejection behavior are; this file records the intent, and the rejection rate
 measured across real repository runs (unchanged or improved, never worse, is
 the bar) is what confirms the prompt change did not trade readability for
 fabrication.
+
+### Report Layout (code-quality-metrics-g39, -aoo, -bmg)
+
+Rendered top to bottom, `lib/report-template.js`'s `renderReportHtml` now produces: masthead
+(title, `workflow_type`, commit count and branch-spread count, actual span, history-granularity
+sentence) → a deterministic top summary → the five metric groups (Metrics 1-8's headings) →
+the archetype block, marked under development → Flight Log → Duplicate Code → Findings → Analysis
+Scope → footer. Three things moved out of the masthead to get there: the branch name list and
+the archetype verdict (both used to render there, before a reader reached a single metric), and
+Analysis Scope itself (used to render immediately after the masthead, before every metric tile).
+The commit count, branch-spread count, and actual span stay in the masthead — code-quality-
+metrics-8sq's own reasoning for keeping the branch-spread count next to the commit count
+(a thin sample across many idle branches is real information) still applies regardless of where
+the branch names themselves render.
+
+**Top summary.** A short paragraph, right after the masthead, links down to Findings via a
+`#findings` fragment matching an `id="findings"` on the Findings heading. Built by
+`renderTopSummary` deterministically from the already-computed catalog -- no model call, no
+free-form text -- so it carries the same non-fabrication guarantee `validateNarrative` enforces
+for the LLM-generated Findings narrative, by construction rather than by a runtime check: every
+word is fixed template text, and every number either comes directly from a catalog entry
+(`value`/`label`/`status`) or `summary.vendored_generated_share`, or is a count of catalog
+entries matching a status already computed from that same catalog (the one arithmetic step this
+function performs, and a provably correct tally rather than new information). Because it never
+reads the findings narrative argument, its content is identical whether that narrative below was
+accepted or fell back to `fallbackFindings`, and it never states more than `fallbackFindings`
+already would for the same catalog. When `summary.vendored_generated_share.lines_pct` is at or
+above 25% (a documented design choice, not a calibrated boundary -- see
+`VENDORED_SHARE_CALLOUT_THRESHOLD`), the summary calls it out explicitly, since Analysis Scope no
+longer sits near the top where a reader would otherwise see it (measured: flight-info-spike
+reports 72%, reframing its large-commit and sprawl figures).
+
+**Archetype block.** See "DORA Archetype Classification" above for the reworded text itself;
+this section covers only its position. It renders below the "Commit messages" metric group, in a
+block headed "Team archetype (under development)," rather than in the masthead.
+
+**Analysis Scope.** Still built by `renderExclusionsSection`, carrying `analysis_exclusions` and
+`vendored_generated_share` exactly as before, plus two additions: the branch name list
+(`branches_analyzed`, relocated from the masthead) and, when `workflow_type: feature_branch`
+structurally overrode a non-granular raw detection, a provenance line naming what detection
+guessed and why it was overridden (`renderHistoryProvenanceLine`, see "History Granularity and
+Commit-Unit Withholding" above). Because the section now always has the branch list to show on
+any real run, it is omitted only when a summary has none of its four possible contents at all
+(exclusions, vendored share, branches, or a discarded detection) -- previously it was omitted
+whenever exclusions and vendored share were both absent, which does not describe what the
+section renders any more.
 
 ---
 
