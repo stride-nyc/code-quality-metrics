@@ -67,7 +67,7 @@ commit, so a threshold change is always deliberate.
 
 ## Reservations
 
-`observations.json` carries a `reservations` array: fifteen recorded concerns
+`observations.json` carries a `reservations` array: sixteen recorded concerns
 about using this sample to set thresholds, three of them currently high severity
 (granular-history-only, pre-AI-baseline and brownfield-only-lifecycle were each
 downgraded from high to medium once their own suggested remedy was measured -- see
