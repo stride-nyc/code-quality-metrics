@@ -10,6 +10,8 @@ const fs = require('fs');
 const claude = require('../lib/claude');
 const duplicate = require('../lib/duplicate');
 const { collectLocalMetrics, CONFIG } = require('../local-code-metrics');
+const { buildMetricCatalog } = require('../lib/report');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 const FAKE_ROOT = '/fake/repo';
 const FAKE_REMOTE = 'git@github.com:org/repo.git';
@@ -469,6 +471,44 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.history_granularity_detected).toBe('squashed');
     expect(summary.history_granularity_confidence).toBe('low');
     expect(summary.history_granularity).toBe('granular');
+  });
+
+  test('threads the workflow_type gate through to the metric catalog: a feature-branch sample with low-confidence squashed detection shows a real large_commits_pct verdict, not merely a present one (code-quality-metrics-drv)', async () => {
+    // Vacuous-green warning from the design: do not assert only that a verdict
+    // appears. This asserts the specific entry (large_commits_pct, a
+    // WITHHELD_WHEN_SQUASHED_KEYS member in lib/report.js) carries a real gauge,
+    // a real status, and the actual THRESHOLDS boundaries -- not the withheld
+    // shape (hasGauge: false, status: 'neutral', boundaries: null).
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-15T10:00:00Z|Dev|feat: dev container (#660)`,
+      `${SHA_B}|2024-01-14T10:00:00Z|Dev|feat: change one`,
+      `${SHA_C}|2024-01-13T10:00:00Z|Dev|feat: change two`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      gitLog,
+      NUMSTAT, NUMSTAT, NUMSTAT
+    );
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+    expect(summary.history_granularity).toBe('granular');
+
+    const entries = buildMetricCatalog(summary);
+    const largeCommits = entries.find(e => e.key === 'large_commits_pct');
+
+    expect(largeCommits.hasGauge).toBe(true);
+    expect(largeCommits.status).not.toBe('neutral');
+    expect(largeCommits.descriptiveNote).toBeUndefined();
+    expect(largeCommits.healthyBoundary).toBe(THRESHOLDS.LARGE_COMMITS_PCT.healthy);
+    expect(largeCommits.criticalBoundary).toBe(THRESHOLDS.LARGE_COMMITS_PCT.critical);
   });
 
   test('a --history override forces history_granularity, recording both the override and what detection actually found', async () => {
