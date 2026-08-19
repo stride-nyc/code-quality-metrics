@@ -112,6 +112,23 @@ describe('renderReportHtml', () => {
     expect(html).toContain('2025-10-20');
   });
 
+  // code-quality-metrics-8sq acceptance criteria: a report makes clear when its sample is
+  // spread thinly across many branches (measured: remote_retro, 29 commits across 30
+  // branches; dotnetdependencytracer, 50 across 49). Recommended fix is visibility, not a
+  // filter, so this has to show up in the masthead a reader actually looks at.
+  it('renders how many branches contributed to the analyzed sample, next to the commit count', () => {
+    const html = renderReportHtml(fixtureArgs({
+      total_commits: 50,
+      branches_with_analyzed_commits: 7
+    }));
+
+    // An exact multi-token phrase, not a bare digit: a bare "7" or "branch" would already be
+    // present elsewhere in the rendered page (base64 font data, the existing branches list)
+    // regardless of whether this feature exists, which would make a weaker assertion pass
+    // vacuously.
+    expect(html).toContain('across 7 branch');
+  });
+
   it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
     const html = renderReportHtml(fixtureArgs({
       analyzed_span_start: '2026-07-30',
