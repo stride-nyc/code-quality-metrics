@@ -620,6 +620,17 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('the clearest sign of code accepted wholesale rather than reviewed');
   });
 
+  // code-quality-metrics-4er: test_isolation_rate carries direction 'special' and no verdict
+  // (lib/report.js never assigns it a calibrated healthy/critical band), but its description
+  // flatly asserted "This is a good sign", and offered only two explanations for a test-only
+  // commit as though they were the only ones -- it can equally be a test deleted or disabled.
+  it('describes test-isolation commits without calling them a good sign', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('it can just as easily mean a test was deleted or disabled');
+    expect(html).not.toContain('This is a good sign');
+  });
+
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
     const duplicates = {
       files_scanned: 3,
