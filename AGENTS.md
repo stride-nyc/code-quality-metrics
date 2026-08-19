@@ -67,6 +67,50 @@ substitution whose result the harness cannot resolve.
 redirects will produce an agent that hits the guard repeatedly and burns turns recovering.
 Write brief examples in the form the guard accepts.
 
+## Starting From the Right Commit
+
+**A worktree does not start on the branch you think it does.** New worktrees in this project
+are created from a squashed pull-request merge on the main line, not from the feature branch
+the work belongs to. A worktree's ref state does not match the main checkout's, so this is
+misleading rather than merely wrong:
+
+```
+git rev-parse fix/my-feature      # inside a worktree: returns a commit from the main line
+```
+
+Measured cost: five agents in one session started from the wrong base. Three recovered by
+re-branching once they noticed. One did not notice and built eight commits against a tree
+missing five test suites, a renamed field and a re-derived threshold; its work merged only
+because it happened to touch four files that had not changed since. One stopped correctly,
+having found its worktree 156 commits behind.
+
+**Whoever writes the brief gives the explicit base SHA.** A branch name is not enough, because
+the branch name is exactly what resolves incorrectly. Get it from the main checkout:
+
+```
+git rev-parse HEAD
+```
+
+Put that SHA in the brief. The agent creates its own branch from it. Do not tell an agent to
+check out the shared branch itself: it is checked out in the main checkout and git will refuse.
+
+```
+git checkout -B my-work-branch <sha-from-the-brief>
+```
+
+The objects are already in the shared store, so no fetch is needed.
+
+**Every brief states the expected test count, and a mismatch is a hard stop.** This is the
+check that catches the problem before any code is written:
+
+> Confirm `npm test` shows N tests across M suites before starting. If you see a different
+> number, STOP and report it. Do not proceed.
+
+Phrase it as a stop, not as a confirmation. An agent told merely to "confirm the baseline" saw
+329 where 390 was expected, reported the discrepancy honestly, and carried on anyway. The
+count is cheap to check and is the only signal that reliably distinguishes a stale base from a
+correct one, since a stale tree is internally consistent and its own tests pass.
+
 ## Dispatching Agents
 
 **State explicitly whether the agent may dispatch further agents.** In most cases it may not.
