@@ -1223,13 +1223,47 @@ The Findings section's connecting prose is the only part of the report that
 can be LLM-generated, via `lib/narrative.js`, and even then only the prose:
 the system prompt instructs the model to echo every number it references
 exactly as given, to the same precision, and never to compute, estimate, or
-restate a number differently. The narrative layer never computes or alters a
-number; it only writes sentences over metric values and top commits that
-`lib/report.js` already computed before the model ever sees them. When no
-`ANTHROPIC_API_KEY` is set, or the API call fails, or the response doesn't
-parse into usable findings, the Findings section falls back to the same
-plain templated bullets (`fallbackFindings` in `lib/report-template.js`): the
-top three critical/warning catalog entries, rendered as
+restate a number differently.
+
+The instruction alone did not hold. Measured against a real run
+(code-quality-metrics-ll1): the model cited a duplication healthy boundary
+of 6 when the catalog held 2, quoted `concern` (an internal sort sentinel,
+`lib/report.js`'s `computeConcern`) as if it were a reader-facing score, and
+presented `message_quality_pct` -- an entry the catalog deliberately marks
+informational, with no healthy/critical band -- under "Concern" anyway. A
+better-worded prompt cannot make an LLM's output verifiable; only a
+generated-output check can, so one now runs on every call:
+
+- `buildNarrativePayload(catalog)` is what is actually sent to the model, not
+  the raw catalog. It strips `concern`, `hasGauge` and `tier` (rendering/sort
+  internals a reader should never see quoted), rounds `value`,
+  `healthyBoundary` and `criticalBoundary` through the same `formatValue`
+  the report's own cards use (`lib/report-template.js`), attaches each
+  entry's `lib/metric-descriptions.js` prose, and marks every
+  informational-direction entry `verdict: 'none'`. The user message also
+  states once, up front, that healthy/critical are benchmark quantiles, not
+  validated outcome thresholds (see "What a band means" above).
+- `validateNarrative(bullets, payload, topCommits)` checks the model's
+  flattened response against that same payload before it is ever returned.
+  It rejects (fails the render's narrative step, not merely warns) if either
+  is true: a bullet cites a number, at whatever precision it wrote, that
+  does not appear anywhere in the catalog payload or the top-commits
+  payload; or a bullet labeled "Concern" names a metric the payload marked
+  `verdict: 'none'`.
+- On rejection, `generateFindingsNarrative` logs the reason and returns the
+  same deterministic fallback described below, prefixed with a
+  `"Narrative rejected: <reason>"` bullet -- visible in the rendered report,
+  not a silently swallowed failure. A silent fallback is how the measured
+  defect went unnoticed in the first place.
+
+The narrative layer still never computes or alters a number itself; it only
+writes sentences over metric values and top commits that `lib/report.js`
+already computed before the model ever sees them. The check above verifies
+that promise held, rather than assuming it. When no `ANTHROPIC_API_KEY` is
+set, the API call fails, the response doesn't parse into usable findings, or
+validation rejects it, the Findings section falls back to the same plain
+templated bullets (`fallbackFindings` in `lib/report-template.js`): the top
+three critical/warning catalog entries, rendered as
 `"<label>: <value> (<status>)"`.
 
 ---
