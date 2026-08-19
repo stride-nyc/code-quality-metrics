@@ -734,4 +734,98 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/test isolation/i);
   });
+
+  // CALLED SHOT (code-quality-metrics-top7, RED 1): measured on a real five-repo
+  // regeneration on 2026-08-19, 73V's narrative was rejected with 'cites "500", which does
+  // not appear in the metric catalog or top-commit payload'. '500 errors' names an HTTP
+  // status code, not a metric measurement -- nothing was fabricated, and 500 has no reason
+  // to appear anywhere in an (here, deliberately empty) payload. Predicted failure before
+  // implementing: expect(result.valid).toBe(true) fails with Received: false, since the
+  // presence check currently treats every numeral as a claimed citation and 500 is absent
+  // from the empty payload/topCommits.
+  test('accepts a Concern bullet whose only number is an HTTP status code, not a metric citation (73V false positive)', () => {
+    const bullets = ['Concern: The largest commit, 8722054b, touches the authentication and user-management code where a missing IAM policy was causing 500 errors, elevating review risk for that change.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // CALLED SHOT (code-quality-metrics-top7, RED 2): measured on the same regeneration,
+  // dotnetdependencytracer was rejected with 'cites "300", which does not appear in the
+  // metric catalog or top-commit payload'. 300 is a ceiling the recommendation itself
+  // proposes ("exceeds roughly 300 lines"), not a report of an existing catalog figure --
+  // the two numbers the same bullet DOES cite as measurements, p90 580 and healthy boundary
+  // 260, are both real and must still be checked (this fixture would also fail today if
+  // either were wrong, since only the exemption for 300 is new). Predicted failure before
+  // implementing: expect(result.valid).toBe(true) fails with Received: false, reason
+  // matching cites "300", which does not appear in the metric catalog or top-commit
+  // payload.
+  test('accepts a Recommended action bullet proposing a new ceiling alongside two correctly-cited catalog numbers (dotnetdependencytracer false positive)', () => {
+    const payload = [{
+      key: 'p90_lines_changed',
+      label: 'Commit size, p90',
+      value: '580',
+      direction: 'higher-is-worse',
+      status: 'critical',
+      healthyBoundary: '260',
+      criticalBoundary: null
+    }];
+    const bullets = ['Recommended action: Pausing when a branch exceeds roughly 300 lines of net change would bring the p90 of 580 closer to the healthy boundary of 260.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // REGRESSION GUARD (code-quality-metrics-top7): the same five-repo regeneration produced
+  // two rejections that were CORRECT and must stay rejected, so a fix aimed at the two false
+  // positives above cannot be tuned by loosening this check in general. daloopa presented
+  // "commit size trend" as a Concern even though the metric layer marked it informational
+  // (status neutral, no verdict) this run -- not a called-shot RED, since neither exemption
+  // added above touches the informational-label check this exercises; confirmed still green
+  // after both fixes.
+  test('still rejects a Concern bullet presenting commit size trend as a Concern when it carries no verdict (daloopa correct rejection)', () => {
+    const payload = [{
+      key: 'commit_size_trend',
+      label: 'Commit size trend',
+      value: 'stable',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Commit size trend is worth watching as the team continues shipping AI-assisted changes.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/commit size trend/i);
+  });
+
+  // REGRESSION GUARD (code-quality-metrics-top7): flight-info-spike's correct rejection,
+  // held alongside daloopa's above. It presented "velocity" as a Concern and went further,
+  // claiming "a combination the tool flags as a drift risk" -- a verdict the tool does not
+  // actually raise (velocity_commits_per_day is always informational). No number appears in
+  // this bullet at all, so neither presence-check exemption added above is even reached; the
+  // rejection still comes from the informational-label check alone.
+  test('still rejects a Concern bullet presenting velocity, and a claimed drift risk the tool does not flag, as a Concern (flight-info-spike correct rejection)', () => {
+    const payload = [{
+      key: 'velocity_commits_per_day',
+      label: 'Velocity',
+      value: '3.2',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Velocity is elevated alongside growing commit size, a combination the tool flags as a drift risk.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/velocity/i);
+  });
 });
