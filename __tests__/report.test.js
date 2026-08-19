@@ -1,7 +1,7 @@
 'use strict';
 
 const { THRESHOLDS } = require('../lib/thresholds');
-const { buildMetricCatalog, buildGaugeSvgParts } = require('../lib/report');
+const { buildMetricCatalog, buildGaugeSvgParts, groupForMetricKey } = require('../lib/report');
 
 function fullSummary(overrides) {
   return Object.assign({
@@ -538,6 +538,84 @@ describe('buildMetricCatalog with a class B config override (code-quality-metric
 
     expect(density.hasGauge).toBe(true);
     expect(density.descriptiveNote).toBeUndefined();
+  });
+});
+
+// code-quality-metrics-yte: five fixed headings, seventeen tiles, no remainder. The mapping
+// below is copied from the issue's own table (decided with the user, not re-derived here) so
+// this test can assert membership directly against it rather than merely asserting the
+// headings exist -- a test that only checks "five headings render" proves nothing about which
+// tile sits under which one, and a test that checks the total proves nothing about any single
+// tile having the right home.
+describe('buildMetricCatalog metric groups (code-quality-metrics-yte)', () => {
+  const EXPECTED_GROUP_BY_KEY = {
+    large_commits_pct: 'Change size and scope',
+    sprawling_commits_pct: 'Change size and scope',
+    avg_lines_changed: 'Change size and scope',
+    p90_lines_changed: 'Change size and scope',
+    p90_files_changed: 'Change size and scope',
+    net_additions_ratio_median: 'Change size and scope',
+
+    duplication_density_pct: 'Duplication',
+    duplication_lines: 'Duplication',
+    duplication_clones: 'Duplication',
+    duplication_semantic_findings: 'Duplication',
+
+    test_coverage_rate: 'Test practice',
+    test_isolation_rate: 'Test practice',
+    uncovered_prod_rate: 'Test practice',
+
+    velocity_commits_per_day: 'Pace and direction',
+    commit_size_trend: 'Pace and direction',
+    velocity_trend: 'Pace and direction',
+
+    message_quality_pct: 'Commit messages'
+  };
+
+  it('assigns every one of the seventeen tiles to its documented group, with no tile left ungrouped and no group beyond the five documented headings', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    expect(entries).toHaveLength(17);
+
+    for (const [key, expectedGroup] of Object.entries(EXPECTED_GROUP_BY_KEY)) {
+      const entry = entries.find(e => e.key === key);
+      expect(entry).toBeDefined();
+      expect(entry.group).toBe(expectedGroup);
+    }
+
+    const distinctGroups = new Set(entries.map(e => e.group));
+    expect(distinctGroups).toEqual(new Set(Object.values(EXPECTED_GROUP_BY_KEY)));
+  });
+
+  // [guard] not a called-shot RED: this test was already green on arrival, since
+  // groupForMetricKey's throw was written as part of the previous cycle's implementation
+  // (needed to keep buildMetricCatalog itself from silently producing an ungrouped entry).
+  // Kept as its own case so removing the throw -- letting an unrecognized key fall through
+  // to `undefined` and render with no heading, the "other" bucket this ticket forbids -- is
+  // caught here directly rather than only incidentally by the membership test above.
+  it('[guard] throws rather than silently omitting a group for an unrecognized catalog key', () => {
+    expect(() => groupForMetricKey('totally_unknown_key')).toThrow(/totally_unknown_key/);
+  });
+
+  // [guard] not a called-shot RED: grouping is a post-hoc filter over an array
+  // buildMetricCatalog already sorts by concern (pre-existing behavior, covered by "sorts the
+  // returned entries by concern descending" above); attaching `.group` does not touch that
+  // sort. Kept as its own case to pin the specific concern this ticket is required to
+  // preserve within one named group, rather than relying on the generic sort test to cover it
+  // incidentally.
+  it('[guard] preserves concern order inside a group after grouping: "Change size and scope" keeps its concern-sorted order', () => {
+    const entries = buildMetricCatalog(fullSummary({
+      large_commits_pct: '35.00',
+      sprawling_commits_pct: '19.00'
+    }));
+    const groupKeys = entries.filter(e => e.group === 'Change size and scope').map(e => e.key);
+    expect(groupKeys).toEqual([
+      'large_commits_pct',
+      'sprawling_commits_pct',
+      'p90_lines_changed',
+      'p90_files_changed',
+      'net_additions_ratio_median',
+      'avg_lines_changed'
+    ]);
   });
 });
 

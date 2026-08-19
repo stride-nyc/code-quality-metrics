@@ -1368,36 +1368,80 @@ only a generated-output check can, so one now runs on every call:
 - `buildNarrativePayload(catalog)` is what is actually sent to the model, not
   the raw catalog. It strips `concern`, `hasGauge` and `tier` (rendering/sort
   internals a reader should never see quoted), rounds `value`,
-  `healthyBoundary` and `criticalBoundary` through the same `formatValue`
-  the report's own cards use (`lib/report-template.js`), attaches each
-  entry's `lib/metric-descriptions.js` prose, and marks every entry whose
-  `direction` is `'informational'` or `'special'` (`test_isolation_rate` is
-  the only current example: it is scored `'good'`/`'neutral'`, never
-  `'warning'`/`'critical'`, so it can never legitimately be a Concern
-  either) `verdict: 'none'`. The user message also states once, up front,
-  that healthy/critical are benchmark quantiles, not validated outcome
-  thresholds (see "What a band means" above).
+  `healthyBoundary` and `criticalBoundary` to two significant figures
+  (`narrativeValue`, code-quality-metrics-5qn) -- deliberately not the same
+  rounding the report's own cards use (`formatValue`, two fixed decimal
+  places, `lib/report-template.js`): a rate or line count drawn from a
+  45-commit sample does not support "62.22%" or "578.5 lines" (both real
+  quoted examples), so a value at that scale collapses to a round number the
+  way a reader would say it aloud (62.22 -> 62, 578.5 -> 580). A value that
+  already has two significant figures or fewer -- a ratio like
+  `net_additions_ratio_median`'s 0.2, or its own 0.63/0.79 boundaries -- is
+  left untouched, with no separate magnitude check needed: rounding an
+  already-short number to two significant figures reproduces it exactly,
+  unlike rounding to a fixed number of decimal places, which would collapse
+  a value below 1 toward zero. `buildNarrativePayload` also attaches each
+  entry's `lib/metric-descriptions.js` prose, and marks `verdict: 'none'` on
+  an entry only when BOTH its `direction` is `'informational'` or `'special'`
+  AND its `status` has not reached `'warning'`/`'critical'` this run
+  (code-quality-metrics-i39). This distinguishes two things `'informational'`
+  used to collide under one rule keyed on direction alone:
+  `message_quality_pct`, `net_additions_ratio_median` and
+  `avg_lines_changed` have `status` hardcoded `'neutral'` because their
+  construct cannot support a verdict at all (their band was withdrawn on
+  evidence), so they are always marked. `commit_size_trend` and
+  `velocity_trend` are `'informational'` by default but carry a real
+  composite-rule `status` (`'warning'` when `lib/report.js`'s
+  `growingAndAccelerating` rule fires) -- the tool itself raised that
+  concern, so prose reporting it must be presentable, and keying on status
+  as well is what lets it through. `test_isolation_rate` (direction
+  `'special'`) is still always marked: it is scored `'good'`/`'neutral'`
+  only, never `'warning'`/`'critical'`, so the status half of the check
+  excludes it on its own. A real scored metric (`direction`
+  `'higher-is-worse'`/`'higher-is-better'`) is never marked regardless of its
+  current status -- direction still gates this, so a scored metric sitting
+  at `'good'` this run is never mistaken for a withdrawn-band entry. Measured
+  on 5 real repository runs, keying on direction alone rejected the
+  toolkit's own named drift signal (growing commit size plus accelerating
+  velocity) in 4 of 5. The user message also states once, up front, that
+  healthy/critical are benchmark quantiles, not validated outcome thresholds
+  (see "What a band means" above).
 - `validateNarrative(bullets, payload, topCommits)` checks the model's
   flattened response against that same payload before it is ever returned.
   It rejects (fails the render's narrative step, not merely warns) if any of
   the following is true:
   - a bullet cites a number, at whatever precision it wrote, that does not
     appear anywhere in the catalog payload or the top-commits payload;
-  - a bullet names exactly one payload entry by label and attributes a
-    number to that metric's "healthy boundary" or "critical boundary" which
-    does not match that metric's own `healthyBoundary`/`criticalBoundary`
-    field -- catching a real value (e.g. a metric's own `value`) mislabeled
-    as its boundary, which a presence-only check cannot, since the digit is
+  - a bullet names exactly one payload entry by label, that entry actually
+    has a boundary at the cited tier, and the bullet attributes a number to
+    that metric's "healthy boundary" or "critical boundary" which does not
+    match that metric's own `healthyBoundary`/`criticalBoundary` field --
+    catching a real value (e.g. a metric's own `value`) mislabeled as its
+    boundary, which a presence-only check cannot, since the digit is
     genuinely present just not in that role. Deliberately narrow: it only
     fires on that literal phrasing, tied to an unambiguous single-metric
     label match, rather than attempting to parse what every number in open
-    prose means (code-quality-metrics-ll1 follow-up item 2);
+    prose means (code-quality-metrics-ll1 follow-up item 2). The
+    "actually has a boundary at the cited tier" half was added after a real
+    daloopa run misattributed a "healthy boundary of 260" phrase to
+    `commit_size_trend` (which has no boundary of any kind) purely because
+    its label happened to precede the phrase, while the true subject
+    (`p90_lines_changed`) was paraphrased rather than quoted verbatim and so
+    never precedes it literally (code-quality-metrics-i39). Requiring
+    boundary eligibility only narrows the candidate pool, so it cannot
+    introduce a new false rejection;
   - a bullet quotes one of the payload's internal `key` values verbatim
     (e.g. `test_prod_cochange_commit`) instead of its human-readable
     `label` -- a snake_case identifier has no legitimate reason to appear in
     reader-facing prose (follow-up item 3);
   - a bullet labeled "Concern" names a metric the payload marked
-    `verdict: 'none'`.
+    `verdict: 'none'`, excluding a label that is itself a text substring of
+    some other, currently-scored label (e.g. `velocity_commits_per_day`'s
+    "Velocity" is a substring of `velocity_trend`'s "Velocity trend"): a
+    model writing the shorter, bare word is not more likely naming the
+    never-scored entry than the scored one whose label contains it
+    (code-quality-metrics-i39, measured against real flight-info-spike and
+    dotnetdependencytracer runs).
 - On rejection, `generateFindingsNarrative` logs the reason and returns the
   same deterministic fallback described below, prefixed with a
   `"Narrative rejected: <reason>"` bullet -- visible in the rendered report,
@@ -1421,6 +1465,32 @@ validation rejects it, the Findings section falls back to the same plain
 templated bullets (`fallbackFindings` in `lib/report-template.js`): the top
 three critical/warning catalog entries, rendered as
 `"<label>: <value> (<status>)"`.
+
+**Readability (code-quality-metrics-5qn).** Passing validation is necessary
+but not sufficient -- a bullet can cite every number correctly and still be
+unreadable to someone who has not seen this tool before. Real generated
+prose, read before this change, showed five specific problems: jargon never
+explained ("p90", "the upper tail", "sprawling"), two decimal places on a
+rate from a 45-commit sample ("62.22%"), a "healthy boundary of N" restated
+in nearly every bullet, a sentence that opens with the metric name and number
+before saying what either means, and no bullet ever stating what "healthy"
+actually means. `NARRATIVE_SYSTEM_PROMPT` now instructs the model, in
+priority order: lead with the consequence rather than the metric name;
+explain "p90" the first time it appears, reusing each entry's own
+`description.measures` wording rather than inventing new phrasing; state the
+healthy/critical comparison where it earns its place rather than in nearly
+every bullet; say once, not repeatedly, that "healthy"/"critical" describe a
+position among six benchmark repositories rather than a validated threshold;
+and never present an entry the payload marked `verdict: 'none'` as a Concern,
+even as supporting color in a sentence about a real one. A final rule caps
+all four: none of this is license to sound more certain than the data
+supports -- rounding a number or explaining a term in plain words must never
+add confidence the catalog itself does not carry. Prompt wording is not
+unit-testable the way `buildNarrativePayload`'s shape and `validateNarrative`'s
+rejection behavior are; this file records the intent, and the rejection rate
+measured across real repository runs (unchanged or improved, never worse, is
+the bar) is what confirms the prompt change did not trade readability for
+fabrication.
 
 ---
 

@@ -2,7 +2,7 @@
 
 const { renderReportHtml } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
-const { buildMetricCatalog } = require('../lib/report');
+const { buildMetricCatalog, METRIC_GROUP_ORDER } = require('../lib/report');
 const { THRESHOLDS } = require('../lib/thresholds');
 
 function fixtureSummary(overrides) {
@@ -243,7 +243,12 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
-  it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
+  it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {
+    // code-quality-metrics-yte: the page groups tiles under fixed headings, so the catalog's
+    // own concern-descending order no longer holds across the whole page -- only within a
+    // group. Expected order is therefore METRIC_GROUP_ORDER's groups in sequence, each
+    // group's own members left in the order they already arrive in (buildMetricCatalog's
+    // concern sort, unchanged by grouping -- see report.test.js's own coverage of that).
     const args = fixtureArgs();
     const html = renderReportHtml(args);
 
@@ -252,7 +257,9 @@ describe('renderReportHtml', () => {
       expect(html).toContain(entry.label);
     }
 
-    const indices = args.catalog.map(entry => html.indexOf(entry.label));
+    const expectedOrder = METRIC_GROUP_ORDER.flatMap(group => args.catalog.filter(entry => entry.group === group));
+    expect(expectedOrder).toHaveLength(args.catalog.length);
+    const indices = expectedOrder.map(entry => html.indexOf(entry.label));
     const sortedIndices = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sortedIndices);
   });
@@ -467,7 +474,7 @@ describe('renderReportHtml', () => {
     // numeric critical boundary that does not exist.
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
-    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
 
     expect(coverageCard).toBeDefined();
     expect(coverageCard).not.toMatch(/critical (above|below) \d/);
@@ -500,11 +507,58 @@ describe('renderReportHtml', () => {
     // bands (good, warning) and no gauge-critical path at all.
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
-    const coverageCard = cards.find(card => card.includes('>Test coverage</p>'));
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
 
     expect(coverageCard).not.toContain('gauge-critical');
     const bandCount = (coverageCard.match(/class="gauge-band /g) || []).length;
     expect(bandCount).toBe(2);
+  });
+
+  // code-quality-metrics-4er: "Test coverage" reads as line/branch coverage from a coverage
+  // tool. It is not -- it is commits that touched tests and production code together. Renaming
+  // the user-facing label only; the underlying summary field test_coverage_rate is untouched.
+  it('labels the test-coverage tile so it does not read as coverage-tool output', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const coverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
+
+    expect(coverageCard).toBeDefined();
+    expect(html).not.toContain('>Test coverage</p>');
+  });
+
+  // code-quality-metrics-4er: "prod" is an abbreviation the reader has no reason to know.
+  it('labels the uncovered-prod tile without the unexplained "prod" abbreviation', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const uncoveredCard = cards.find(card => card.includes('>Uncovered production</p>'));
+
+    expect(uncoveredCard).toBeDefined();
+    expect(html).not.toContain('>Uncovered prod</p>');
+  });
+
+  // code-quality-metrics-4er: "Commit size, p90" puts the jargon "p90" in the label while its
+  // own description already explains it in plain words ("nine out of ten commits are smaller
+  // than this"). The label should say the same thing the description does.
+  it('labels the files-changed percentile tile without the "p90" jargon, matching its sibling', () => {
+    // Its own description already says "Nine out of ten commits touch fewer files than this",
+    // so repeating p90 in the label adds jargon without information. Paired with
+    // "Commit size, high end" (code-quality-metrics-4er): leaving one of the two fixed and the
+    // other not is a worse state than either.
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const filesCard = cards.find(card => card.includes('>Files changed, high end</p>'));
+
+    expect(filesCard).toBeDefined();
+    expect(html).not.toContain('>Files changed, p90</p>');
+  });
+
+  it('labels the commit-size percentile tile without the "p90" jargon', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const sizeCard = cards.find(card => card.includes('>Commit size, high end</p>'));
+
+    expect(sizeCard).toBeDefined();
+    expect(html).not.toContain('>Commit size, p90</p>');
   });
 
   it('omits a threshold description for informational entries with no numeric boundary', () => {
@@ -541,6 +595,80 @@ describe('renderReportHtml', () => {
       expect(precedingIndex).toBeGreaterThanOrEqual(0);
       expect(descIndex).toBeGreaterThan(precedingIndex);
     }
+  });
+
+  // code-quality-metrics-4er: test_coverage_rate's description called co-changing tests and
+  // production "what healthy work usually looks like". That penalises landing a failing test
+  // and its implementation as two atomic commits -- the discipline this project's own working
+  // agreement requires -- and Sun et al. (TOSEM 2023) report pervasive noise in exactly this
+  // heuristic. The description should say what the metric counts and that it cannot tell
+  // test-first from test-after, not call one pattern healthy.
+  it('describes test-coverage co-change plainly, without calling it what healthy work looks like', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('a team that deliberately lands a failing test and its implementation as two separate commits looks identical, by this count, to a team that never wrote the test');
+    expect(html).not.toContain('what healthy work usually looks like');
+  });
+
+  // code-quality-metrics-4er: uncovered_prod_rate's description called itself "the strongest
+  // drift signal in the report", a ranking claim with nothing behind it -- no study cited
+  // anywhere in this project ranks these signals against each other. The description should
+  // say what the metric counts, and that it inherits the large-commit and test-coverage
+  // checks' own open questions, instead of ranking it above the other tiles.
+  it('describes uncovered-prod plainly, without ranking it above the other tiles', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('It is built from the large-commit check and the test/prod co-change check above');
+    expect(html).not.toContain('the strongest drift signal in the report');
+  });
+
+  // code-quality-metrics-4er: large_commits_pct's description called large commits "the
+  // clearest sign of code accepted wholesale rather than reviewed" -- an unranked superlative.
+  // The direction (harder to review) is supported, but the boundary is a selectivity choice
+  // and the tail is confounded by vendoring, which this project's own calibration data hit.
+  it('describes large commits plainly, without calling them the clearest sign of anything', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('where the line falls is a selectivity choice, not a validated health boundary');
+    expect(html).not.toContain('the clearest sign of code accepted wholesale rather than reviewed');
+  });
+
+  // code-quality-metrics-4er: test_isolation_rate carries direction 'special' and no verdict
+  // (lib/report.js never assigns it a calibrated healthy/critical band), but its description
+  // flatly asserted "This is a good sign", and offered only two explanations for a test-only
+  // commit as though they were the only ones -- it can equally be a test deleted or disabled.
+  it('describes test-isolation commits without calling them a good sign', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('it can just as easily mean a test was deleted or disabled');
+    expect(html).not.toContain('This is a good sign');
+  });
+
+  // code-quality-metrics-4er (spotted separately, not in the issue's own quoted text):
+  // message_quality_pct's description claimed "Vague messages pile up when suggested text is
+  // accepted without editing it", a causal claim about AI tools with nothing behind it. The
+  // metric's own descriptiveNote (lib/report.js) already says this rate mostly reflects
+  // Conventional Commits adoption, not message quality; the description should say the same
+  // supported thing rather than an unsupported causal story.
+  it('describes commit-message quality without an unsupported causal claim about AI tools', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('mostly tracks whether the project has adopted the Conventional Commits format');
+    expect(html).not.toContain('Vague messages pile up when suggested text is accepted without editing it');
+  });
+
+  // code-quality-metrics-4er (found during the sweep for the same pattern, not in the issue's
+  // own quoted text): sprawling_commits_pct claimed a change that ripples through unrelated
+  // files "usually means it was applied by pattern rather than understood" -- an unsupported
+  // causal claim contradicted by metrics-specification.md's own Metric 2 section, which
+  // reports the threshold sits close to automatic for most commits regardless of practice and
+  // that the largest, most file-spanning commits are dominated by license sweeps, generated
+  // documentation, and merges rather than drift.
+  it('describes sprawling commits as a proxy, without asserting what caused them', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('used as a proxy for a fix rippling through unrelated files');
+    expect(html).not.toContain('usually means it was applied by pattern rather than understood');
   });
 
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
@@ -714,4 +842,107 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/truncat|fail/i);
   });
 
+});
+
+// code-quality-metrics-yte: the flat, single concern-sorted grid becomes five headed groups.
+// fullDuplicates supplies real data for every duplication tile so the "Duplication" heading
+// (otherwise absent when no duplicate analysis was supplied at all) is present in every test
+// below, letting these tests assert all five headings render together.
+function fullDuplicatesForGrouping() {
+  return {
+    files_scanned: 11,
+    static_duplicates: [],
+    semantic_findings: [],
+    statistics: { clones: 2, duplicatedLines: 12, duplicatedTokens: 90, lines: 1595, tokens: 6196, sources: 11, percentage: 0.75, percentageTokens: 2.07, newClones: 0, newDuplicatedLines: 0 },
+    layers_run: { static: true, semantic: true }
+  };
+}
+
+describe('renderReportHtml metric group headings (code-quality-metrics-yte)', () => {
+  // [guard] not a called-shot RED: renderMetricGrid already groups by entry.group alone, so
+  // a withheld (concern -Infinity, informational) entry keeps its heading with no extra
+  // code. Proven by mutation: filtering `entry.concern !== -Infinity` into the group filter
+  // (the exact mistake this guard exists to catch -- conflating "withheld/informational"
+  // with "should be hidden") made the entire "Change size and scope" heading vanish under
+  // squashed history, since every one of its members is informational in that state; the
+  // test failed on the missing heading itself before the fix was reverted.
+  it('[guard] keeps a withheld tile (squashed history) under its documented heading, in the "Change size and scope" section, rather than moving or dropping it', () => {
+    const summary = fixtureSummary({ history_granularity: 'squashed', dora_archetype: undefined });
+    const catalog = buildMetricCatalog(summary);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData() });
+
+    const sizeHeadingStart = html.indexOf('<h2 class="metric-category-heading">Change size and scope</h2>');
+    expect(sizeHeadingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingStart = html.indexOf('<h2 class="metric-category-heading">', sizeHeadingStart + 1);
+    const sizeSection = html.slice(sizeHeadingStart, nextHeadingStart === -1 ? html.length : nextHeadingStart);
+
+    // large_commits_pct is withheld under squashed history (no verdict, informational), but
+    // it still measures commit size and must stay under this heading, not move to an
+    // "other"/withheld section or vanish.
+    expect(sizeSection).toContain('>Large commits</p>');
+    expect(sizeSection.toLowerCase()).toContain('no verdict');
+  });
+
+  // [guard] not a called-shot RED, same mechanism as the squashed-history guard above (group
+  // is keyed on entry.key alone, independent of any withheld/informational state a tile is
+  // in): a duplication tile marked "Not measurable" (jscpd cannot parse the scanned
+  // language, code-quality-metrics-tjn) still measures duplication and must stay under that
+  // heading rather than being omitted or filed elsewhere.
+  it('[guard] keeps the "Not measurable" duplication tile under the "Duplication" heading', () => {
+    const summary = fixtureSummary();
+    const duplicates = { files_scanned: 3, static_duplicates: [], semantic_findings: [], statistics: null, unsupported_extensions: ['.ex', '.exs'], layers_run: { static: 'unmeasured', semantic: false } };
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    const dupHeadingStart = html.indexOf('<h2 class="metric-category-heading">Duplication</h2>');
+    expect(dupHeadingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingStart = html.indexOf('<h2 class="metric-category-heading">', dupHeadingStart + 1);
+    const dupSection = html.slice(dupHeadingStart, nextHeadingStart === -1 ? html.length : nextHeadingStart);
+
+    expect(dupSection).toContain('>Duplication density</p>');
+    expect(dupSection).toContain('Not measurable');
+  });
+
+  // [guard] not a called-shot RED: closes the loop between report.test.js's catalog-level
+  // membership assertion and the actual markup, so a mismatch introduced only in
+  // rendering (not in the group-assignment table) would still be caught here. Proven by
+  // mutation: reassigning avg_lines_changed to 'Pace and direction' in
+  // lib/report.js's METRIC_GROUP_BY_KEY changed the distribution to [6, 3, 3, 4, 1] and
+  // failed this test (also would have failed report.test.js's own membership test, since
+  // the mutation was upstream of both).
+  it('renders exactly seventeen metric cards distributed 6/4/3/3/1 across the five headings, with no extra heading anywhere in the page', () => {
+    const summary = fixtureSummary();
+    const duplicates = fullDuplicatesForGrouping();
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    expect(catalog).toHaveLength(17);
+
+    const headingRegex = /<h2 class="metric-category-heading">([^<]+)<\/h2>/g;
+    const renderedHeadings = [...html.matchAll(headingRegex)].map(m => m[1]);
+    expect(renderedHeadings).toEqual(METRIC_GROUP_ORDER);
+
+    const sections = html.split('<section class="metric-category">').slice(1);
+    expect(sections).toHaveLength(5);
+    const cardCounts = sections.map(section => (section.match(/<article class="metric-card"/g) || []).length);
+    expect(cardCounts).toEqual([6, 4, 3, 3, 1]);
+    expect(cardCounts.reduce((a, b) => a + b, 0)).toBe(17);
+  });
+
+  it('renders all five documented group headings, in the fixed order, even when a later group carries the highest concern this run', () => {
+    // test_coverage_rate (Test practice) is driven to its critical-ish low end so a
+    // concern-only sort would put the "Test practice" group first; the fixed group order
+    // must win over that anyway.
+    const summary = fixtureSummary({ test_coverage_rate: '1.00', large_commits_pct: '5.00', sprawling_commits_pct: '5.00' });
+    const duplicates = fullDuplicatesForGrouping();
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    const positions = METRIC_GROUP_ORDER.map(group => html.indexOf(`<h2 class="metric-category-heading">${group}</h2>`));
+    for (const position of positions) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    const sortedPositions = [...positions].sort((a, b) => a - b);
+    expect(positions).toEqual(sortedPositions);
+  });
 });

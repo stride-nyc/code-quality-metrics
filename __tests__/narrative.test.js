@@ -209,13 +209,13 @@ describe('buildNarrativePayload', () => {
     expect(sprawling.tier).toBeUndefined();
   });
 
-  // GUARD, not a called-shot RED: the rounding this asserts was already added in the
-  // previous cycle's implementation (formatValue is applied to value/healthyBoundary/
-  // criticalBoundary in the same edit that stripped concern/hasGauge/tier), so this test
-  // was green on arrival. Kept as its own case, separate from the field-stripping test
-  // above, because it pins the specific measured defect (code-quality-metrics-ll1's
-  // 0.4108463434675432) rather than relying on the other test to cover it incidentally.
-  test('rounds a long floating-point value the same way the report cards do', () => {
+  // GUARD, not a called-shot RED: pins the original measured defect (code-quality-metrics-ll1's
+  // raw 0.4108463434675432 reaching the model) rather than relying on the field-stripping test
+  // above to catch it incidentally. Since code-quality-metrics-5qn, the rounding rule is two
+  // significant figures rather than formatValue's fixed two decimal places (see the next test),
+  // but 0.4108463434675432 already has only two significant figures once rounded ("0.41"), so
+  // this specific value is green under both rules and the assertion is unchanged.
+  test('rounds a long floating-point value down to two significant figures', () => {
     const catalog = buildMetricCatalog(fixtureSummary(), {
       statistics: { percentage: 0.4108463434675432, duplicatedLines: 15, lines: 3651, clones: 1 }
     });
@@ -224,6 +224,60 @@ describe('buildNarrativePayload', () => {
 
     expect(JSON.stringify(payload)).not.toContain('0.4108463434675432');
     expect(duplication.value).toBe('0.41');
+  });
+
+  // CALLED SHOT (code-quality-metrics-5qn, RED 1): a rate this small a sample cannot support two
+  // decimal places -- "62.22%" reads as more precise than a 45-commit sample can back up (the
+  // issue's own quoted example). formatValue alone (Math.round(value*100)/100) would keep
+  // "62.22" unchanged, since it is already at 2 decimal places; this test pins the payload
+  // rounding to two SIGNIFICANT figures instead, so a large rate collapses to a whole number
+  // while a genuinely small value (see the ratio test below) keeps its meaningful digits.
+  // Predicted failure before implementing: toBe('62') fails with Received: "62.22", because
+  // buildNarrativePayload currently calls formatValue directly with no further rounding.
+  test('rounds a percentage-scale value to two significant figures rather than two decimal places', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ test_coverage_rate: '62.22' }));
+    const payload = buildNarrativePayload(catalog);
+    const testCoverage = payload.find(entry => entry.key === 'test_coverage_rate');
+
+    expect(testCoverage.value).toBe('62');
+  });
+
+  // CALLED SHOT (code-quality-metrics-5qn, RED 2): a p90 line count is itself an interpolated
+  // statistic, not a whole line -- "578.5" (a real quoted issue example) implies more precision
+  // than the underlying 45-commit sample supports. Two significant figures rounds it to the
+  // nearest ten (580) instead of reporting a fractional line. Predicted failure before
+  // implementing: toBe('580') fails with Received: "578.5", since formatValue's own rounding
+  // (2 decimal places) leaves a value already at 1 decimal place untouched.
+  test('rounds a p90 lines-changed value to two significant figures', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ p90_lines_changed: 578.5 }));
+    const payload = buildNarrativePayload(catalog);
+    const p90Lines = payload.find(entry => entry.key === 'p90_lines_changed');
+
+    expect(p90Lines.value).toBe('580');
+  });
+
+  // GUARD: two significant figures must not erase a ratio metric that is naturally below 1 --
+  // net_additions_ratio_median's own healthy/critical boundaries (0.63/0.79) are meaningless if
+  // rounded to a whole number. 0.2 already has one significant figure short of the rounding
+  // point, so this proves the same rule that collapses 62.22 to 62 leaves a small value's
+  // information intact rather than always dropping to an integer.
+  test('does not collapse a sub-1 ratio value to a whole number', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ net_additions_ratio_median: 0.2 }));
+    const payload = buildNarrativePayload(catalog);
+    const netAdditions = payload.find(entry => entry.key === 'net_additions_ratio_median');
+
+    expect(netAdditions.value).toBe('0.2');
+  });
+
+  // GUARD: a non-numeric value (a trend label, or duplication_lines' composite "15 / 3651"
+  // string) must keep passing through unrounded, exactly as before -- two-significant-figure
+  // rounding only ever applies to a genuine number.
+  test('leaves a non-numeric value untouched by the significant-figure rounding', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ commit_size_trend: 'growing' }));
+    const payload = buildNarrativePayload(catalog);
+    const trend = payload.find(entry => entry.key === 'commit_size_trend');
+
+    expect(trend.value).toBe('growing');
   });
 
   test("includes the metric's own explanatory prose from METRIC_DESCRIPTIONS", () => {
@@ -258,6 +312,40 @@ describe('buildNarrativePayload', () => {
 
     expect(testIsolation.direction).toBe('special');
     expect(testIsolation.verdict).toBe('none');
+  });
+
+  // code-quality-metrics-i39: commit_size_trend and velocity_trend are direction: 'informational'
+  // even when lib/report.js's growingAndAccelerating rule has just scored them 'warning' -- a
+  // construct whose band was withdrawn on evidence (message_quality_pct, net_additions_ratio_median,
+  // avg_lines_changed -- always status 'neutral') is a different thing from a composite rule that
+  // reached a real status this run. Measured on 5 real repository runs, marking verdict from
+  // direction alone rejected the toolkit's own named drift signal in 4 of 5. The verdict mark must
+  // key on the entry's own status instead: 'warning'/'critical' leaves it unmarked (presentable),
+  // whatever its direction, while an entry whose status never leaves 'neutral' stays marked
+  // verdict: 'none' exactly as before.
+  test('keys the verdict mark on status, not direction: commit_size_trend and velocity_trend at warning status carry no verdict mark', () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ commit_size_trend: 'growing', velocity_trend: 'accelerating' }));
+    const payload = buildNarrativePayload(catalog);
+    const commitSizeTrend = payload.find(entry => entry.key === 'commit_size_trend');
+    const velocityTrend = payload.find(entry => entry.key === 'velocity_trend');
+
+    expect(commitSizeTrend.status).toBe('warning');
+    expect(commitSizeTrend.verdict).toBeUndefined();
+    expect(velocityTrend.status).toBe('warning');
+    expect(velocityTrend.verdict).toBeUndefined();
+  });
+
+  // GUARD, not a called-shot RED: same status-keyed rule, checked from the other side -- an
+  // entry whose construct cannot support a verdict at all (message_quality_pct: status is fixed
+  // 'neutral' regardless of value, see lib/report.js) must stay marked verdict: 'none' even
+  // though it shares direction: 'informational' with commit_size_trend/velocity_trend above.
+  test('still marks message_quality_pct verdict: none, since its status never leaves neutral', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const messageQuality = payload.find(entry => entry.key === 'message_quality_pct');
+
+    expect(messageQuality.status).toBe('neutral');
+    expect(messageQuality.verdict).toBe('none');
   });
 });
 
@@ -532,5 +620,118 @@ describe('validateNarrative', () => {
     const result = validateNarrative(bullets, payload, []);
 
     expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-i39: measured against real flight-info-spike and dotnetdependencytracer
+  // runs, both rejected with 'presents "velocity" as a Concern'. velocity_commits_per_day (label
+  // "Velocity") never carries a verdict -- it is a raw rate with no calibrated band, like
+  // message_quality_pct. velocity_trend (label "Velocity trend") is a different entry that CAN
+  // be scored 'warning' (lib/report.js's growingAndAccelerating rule) once the prior cycle's
+  // status-keyed verdict mark is in place. "Velocity" is a strict text prefix of "Velocity
+  // trend", so a bullet that names the scored entry using the bare word "velocity" (without
+  // "trend") -- natural, since a model is not required to echo the label back verbatim --
+  // matches the informational entry's own label by substring and gets rejected as though it
+  // named the wrong metric, even though it is correctly reporting the composite entry's real
+  // warning status.
+  test('accepts a Concern bullet about velocity_trend written as bare "velocity", even though a separate always-informational entry shares that word as its whole label', () => {
+    const payload = [
+      { key: 'velocity_trend', label: 'Velocity trend', value: 'accelerating', direction: 'informational', status: 'warning', healthyBoundary: null, criticalBoundary: null },
+      { key: 'velocity_commits_per_day', label: 'Velocity', value: '3.2', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ['Concern: Velocity is accelerating while commit size stays flat, compounding review pressure.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // GUARD, not a called-shot RED: the substring-exclusion above only fires while velocity_trend
+  // is actually scored (verdict !== 'none'). When it is not -- both entries stay informational,
+  // as in most runs -- a Concern bullet naming "velocity" is still correctly rejected. Proves the
+  // fix narrows the check rather than disabling it: mutating the exclusion's `.some(...)` guard
+  // to always-true (as if velocity_trend were unconditionally exempt) would make this test pass
+  // when it should fail, so this is what pins the "only when currently scored" half of the rule.
+  test('still rejects a Concern bullet naming bare "velocity" when velocity_trend is not currently scored either', () => {
+    const payload = [
+      { key: 'velocity_trend', label: 'Velocity trend', value: 'stable', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'velocity_commits_per_day', label: 'Velocity', value: '3.2', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ['Concern: Velocity is unusually high this period.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/velocity/i);
+  });
+
+  // code-quality-metrics-i39, shape 2: measured against a real daloopa run, rejected with
+  // 'cites a healthy boundary of 260 for "Commit size trend", but the payload's healthyBoundary
+  // for that metric is absent'. commit_size_trend has no boundary of any kind (it is a
+  // composite-rule status, not a threshold), but its label is the only one that literally
+  // precedes the boundary phrase -- the model paraphrased p90_lines_changed as "p90 lines
+  // changed" rather than echoing its exact label "Commit size, p90". The role check credited
+  // commit_size_trend as the phrase's sole subject purely because its label happened to appear
+  // first, without asking whether commit_size_trend could ever legitimately own a healthy
+  // boundary at all. 260 is p90_lines_changed's real healthyBoundary and genuinely appears in
+  // the payload, so the correct behavior is to accept this bullet.
+  test('does not attribute a healthy-boundary phrase to a preceding metric that has no healthy boundary of its own, when the true subject is only paraphrased', () => {
+    const payload = [
+      { key: 'commit_size_trend', label: 'Commit size trend', value: 'growing', direction: 'informational', status: 'warning', healthyBoundary: null, criticalBoundary: null },
+      { key: 'p90_lines_changed', label: 'Commit size, p90', value: '578.5', direction: 'higher-is-worse', status: 'critical', healthyBoundary: '260', criticalBoundary: null }
+    ];
+    const bullets = ['Concern: Commit size trend is growing, and p90 lines changed sits at 578.5, above the healthy boundary of 260.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // Also a called-shot RED, not a guard: before the fix, BOTH labels precede the phrase here (the
+  // case above has only one), so the pre-fix check finds 2 candidates, treats that as ambiguous,
+  // and skips -- letting 578.5 (p90_lines_changed's own value) slide through uncaught as though it
+  // were that metric's healthy boundary (really 260). Filtering by boundary existence removes
+  // commit_size_trend (no healthy boundary to be eligible with) from the candidate pool, leaving
+  // exactly one -- p90_lines_changed -- so the check newly becomes able to catch this
+  // misattribution instead of treating it as unresolvable ambiguity. Predicted and verified RED
+  // against the pre-fix code: Expected: false, Received: true.
+  test('still rejects a metric\'s own value cited as its healthy boundary, even when a second, boundary-less metric also precedes the phrase', () => {
+    const payload = [
+      { key: 'commit_size_trend', label: 'Commit size trend', value: 'growing', direction: 'informational', status: 'warning', healthyBoundary: null, criticalBoundary: null },
+      { key: 'p90_lines_changed', label: 'Commit size, p90', value: '578.5', direction: 'higher-is-worse', status: 'critical', healthyBoundary: '260', criticalBoundary: null }
+    ];
+    const bullets = ['Concern: Commit size trend is growing, and commit size, p90 sits at 578.5, above the healthy boundary of 578.5.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/578\.5/);
+  });
+
+  // GUARD, not a called-shot RED: code-quality-metrics-i39's third measured shape-1 rejection was
+  // a real remote_retro run, rejected with 'presents "test isolation" as a Concern'.
+  // test_isolation_rate (direction: 'special') is scored 'good' or 'neutral' only -- lib/report.js
+  // never assigns it 'warning' or 'critical', so unlike commit_size_trend/velocity_trend it can
+  // never legitimately be presented as a Concern, whatever its value. Unlike the "velocity"
+  // collision, "test isolation" is not a substring of any other payload label, so this was
+  // already a correct rejection before this ticket's fixes and remains one after: the acceptance
+  // criteria's "still rejected" half, for the third metric the ticket names alongside
+  // commit_size_trend and velocity_trend.
+  test('still rejects a Concern bullet naming test_isolation_rate, which can never reach warning/critical status', () => {
+    const payload = [{
+      key: 'test_isolation_rate',
+      label: 'Test isolation',
+      value: '0',
+      direction: 'special',
+      status: 'neutral',
+      healthyBoundary: '10',
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Test isolation sits at 0%, meaning no commits show a red-then-green test pattern.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/test isolation/i);
   });
 });
