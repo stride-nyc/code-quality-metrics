@@ -24,7 +24,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -438,8 +438,11 @@ async function collectLocalMetrics(options = {}) {
   // of workflow_type -- unlike history_granularity above, no feature-branch special case is
   // needed here: a commit's SHA either is one of the repository's roots or it is not,
   // regardless of which ref found it.
-  const rootCommitLog = runGitCommand('git rev-list --max-parents=0 --all');
-  const rootCommitShas = rootCommitLog ? rootCommitLog.split('\n').filter(Boolean) : [];
+  const { shas: rootCommitShas, failed: rootCommitDetectionFailed } = findRepositoryRootShas();
+  if (rootCommitDetectionFailed) {
+    console.log('⚠️ Unable to determine the repository\'s root commit(s); project_lifecycle will report as undetermined rather than established.');
+    console.log('');
+  }
 
   // Analyze commits in detail. uniqueCommits is a concatenation of per-branch results in
   // branch-iteration order, not a globally date-sorted list, so slicing it directly would keep
@@ -643,7 +646,15 @@ async function collectLocalMetrics(options = {}) {
     analyzedShas: metrics.map(m => m.full_sha),
     rootShas: rootCommitShas
   });
-  const project_lifecycle = includesRepositoryRoot ? 'initial-build' : 'established';
+  // 'undetermined' when the root-commit query itself failed: neither 'established' (which
+  // would silently assert brownfield bands apply, exactly the defect this guards against)
+  // nor 'initial-build' (which would assert a fact the failed query never confirmed).
+  // Distinct from both, and paired with root_commit_detection_failed below so the failure
+  // is visible in the written summary rather than reading as a confident verdict either way
+  // (code-quality-metrics-dqri).
+  const project_lifecycle = rootCommitDetectionFailed
+    ? 'undetermined'
+    : (includesRepositoryRoot ? 'initial-build' : 'established');
 
   // Generate summary statistics
   const summary = {
@@ -677,7 +688,10 @@ async function collectLocalMetrics(options = {}) {
     project_lifecycle,
     project_lifecycle_signals: {
       window_includes_repository_root: includesRepositoryRoot,
-      repository_root_commit_count: rootCommitShas.length
+      repository_root_commit_count: rootCommitShas.length,
+      // True when `git rev-list --max-parents=0 --all` itself failed rather than
+      // succeeding with no roots -- see project_lifecycle's own comment above.
+      root_commit_detection_failed: rootCommitDetectionFailed
     },
     config_sources,
     analysis_exclusions,
