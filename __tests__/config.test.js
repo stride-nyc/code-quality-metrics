@@ -49,4 +49,8 @@ describe('CONFIG analysis-exclusion defaults', () => {
     expect(Array.isArray(CONFIG.ANALYSIS_IGNORE_PATTERNS)).toBe(true);
     expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toHaveLength(0);
   });
+
+  test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
+    expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
+  });
 });
