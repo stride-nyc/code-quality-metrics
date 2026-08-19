@@ -339,6 +339,16 @@ describe('short count provenance', () => {
 
     expect(findUnexplainedShortCounts(fixture)).toEqual([]);
   });
+
+  // [guard] The actual gate: applies the checker proven against fixtures above to the real
+  // dataset. This is the check that would have caught all four of code-quality-metrics-dxl's
+  // short counts at the time they were recorded, and catches a fifth one the same way. It is
+  // deliberately not the only test of this behavior -- see the fixture-based guards above -- a
+  // dataset where every current observation happens to be explained would make this test pass
+  // for the wrong reason on its own.
+  test('[guard] every included observation short of MAX_COMMITS in the current dataset carries an explanation', () => {
+    expect(findUnexplainedShortCounts(observationData.observations)).toEqual([]);
+  });
 });
 
 describe('workflow provenance', () => {
