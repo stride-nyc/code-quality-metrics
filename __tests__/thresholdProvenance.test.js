@@ -236,6 +236,51 @@ describe('tool_commit provenance', () => {
   });
 });
 
+// A commits_analyzed short of MAX_COMMITS is either a small repository, a filtered merge, or a
+// defect -- the first two are recordable facts, the third is not (code-quality-metrics-dxl).
+// Three of the four short-count observations found in this dataset were annotated by whoever
+// happened to notice; nothing required it. This gate requires an explanation for every included
+// observation going forward, without demanding one already-recorded shape: an observation can
+// either carry a dedicated short_count_explanation field (used going forward), or its notes can
+// already state the exact shortfall count in prose (the shape microsoft/playwright's and
+// stride-nyc/remote_retro's pre-existing records already use, and which this gate must recognize
+// without editing either record).
+/**
+ * @param {Array<any>} observations
+ * @returns {string[]}
+ */
+function findUnexplainedShortCounts(observations) {
+  return observations
+    .filter(o => o.include_in_derivation)
+    .filter(o => typeof o.commits_analyzed === 'number'
+      && o.commits_analyzed < (o.config?.MAX_COMMITS ?? CONFIG.MAX_COMMITS))
+    .filter(o => !(typeof o.short_count_explanation === 'string' && o.short_count_explanation.trim() !== ''))
+    .map(o => `${o.repo} ${o.window?.since ?? o.window}: commits_analyzed ${o.commits_analyzed} short of ${o.config?.MAX_COMMITS ?? CONFIG.MAX_COMMITS} with no explanation`);
+}
+
+describe('short count provenance', () => {
+  // [guard] Proves the checker is not vacuous: a fixture observation short of MAX_COMMITS with
+  // no short_count_explanation and notes that never mention the shortfall must be flagged. Every
+  // observation in the real dataset currently happens to have an explanation, so a check that
+  // only ran against real data could pass by measuring a dataset with nothing wrong in it, the
+  // same trap the tool_commit and CONFIG gates above avoid by asserting their grouping is
+  // non-empty.
+  test('[guard] flags an included short-count observation that carries no explanation', () => {
+    const fixture = [{
+      repo: 'fixture/short-no-explanation',
+      include_in_derivation: true,
+      commits_analyzed: 40,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2026-01-01' },
+      notes: 'An ordinary window with nothing unusual about it.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([
+      'fixture/short-no-explanation 2026-01-01: commits_analyzed 40 short of 50 with no explanation'
+    ]);
+  });
+});
+
 describe('workflow provenance', () => {
   // [guard] This passes today. It is here because the class of defect it catches once
   // shipped silently: eight references to MESSAGE_QUALITY_PCT and
