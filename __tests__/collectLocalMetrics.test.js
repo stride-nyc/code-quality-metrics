@@ -10,6 +10,8 @@ const fs = require('fs');
 const claude = require('../lib/claude');
 const duplicate = require('../lib/duplicate');
 const { collectLocalMetrics, CONFIG } = require('../local-code-metrics');
+const { buildMetricCatalog } = require('../lib/report');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 const FAKE_ROOT = '/fake/repo';
 const FAKE_REMOTE = 'git@github.com:org/repo.git';
@@ -433,6 +435,80 @@ describe('collectLocalMetrics — successful run', () => {
         pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0
       });
     });
+  });
+
+  test('wires resolveHistoryGranularityForWithholding into the pipeline: a feature-branch sample with a low-confidence squashed detection resolves history_granularity to granular while preserving the raw detected value (code-quality-metrics-drv)', async () => {
+    // A feature-branch sample (workflow_type: feature_branch, the default branch
+    // setup in this describe block's beforeEach) where one of three commits
+    // carries a trailing PR reference: pr_reference_share 1/3, below the 0.5
+    // threshold, so detectHistoryGranularity alone reports squashed/low. This
+    // mirrors the measured remote_retro trigger (1 of 29 commits) that used to
+    // silence every commit-unit verdict for the whole repository -- commits
+    // unique to an unmerged feature branch are granular by construction,
+    // whatever one subject line says.
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-15T10:00:00Z|Dev|feat: dev container (#660)`,
+      `${SHA_B}|2024-01-14T10:00:00Z|Dev|feat: change one`,
+      `${SHA_C}|2024-01-13T10:00:00Z|Dev|feat: change two`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',   // git branch
+      gitLog,          // git log feature/x — three commits, one PR-referenced
+      NUMSTAT, NUMSTAT, NUMSTAT // git show numstat, one per commit
+    );
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.workflow_type).toBe('feature_branch');
+    expect(summary.history_granularity_detected).toBe('squashed');
+    expect(summary.history_granularity_confidence).toBe('low');
+    expect(summary.history_granularity).toBe('granular');
+  });
+
+  test('threads the workflow_type gate through to the metric catalog: a feature-branch sample with low-confidence squashed detection shows a real large_commits_pct verdict, not merely a present one (code-quality-metrics-drv)', async () => {
+    // Vacuous-green warning from the design: do not assert only that a verdict
+    // appears. This asserts the specific entry (large_commits_pct, a
+    // WITHHELD_WHEN_SQUASHED_KEYS member in lib/report.js) carries a real gauge,
+    // a real status, and the actual THRESHOLDS boundaries -- not the withheld
+    // shape (hasGauge: false, status: 'neutral', boundaries: null).
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-15T10:00:00Z|Dev|feat: dev container (#660)`,
+      `${SHA_B}|2024-01-14T10:00:00Z|Dev|feat: change one`,
+      `${SHA_C}|2024-01-13T10:00:00Z|Dev|feat: change two`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      gitLog,
+      NUMSTAT, NUMSTAT, NUMSTAT
+    );
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+    expect(summary.history_granularity).toBe('granular');
+
+    const entries = buildMetricCatalog(summary);
+    const largeCommits = entries.find(e => e.key === 'large_commits_pct');
+
+    expect(largeCommits.hasGauge).toBe(true);
+    expect(largeCommits.status).not.toBe('neutral');
+    expect(largeCommits.descriptiveNote).toBeUndefined();
+    expect(largeCommits.healthyBoundary).toBe(THRESHOLDS.LARGE_COMMITS_PCT.healthy);
+    expect(largeCommits.criticalBoundary).toBe(THRESHOLDS.LARGE_COMMITS_PCT.critical);
   });
 
   test('a --history override forces history_granularity, recording both the override and what detection actually found', async () => {
@@ -874,6 +950,37 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(output.layers_run).toEqual({ static: true, semantic: 'unmeasured' });
   });
 
+  // code-quality-metrics-tjn: lib/duplicate.js reports unsupportedExtensions rather than a
+  // statistics object when jscpd recognizes none of the scanned files' languages (verified
+  // live against remote_retro, Elixir). local-code-metrics.js must carry that through to
+  // local_duplicate_analysis.json rather than silently dropping it, and must not claim Layer 1
+  // produced a real measurement when it did not.
+  test('writes unsupported_extensions and marks layers_run.static "unmeasured" when the duplicate scan reports an unsupported language', async () => {
+    duplicate.runDuplicateAnalysis.mockReturnValue({
+      findings: [],
+      statistics: null,
+      unsupportedExtensions: ['.ex', '.exs']
+    });
+
+    await collectLocalMetrics();
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.unsupported_extensions).toEqual(['.ex', '.exs']);
+    expect(output.layers_run).toEqual({ static: 'unmeasured', semantic: false });
+  });
+
+  test('GUARD: omits unsupported_extensions and keeps layers_run.static true when the duplicate scan found no unsupported language', async () => {
+    duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
+
+    await collectLocalMetrics();
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.unsupported_extensions).toBeUndefined();
+    expect(output.layers_run).toEqual({ static: true, semantic: false });
+  });
+
   // Locks in the guard in local-code-metrics.js (`if (prodFilePaths.length > 0)`):
   // when every analyzed commit is test-only, there is nothing for jscpd to scan,
   // so local_duplicate_analysis.json is omitted entirely rather than written
@@ -986,6 +1093,69 @@ describe('collectLocalMetrics — repo-local .codemetrics.json override (code-qu
   });
 });
 
+// code-quality-metrics-ap7: --config <path> lets a scripted run against a repository the
+// operator does not control supply an override from outside the analysis target, since it
+// cannot commit a .codemetrics.json into that repo.
+describe('collectLocalMetrics — explicit --config path override (code-quality-metrics-ap7)', () => {
+  test('applies an override from an explicit --config path and records it in config_sources.files', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    const explicitConfigPath = '/shared/outside-repo/.codemetrics.json';
+    // No .codemetrics.json in the analysis target itself -- only the explicit path exists.
+    fs.existsSync.mockImplementation(p => p === explicitConfigPath);
+    fs.statSync.mockReturnValue({ isDirectory: () => false });
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/flight-info-spike-example/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ config: explicitConfigPath });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.files).toContain(explicitConfigPath);
+    expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+  });
+
+  // GUARD: proven by making applyOverrideFile never set classBOverridden for the
+  // explicit-path branch specifically (hardcode the explicit-file contribution to
+  // bypass the CLASS_B_KEYS check) -- with that mutation config_sources.class_b_overridden
+  // comes back false even though DUPLICATE_MIN_LINES was overridden, and this test starts
+  // failing. This is the direct proof that a class B override supplied by --config
+  // withholds the duplication verdict identically to one supplied by the target file's own
+  // .codemetrics.json (AGENTS.md's "Per-Repo Configuration Overrides", lib/report.js's
+  // buildMetricCatalog reads only this boolean, never which route produced it).
+  test('a class B override supplied via --config alone sets config_sources.class_b_overridden true, the same as the file route', async () => {
+    const SHA = 'd'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    const explicitConfigPath = '/shared/outside-repo/.codemetrics.json';
+    fs.existsSync.mockImplementation(p => p === explicitConfigPath);
+    fs.statSync.mockReturnValue({ isDirectory: () => false });
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_MIN_LINES: 5 }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ config: explicitConfigPath });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.class_b_overridden).toBe(true);
+    expect(CONFIG.DUPLICATE_MIN_LINES).toBe(5);
+  });
+});
+
 describe('collectLocalMetrics — analysis exclusions and vendored-default share (code-quality-metrics-3b6)', () => {
   test('writes local_metrics_summary.json with an analysis_exclusions block reporting excluded file/line counts and share', async () => {
     const SHA = 'a'.repeat(40);
@@ -1056,5 +1226,161 @@ describe('collectLocalMetrics — analysis exclusions and vendored-default share
     expect(summary.vendored_generated_share.lines_count).toBe(300);
     // 300 of 310 total lines.
     expect(summary.vendored_generated_share.lines_pct).toBe('96.77');
+  });
+});
+
+describe('collectLocalMetrics — HEAD-anchored window (code-quality-metrics-g10)', () => {
+  test('uses --max-count instead of --since when no CLI window flag is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).not.toMatch(/--since=/);
+    expect(branchLogCommand).toMatch(new RegExp(`--max-count=${CONFIG.MAX_COMMITS}`));
+  });
+
+  test('selects the globally newest MAX_COMMITS commits across branches, not the first ones encountered in branch order', async () => {
+    const originalMaxCommits = CONFIG.MAX_COMMITS;
+    CONFIG.MAX_COMMITS = 2;
+    try {
+      const SHA_OLDEST = 'a'.repeat(40);
+      const SHA_MIDDLE = 'b'.repeat(40);
+      const SHA_NEWEST = 'c'.repeat(40);
+      // Branch order (a, b, c) matches commit-age order (oldest, middle, newest): if the
+      // implementation slices the first MAX_COMMITS commits in encounter order instead of
+      // sorting by date first, it keeps the oldest two (a, b) and drops the actual newest (c).
+      // All three branch `git log` calls happen first, in the branch loop; `git show
+      // --numstat` calls happen afterward, once per commit that survives selection into
+      // commitsToAnalyze, in that array's (post-sort) order. SHA_OLDEST is dropped by
+      // selection, so it never reaches a numstat call.
+      mockExecSequence(
+        FAKE_ROOT,
+        FAKE_REMOTE,
+        '  feature/a\n  feature/b\n  feature/c',
+        `${SHA_OLDEST}|2020-01-01T10:00:00Z|Dev|feat: oldest`,  // git log feature/a
+        `${SHA_MIDDLE}|2026-08-01T10:00:00Z|Dev|feat: middle`,  // git log feature/b
+        `${SHA_NEWEST}|2026-08-10T10:00:00Z|Dev|feat: newest`,  // git log feature/c
+        `1\t0\tsrc/b.js`,  // numstat for SHA_MIDDLE (analyzed first: oldest of the selected two)
+        `1\t0\tsrc/c.js`   // numstat for SHA_NEWEST (analyzed second)
+      );
+      fs.writeFileSync.mockImplementation(() => {});
+
+      await collectLocalMetrics();
+
+      const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+      const commitMetrics = JSON.parse(metricsCall[1]);
+      const shas = commitMetrics.map(m => m.full_sha);
+
+      expect(shas).toContain(SHA_NEWEST);
+      expect(shas).toContain(SHA_MIDDLE);
+      expect(shas).not.toContain(SHA_OLDEST);
+    } finally {
+      CONFIG.MAX_COMMITS = originalMaxCommits;
+    }
+  });
+
+  test('reports analyzed_span_start/analyzed_span_end matching the real oldest and newest analyzed commit dates, not the requested window', async () => {
+    const SHA1 = 'a'.repeat(40);
+    const SHA2 = 'b'.repeat(40);
+    // Both commits are ~300 days before "now" (well outside the old default 30-day window),
+    // matching the measured daloopa shape cited in code-quality-metrics-g10.
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      [
+        `${SHA1}|2025-10-12T10:00:00Z|Dev|feat: old work one\x1e`,
+        `${SHA2}|2025-10-20T10:00:00Z|Dev|feat: old work two\x1e`
+      ].join('\n'),
+      `1\t0\tsrc/one.js`,
+      `1\t0\tsrc/two.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(2);
+    expect(summary.analyzed_span_start).toBe('2025-10-12');
+    expect(summary.analyzed_span_end).toBe('2025-10-20');
+    expect(summary.window_widened).toBe(false);
+  });
+
+  test('widens an explicit --since window that returns zero commits to the newest MAX_COMMITS, and reports window_widened', async () => {
+    const SHA1 = 'd'.repeat(40);
+    const SHA2 = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',   // git branch -a — no main/master, so defaultBranch is null, fallbackRef is 'HEAD'
+      '',              // git log feature/x --since=2020-01-01 — zero commits
+      '',              // git log HEAD --since=2020-01-01 (existing trunk fallback) — zero commits
+      [                // git log HEAD --max-count (the widen fallback) — real commits, ignoring the date
+        `${SHA1}|2026-07-30T10:00:00Z|Dev|feat: widened one\x1e`,
+        `${SHA2}|2026-08-05T10:00:00Z|Dev|feat: widened two\x1e`
+      ].join('\n'),
+      `1\t0\tsrc/one.js`,
+      `1\t0\tsrc/two.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ since: '2020-01-01' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    expect(summaryCall).toBeDefined();
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(2);
+    expect(summary.window_widened).toBe(true);
+    expect(summary.window_requested_since).toBe('2020-01-01');
+    expect(summary.analyzed_span_start).toBe('2026-07-30');
+    expect(summary.analyzed_span_end).toBe('2026-08-05');
+  });
+});
+
+describe('collectLocalMetrics — branch spread visibility (code-quality-metrics-8sq)', () => {
+  test('reports how many distinct branches actually contributed to the analyzed commit set, alongside the raw commit count', async () => {
+    const SHA_A1 = 'a'.repeat(40);
+    const SHA_A2 = 'b'.repeat(40);
+    const SHA_B1 = 'c'.repeat(40);
+    // All branch `git log` calls happen first, in the branch loop; `git show --numstat` calls
+    // happen afterward, once per analyzed commit, in commitsToAnalyze's date-ascending order.
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/a\n  feature/b',
+      [
+        `${SHA_A1}|2026-08-01T10:00:00Z|Dev|feat: a one\x1e`,
+        `${SHA_A2}|2026-08-02T10:00:00Z|Dev|feat: a two\x1e`
+      ].join('\n'),                        // git log feature/a
+      `${SHA_B1}|2026-08-03T10:00:00Z|Dev|feat: b one`,  // git log feature/b
+      `1\t0\tsrc/a1.js`,  // numstat SHA_A1 (2026-08-01, analyzed first)
+      `1\t0\tsrc/a2.js`,  // numstat SHA_A2 (2026-08-02)
+      `1\t0\tsrc/b1.js`   // numstat SHA_B1 (2026-08-03, analyzed last)
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(3);
+    expect(summary.analyzed_branch_commit_counts).toEqual({ 'feature/a': 2, 'feature/b': 1 });
+    expect(summary.branches_with_analyzed_commits).toBe(2);
   });
 });

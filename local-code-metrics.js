@@ -90,13 +90,37 @@ function parseBranchList(output) {
 }
 
 /**
+ * Fetch and parse commits for one ref. When sinceStr is a date string (an explicit --since or
+ * --days request), commits are filtered to that boundary, unchanged from prior behavior. When
+ * sinceStr is null, no date filter is applied at all: --max-count bounds the fetch to
+ * CONFIG.MAX_COMMITS instead, since the newest MAX_COMMITS commits on a ref is exactly what a
+ * HEAD-anchored window asks for, and the caller never needs more than that from any single ref
+ * before its own global slice (code-quality-metrics-g10). --since alone would not achieve this:
+ * with no --since and no --max-count, git returns the whole history of the ref.
+ *
+ * --no-merges: git show --numstat diffs a merge against its first parent, so merging a
+ * single-commit branch reproduces that commit's diff and the same change is counted twice. A
+ * merge commit's content belongs to the commits it merges.
+ * @param {string} ref
+ * @param {string|null} sinceStr
+ * @returns {CommitInfo[]}
+ */
+function fetchBranchCommits(ref, sinceStr) {
+  const boundsArg = sinceStr ? `--since="${sinceStr}"` : `--max-count=${CONFIG.MAX_COMMITS}`;
+  const logOutput = runGitCommand(
+    `git log --no-merges ${boundsArg} --pretty=format:"%H|%ai|%an|%B%x1e" ${ref}`
+  );
+  return parseGitLog(logOutput);
+}
+
+/**
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed' }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -125,31 +149,71 @@ function parseCliArgs(argv) {
       }
       options.history = history;
       i++;
+    } else if (argv[i] === '--config') {
+      if (!argv[i + 1]) throw new Error('--config requires a path');
+      options.config = argv[i + 1];
+      i++;
     }
   }
   return options;
 }
 
 /**
+ * Resolve detectHistoryGranularity()'s raw verdict into the value used to
+ * decide whether commit-unit verdicts are withheld (lib/report.js's
+ * WITHHELD_WHEN_SQUASHED_KEYS, gated on summary.history_granularity).
+ *
+ * Commits unique to unmerged feature branches (workflow_type: feature_branch)
+ * are granular by construction: they have not been squashed into anything
+ * yet, whatever a (#N)/(GH-N) subject suffix on one of them says. A single
+ * such commit among many otherwise-granular ones was previously enough to
+ * classify the whole sample squashed/low and silence every commit-unit
+ * verdict for the repository -- see code-quality-metrics-drv, measured on
+ * remote_retro (1 of 29 commits, share 0.034) and daloopa (7 of 50, share
+ * 0.140). This gate does not apply to workflow_type: trunk, where commits on
+ * main after a squash merge genuinely are whole pull requests and withholding
+ * is correct -- that case must not regress.
+ * @param {{ value: 'granular'|'squashed'|'unknown', confidence: 'high'|'low' }} detectedGranularity
+ * @param {'trunk'|'feature_branch'} workflowType
+ * @returns {'granular'|'squashed'}
+ */
+function resolveHistoryGranularityForWithholding(detectedGranularity, workflowType) {
+  if (workflowType === 'feature_branch') return 'granular';
+  // Undetermined defaults to squashed, not unknown: squash-merge-delete is the more common
+  // workflow, and asserting a verdict against bands that don't apply is a worse error than
+  // withholding one that would have been valid (code-quality-metrics-bnq's notes).
+  return detectedGranularity.value === 'unknown' ? 'squashed' : detectedGranularity.value;
+}
+
+/**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed' }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
  */
 async function collectLocalMetrics(options = {}) {
   const analysisDays = options.days ?? CONFIG.ANALYSIS_DAYS;
+  // true only when the operator passed --since or --days explicitly. Drives the choice between
+  // a date-bounded window (existing behavior, preserved exactly) and the HEAD-anchored default
+  // (code-quality-metrics-g10) below.
+  const explicitWindow = options.since !== undefined || options.days !== undefined;
 
   // PRECEDENCE (highest to lowest): CLI flags (--since/--days, applied via
-  // `options` above and parseCliArgs' own flags) > a .codemetrics.json in the
-  // analysis target, resolved from process.cwd() > lib/config.js's own
-  // defaults. See lib/repoConfig.js's own doc comment for the full rationale
-  // (JSON not JS, array union not replace, why this is three tiers and not
-  // loadEnv's four) and AGENTS.md's "Per-Repo Configuration Overrides" section
-  // for an example file. Reset-then-apply every run: see
-  // CONFIG_OVERRIDABLE_DEFAULTS' own comment for why.
+  // `options` above and parseCliArgs' own flags) > an explicit --config <path>
+  // (options.config, code-quality-metrics-ap7 -- for a scripted run against a
+  // repository the operator does not control, where committing a
+  // .codemetrics.json into that repo is not an option) > a .codemetrics.json in
+  // the analysis target, resolved from process.cwd() > lib/config.js's own
+  // defaults. --config COMPOSES with the target's own .codemetrics.json rather
+  // than replacing it -- see lib/repoConfig.js's own doc comment for the full
+  // rationale (JSON not JS, array union not replace, why this is four tiers
+  // with --config and three without, not loadEnv's four) and AGENTS.md's
+  // "Per-Repo Configuration Overrides" section for an example file.
+  // Reset-then-apply every run: see CONFIG_OVERRIDABLE_DEFAULTS' own comment
+  // for why.
   const { effective: effectiveConfig, sources: configSources, classBOverridden } =
-    resolveConfigOverrides(CONFIG_OVERRIDABLE_DEFAULTS, process.cwd());
+    resolveConfigOverrides(CONFIG_OVERRIDABLE_DEFAULTS, process.cwd(), options.config);
   Object.assign(CONFIG, effectiveConfig);
   const config_sources = {
     files: configSources.map(source => source.file),
@@ -171,7 +235,9 @@ async function collectLocalMetrics(options = {}) {
 
   console.log(`📁 Repository: ${remoteUrl}`);
   console.log(`📍 Local path: ${repoRoot}`);
-  console.log(`📅 Analysis period: Last ${analysisDays} days`);
+  console.log(explicitWindow
+    ? `📅 Analysis period: Last ${analysisDays} days`
+    : `📅 Analysis period: newest ${CONFIG.MAX_COMMITS} commits (HEAD-anchored)`);
   console.log('');
 
   // Get all local and remote branches except main/master
@@ -203,6 +269,7 @@ async function collectLocalMetrics(options = {}) {
   // workflowType and branchesToAnalyze default to the feature-branch path; the
   // no-feature-branches fallback below overrides both for repos whose history
   // lives on main (trunk workflow), instead of returning early.
+  /** @type {'trunk'|'feature_branch'} */
   let workflowType = 'feature_branch';
   let branchesToAnalyze = allBranches;
 
@@ -218,18 +285,27 @@ async function collectLocalMetrics(options = {}) {
     console.log('');
   }
 
-  // Calculate date range. An explicit --since date takes precedence over the
-  // day-count window; otherwise derive the boundary from analysisDays.
-  let sinceStr;
-  if (options.since) {
-    sinceStr = options.since;
-  } else {
-    const since = new Date();
-    since.setDate(since.getDate() - analysisDays);
-    sinceStr = since.toISOString().split('T')[0];
-  }
+  // Window boundary. An explicit --since/--days is a real request and is honored exactly
+  // (regression guard, code-quality-metrics-g10): sinceStr becomes the boundary date and
+  // fetchBranchCommits filters every ref to it, unchanged from prior behavior. Absent either
+  // flag, the window is HEAD-anchored rather than anchored on today: sinceStr stays null and
+  // fetchBranchCommits takes the newest CONFIG.MAX_COMMITS commits per ref regardless of
+  // calendar date instead. A calendar window that happens to be "the last 30 days" reports
+  // zero for a repository whose newest commit is older than that -- measured on remote_retro
+  // (103 days), daloopa (~300), flight-info-spike (95) and dotnetdependencytracer (~270) -- and
+  // a commit-count window matches the 50-commit windows calibration/README.md's bands were
+  // derived from more closely than a date range does.
+  let sinceStr = explicitWindow
+    ? (options.since ?? (() => {
+      const since = new Date();
+      since.setDate(since.getDate() - analysisDays);
+      return since.toISOString().split('T')[0];
+    })())
+    : null;
 
-  console.log(`🔍 Looking for commits since: ${sinceStr}`);
+  console.log(sinceStr
+    ? `🔍 Looking for commits since: ${sinceStr}`
+    : `🔍 Looking for the newest ${CONFIG.MAX_COMMITS} commits (HEAD-anchored, no date filter)`);
   console.log('');
 
   // Collect commits from all feature branches
@@ -242,14 +318,7 @@ async function collectLocalMetrics(options = {}) {
     process.stdout.write(`📊 Analyzing branch: ${branch}... `);
 
     try {
-      // --no-merges: git show --numstat diffs a merge against its first parent, so
-      // merging a single-commit branch reproduces that commit's diff and the same change
-      // is counted twice. A merge commit's content belongs to the commits it merges.
-      const logOutput = runGitCommand(
-        `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%B%x1e" ${branch}`
-      );
-
-      const branchCommits = parseGitLog(logOutput);
+      const branchCommits = fetchBranchCommits(branch, sinceStr);
       branchCommitCounts[branch] = branchCommits.length;
 
       // Add branch info to each commit
@@ -289,16 +358,43 @@ async function collectLocalMetrics(options = {}) {
     branchesToAnalyze = [fallbackRef];
 
     process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
-    const trunkLog = runGitCommand(
-      `git log --no-merges --since="${sinceStr}" --pretty=format:"%H|%ai|%an|%B%x1e" ${fallbackRef}`
-    );
-    const trunkCommits = parseGitLog(trunkLog);
+    const trunkCommits = fetchBranchCommits(fallbackRef, sinceStr);
     trunkCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });
     branchCommitCounts[fallbackRef] = trunkCommits.length;
     console.log(`${trunkCommits.length} commits`);
     console.log('');
 
     uniqueCommits.push(...trunkCommits);
+  }
+
+  // Automatic fallback (code-quality-metrics-g10): an explicitly requested window that still
+  // yields zero commits after the trunk fallback above is widened to the newest
+  // CONFIG.MAX_COMMITS commits, ignoring the requested date boundary entirely, rather than
+  // reporting an empty run the operator has to retry by hand. windowWidened and
+  // effectiveSinceStr (used below for history-granularity detection and the reported span)
+  // both record that this happened; a default (already HEAD-anchored) run that is still empty
+  // here is a genuinely empty repository, not a window to widen.
+  let windowWidened = false;
+  let effectiveSinceStr = sinceStr;
+  if (uniqueCommits.length === 0 && explicitWindow) {
+    const fallbackRef = defaultBranch ?? 'HEAD';
+    console.log(`⚠️ The requested window (since ${sinceStr}) returned no commits. Widening to the newest ${CONFIG.MAX_COMMITS} commits on '${fallbackRef}', ignoring the requested date boundary.`);
+    console.log('');
+    workflowType = 'trunk';
+    branchesToAnalyze = [fallbackRef];
+
+    process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
+    const widenedCommits = fetchBranchCommits(fallbackRef, null);
+    widenedCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });
+    branchCommitCounts[fallbackRef] = widenedCommits.length;
+    console.log(`${widenedCommits.length} commits`);
+    console.log('');
+
+    uniqueCommits.push(...widenedCommits);
+    if (widenedCommits.length > 0) {
+      windowWidened = true;
+      effectiveSinceStr = null;
+    }
   }
 
   if (uniqueCommits.length === 0) {
@@ -315,20 +411,33 @@ async function collectLocalMetrics(options = {}) {
   // the analyzed set, so their count is fetched separately here; their presence
   // is itself evidence FOR granular history (a true merge-button workflow keeps
   // individual commits, e.g. emberjs), not a squash signal.
+  // effectiveSinceStr, not sinceStr: after a widen (above), the analyzed commits are no longer
+  // bounded by the originally requested date, so querying these with the stale requested
+  // boundary would starve detection of merge/committer signal that the actual analyzed window
+  // does contain. In HEAD-anchored mode (effectiveSinceStr null from the start) these are
+  // unbounded too, matching fetchBranchCommits' own null-means-no-date-filter contract.
   const historyRefs = branchesToAnalyze.join(' ');
-  const mergeLog = runGitCommand(`git log --merges --since="${sinceStr}" --pretty=format:"%H" ${historyRefs}`);
+  const historySinceArg = effectiveSinceStr ? `--since="${effectiveSinceStr}" ` : '';
+  const mergeLog = runGitCommand(`git log --merges ${historySinceArg}--pretty=format:"%H" ${historyRefs}`);
   const mergeCommitCount = mergeLog ? mergeLog.split('\n').filter(Boolean).length : 0;
-  const committerLog = runGitCommand(`git log --no-merges --since="${sinceStr}" --pretty=format:"%cn" ${historyRefs}`);
+  const committerLog = runGitCommand(`git log --no-merges ${historySinceArg}--pretty=format:"%cn" ${historyRefs}`);
   const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
   const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
-  // Undetermined defaults to squashed, not unknown: squash-merge-delete is the more common
-  // workflow, and asserting a verdict against bands that don't apply is a worse error than
-  // withholding one that would have been valid (code-quality-metrics-bnq's notes).
-  const detectedForWithholding = detectedGranularity.value === 'unknown' ? 'squashed' : detectedGranularity.value;
+  const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
   const historyGranularity = options.history ?? detectedForWithholding;
 
-  // Analyze commits in detail
-  const commitsToAnalyze = uniqueCommits.slice(0, CONFIG.MAX_COMMITS);
+  // Analyze commits in detail. uniqueCommits is a concatenation of per-branch results in
+  // branch-iteration order, not a globally date-sorted list, so slicing it directly would keep
+  // whichever MAX_COMMITS commits were encountered first rather than the newest MAX_COMMITS
+  // across all branches -- the opposite of what a HEAD-anchored window claims to select
+  // (code-quality-metrics-g10). Select newest-first, then re-sort the selected set oldest-first
+  // before use: computeStatistics's trend calculation (lib/statistics.js) assumes its
+  // `timestamps` argument arrives oldest-first and does not re-sort internally, unlike
+  // computeVelocity, which does.
+  const commitsToAnalyze = [...uniqueCommits]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, CONFIG.MAX_COMMITS)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
   console.log('');
 
@@ -362,6 +471,15 @@ async function collectLocalMetrics(options = {}) {
   const timestamps = metrics.map(m => new Date(m.date).getTime());
   const lineStats = computeStatistics(lineSizes, timestamps);
   const fileStats = computeStatistics(fileCounts, timestamps);
+
+  // The actual analyzed span (code-quality-metrics-g10 hard requirement): derived from the
+  // analyzed commits themselves, never from the requested window or from "today", so a report
+  // is never presentable as covering recent activity when it does not. Reported unconditionally
+  // -- both for an explicit --since/--days window and for the HEAD-anchored default -- since a
+  // requested window can itself be wider than what was actually found (e.g. --days 365 on a
+  // repository whose commits all land in the last 40 of those days).
+  const analyzedSpanStart = new Date(Math.min(...timestamps)).toISOString().split('T')[0];
+  const analyzedSpanEnd = new Date(Math.max(...timestamps)).toISOString().split('T')[0];
 
   // The per-commit outlier flag is withdrawn (code-quality-metrics-496). Every window-relative
   // cutoff measured -- mean + 2*stddev, a bare p95, and a log-scale Tukey fence at several
@@ -430,7 +548,7 @@ async function collectLocalMetrics(options = {}) {
   const prodFilePaths = [...new Set(metrics.flatMap(m => m.prod_file_paths || []))];
   // One combined call: jscpd is the expensive part of a run, so findings and
   // statistics come from the same scan rather than two passes over the same files.
-  const { findings: staticDuplicates, statistics: duplicateStatistics } = runDuplicateAnalysis(prodFilePaths);
+  const { findings: staticDuplicates, statistics: duplicateStatistics, unsupportedExtensions } = runDuplicateAnalysis(prodFilePaths);
   /** @type {any[]} */
   let semanticFindings = [];
   // false: layer did not run (no client). true: ran and produced a usable result
@@ -484,12 +602,43 @@ async function collectLocalMetrics(options = {}) {
   const test_isolation_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_only_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const uncovered_prod_rate = metrics.length > 0 ? ((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
 
+  // How many of the analyzed commits actually came from each branch (code-quality-metrics-8sq),
+  // as opposed to branch_commit_counts above, which counts what was fetched from each branch
+  // before global selection and can no longer be read as "how much this branch contributed":
+  // in HEAD-anchored mode every branch fetch is capped at CONFIG.MAX_COMMITS regardless of how
+  // few of those commits survive into the analyzed set. A repository whose sample is spread
+  // across many long-abandoned branches (measured: remote_retro, 29 analyzed commits across 30
+  // branches; dotnetdependencytracer, 50 across 49) draws no shipped-practice signal from most
+  // of those branches at all, and a reader has no way to see that from total_commits alone.
+  // This does not filter anything out -- see this project's own notes on why an unjustified
+  // recency bound was rejected in favor of visibility -- it only makes the shape of the sample
+  // visible next to the count.
+  /** @type {Record<string, number>} */
+  const analyzed_branch_commit_counts = {};
+  for (const m of metrics) {
+    const branch = m.source_branch;
+    analyzed_branch_commit_counts[branch] = (analyzed_branch_commit_counts[branch] || 0) + 1;
+  }
+  const branches_with_analyzed_commits = Object.keys(analyzed_branch_commit_counts).length;
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
     analysis_period_days: analysisDays,
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
+    // The actual span covered by the analyzed commits (code-quality-metrics-g10), never the
+    // requested window or "today" -- see analyzedSpanStart/End's own comment above for why.
+    // Rendered in the HTML masthead too (lib/report-template.js's renderMasthead), not only here.
+    analyzed_span_start: analyzedSpanStart,
+    analyzed_span_end: analyzedSpanEnd,
+    // null when the run was HEAD-anchored from the start (no --since/--days given); otherwise
+    // the boundary date that was actually requested, whether or not it was later widened.
+    window_requested_since: explicitWindow ? sinceStr : null,
+    // true only when an explicit --since/--days window returned zero commits and was widened to
+    // the newest CONFIG.MAX_COMMITS regardless of date (see the widen block above). A
+    // HEAD-anchored default run is never "widened": it had no date restriction to begin with.
+    window_widened: windowWidened,
     workflow_type: workflowType,
     history_granularity: historyGranularity,
     history_granularity_detected: detectedGranularity.value,
@@ -501,6 +650,8 @@ async function collectLocalMetrics(options = {}) {
     vendored_generated_share,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
+    analyzed_branch_commit_counts,
+    branches_with_analyzed_commits,
     large_commits_pct,
     sprawling_commits_pct,
     test_coverage_rate,
@@ -561,7 +712,15 @@ async function collectLocalMetrics(options = {}) {
       static_duplicates: staticDuplicates,
       semantic_findings: semanticFindings,
       statistics: duplicateStatistics,
-      layers_run: { static: true, semantic: semanticLayerStatus }
+      // code-quality-metrics-tjn: unsupportedExtensions is only present when
+      // runDuplicateAnalysis has determined jscpd recognizes none of the scanned files'
+      // languages (verified live against remote_retro, Elixir) -- distinct from a genuine
+      // zero, which carries a real statistics object instead. Layer 1 attempted to run but
+      // produced no usable measurement in that case, so layers_run.static reports
+      // 'unmeasured' rather than a confident true, the same tri-state convention
+      // layers_run.semantic already uses for its own failed/truncated case.
+      ...(unsupportedExtensions ? { unsupported_extensions: unsupportedExtensions } : {}),
+      layers_run: { static: unsupportedExtensions ? 'unmeasured' : true, semantic: semanticLayerStatus }
     };
     fs.writeFileSync(
       path.join(outputDir, 'local_duplicate_analysis.json'),
@@ -652,6 +811,7 @@ async function collectLocalMetrics(options = {}) {
 module.exports = {
   collectLocalMetrics,
   parseCliArgs,
+  resolveHistoryGranularityForWithholding,
   CONFIG,
   // git
   runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff,
@@ -667,7 +827,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -675,7 +835,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--config <path>]');
     process.exit(1);
   }
 

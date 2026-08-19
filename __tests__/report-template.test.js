@@ -72,6 +72,17 @@ function fixtureArgs(summaryOverrides) {
   return { summary, metrics, catalog, fontData };
 }
 
+// Scopes an assertion to the Duplicate Code detail section only, so a match against the
+// unrelated "Not measurable" metric tile elsewhere in the document can never make a
+// duplicate-section assertion pass for the wrong reason (the vacuous-green trap this ticket
+// warns about: a fixture that produces no duplicates for an unrelated reason).
+function duplicateSection(html) {
+  const start = html.indexOf('<section class="duplicate-code">');
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = html.indexOf('</section>', start) + '</section>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -94,6 +105,68 @@ describe('renderReportHtml', () => {
     expect(html).toContain('feature/foo');
     expect(html).toContain('42');
     expect(html).toContain('30');
+  });
+
+  // code-quality-metrics-g10 hard requirement: a HEAD-anchored run never applied a day-based
+  // boundary at all, so the primary masthead line claiming "a 30-day window" would itself be
+  // false, not merely incomplete -- the adjacent span line (tested below) does not fix a false
+  // statement sitting right next to it.
+  it('does not claim a day-count window in the masthead when the analysis was HEAD-anchored', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2025-10-12',
+      analyzed_span_end: '2025-10-20',
+      window_requested_since: null,
+      window_widened: false
+    }));
+
+    expect(html).not.toContain('30-day window');
+  });
+
+  // code-quality-metrics-g10 hard requirement: the actual analyzed span must appear in the
+  // HTML, not only in the summary JSON, so a report is never presentable as covering recent
+  // activity when the analyzed commits are actually old (e.g. a HEAD-anchored window on a
+  // repository whose newest commit is 300 days old).
+  it('renders the actual analyzed span in the masthead, not just the requested day count', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2025-10-12',
+      analyzed_span_end: '2025-10-20',
+      window_requested_since: null,
+      window_widened: false
+    }));
+
+    expect(html).toContain('2025-10-12');
+    expect(html).toContain('2025-10-20');
+  });
+
+  // code-quality-metrics-8sq acceptance criteria: a report makes clear when its sample is
+  // spread thinly across many branches (measured: remote_retro, 29 commits across 30
+  // branches; dotnetdependencytracer, 50 across 49). Recommended fix is visibility, not a
+  // filter, so this has to show up in the masthead a reader actually looks at.
+  it('renders how many branches contributed to the analyzed sample, next to the commit count', () => {
+    const html = renderReportHtml(fixtureArgs({
+      total_commits: 50,
+      branches_with_analyzed_commits: 7
+    }));
+
+    // An exact multi-token phrase, not a bare digit: a bare "7" or "branch" would already be
+    // present elsewhere in the rendered page (base64 font data, the existing branches list)
+    // regardless of whether this feature exists, which would make a weaker assertion pass
+    // vacuously.
+    expect(html).toContain('across 7 branch');
+  });
+
+  it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2026-07-30',
+      analyzed_span_end: '2026-08-05',
+      window_requested_since: '2020-01-01',
+      window_widened: true
+    }));
+
+    expect(html).toContain('2026-07-30');
+    expect(html).toContain('2026-08-05');
+    expect(html).toContain('2020-01-01');
+    expect(html).toMatch(/widened/i);
   });
 
   it('renders the detected history granularity and confidence in the masthead', () => {
@@ -521,6 +594,73 @@ describe('renderReportHtml', () => {
     expect(html).toContain('Duplicate Code');
     expect(html).not.toContain('No semantic findings');
     expect(html.toLowerCase()).toContain('not measured');
+  });
+
+  it('makes no claim that Layer 1 ran or that no static duplicates were found when layers_run.static is "unmeasured"', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 2,
+      static_duplicates: [],
+      semantic_findings: [],
+      unsupported_extensions: ['.ex', '.exs'],
+      layers_run: { static: 'unmeasured', semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).not.toContain('Layer 1 (static) ran');
+    expect(section).not.toContain('No static duplicates found');
+  });
+
+  it('names the unsupported extensions and states the measurement does not exist when layers_run.static is "unmeasured", matching the metric tile\'s own wording', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 2,
+      static_duplicates: [],
+      semantic_findings: [],
+      unsupported_extensions: ['.ex', '.exs'],
+      layers_run: { static: 'unmeasured', semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section.toLowerCase()).toContain('not measurable');
+    expect(section).toContain('.ex');
+    expect(section).toContain('.exs');
+  });
+
+  it('GUARD: still reports a genuine zero as "No static duplicates found" and "Layer 1 (static) ran" when layers_run.static is true (a supported language with no duplication)', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 4,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: { clones: 0, duplicatedLines: 0, duplicatedTokens: 0, lines: 900, tokens: 4200, sources: 4, percentage: 0, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 },
+      layers_run: { static: true, semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).toContain('No static duplicates found');
+    expect(section).toContain('Layer 1 (static) ran');
+    expect(section.toLowerCase()).not.toContain('not measurable');
+  });
+
+  it('states Layer 1 did not run, with no "ran", "no static duplicates found", or "not measurable" claim, when layers_run.static is false', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 0,
+      static_duplicates: [],
+      semantic_findings: [],
+      layers_run: { static: false, semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).toContain('did not run');
+    expect(section).not.toContain('Layer 1 (static) ran');
+    expect(section).not.toContain('No static duplicates found');
+    expect(section.toLowerCase()).not.toContain('not measurable');
   });
 
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {

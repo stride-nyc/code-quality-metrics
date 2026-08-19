@@ -67,6 +67,50 @@ substitution whose result the harness cannot resolve.
 redirects will produce an agent that hits the guard repeatedly and burns turns recovering.
 Write brief examples in the form the guard accepts.
 
+## Starting From the Right Commit
+
+**A worktree does not start on the branch you think it does.** New worktrees in this project
+are created from a squashed pull-request merge on the main line, not from the feature branch
+the work belongs to. A worktree's ref state does not match the main checkout's, so this is
+misleading rather than merely wrong:
+
+```
+git rev-parse fix/my-feature      # inside a worktree: returns a commit from the main line
+```
+
+Measured cost: five agents in one session started from the wrong base. Three recovered by
+re-branching once they noticed. One did not notice and built eight commits against a tree
+missing five test suites, a renamed field and a re-derived threshold; its work merged only
+because it happened to touch four files that had not changed since. One stopped correctly,
+having found its worktree 156 commits behind.
+
+**Whoever writes the brief gives the explicit base SHA.** A branch name is not enough, because
+the branch name is exactly what resolves incorrectly. Get it from the main checkout:
+
+```
+git rev-parse HEAD
+```
+
+Put that SHA in the brief. The agent creates its own branch from it. Do not tell an agent to
+check out the shared branch itself: it is checked out in the main checkout and git will refuse.
+
+```
+git checkout -B my-work-branch <sha-from-the-brief>
+```
+
+The objects are already in the shared store, so no fetch is needed.
+
+**Every brief states the expected test count, and a mismatch is a hard stop.** This is the
+check that catches the problem before any code is written:
+
+> Confirm `npm test` shows N tests across M suites before starting. If you see a different
+> number, STOP and report it. Do not proceed.
+
+Phrase it as a stop, not as a confirmation. An agent told merely to "confirm the baseline" saw
+329 where 390 was expected, reported the discrepancy honestly, and carried on anyway. The
+count is cheap to check and is the only signal that reliably distinguishes a stale base from a
+correct one, since a stale tree is internally consistent and its own tests pass.
+
 ## Dispatching Agents
 
 **State explicitly whether the agent may dispatch further agents.** In most cases it may not.
@@ -74,6 +118,24 @@ An agent briefed only to read two files once dispatched its own background fork,
 committed implementation code concurrently in the same worktree. Nothing prevented it and nothing
 detected it; the work was only salvaged because the parent audited every commit the fork produced.
 A brief that is silent on this is not a brief that forbids it.
+
+**Give the prohibition its reason, not just the rule.** A second agent dispatched a fork despite
+the instruction appearing in the third line of its brief. That fork was harmless: it only
+replayed its parent's red/green cycles and cleaned up after itself, and the work proved sound
+when the parent replayed the same cycles independently. But a bare "do not dispatch further
+agents" invites an agent to conclude that a read-only verification fork is outside the spirit of
+the rule, which is a reasonable reading of a rule stated without its purpose.
+
+The reason is worth stating because it is not obvious:
+
+> Verification you dispatch yourself is not independent. A fork shares your context and your
+> assumptions, so it will tend to confirm what you already believe. The parent replays every RED
+> against its parent commit regardless, so a verification fork adds nothing a reader can rely on
+> while looking like a control that was applied.
+
+That last part is the real cost. A report saying "replayed by an independent fork" reads as
+stronger evidence than "I checked my own work", and it is not. Self-reported TDD is not evidence,
+and neither is TDD reported by something the same agent spawned.
 
 ## Running the Report Against an External Repository
 
@@ -94,6 +156,32 @@ fixture:
 Anything a repository holds that you did not create is evidence until proven otherwise. Do not
 delete untracked files there to tidy up, and back them up before any run that could overwrite them.
 
+## Analysis Window and Branch Spread (code-quality-metrics-g10, code-quality-metrics-8sq)
+
+With no `--since`/`--days`, the default window is HEAD-anchored, not anchored on today: the
+newest `CONFIG.MAX_COMMITS` commits across all analyzed branches, globally sorted by date, not
+the first commits a branch loop happens to encounter. Anchoring on today made a repository
+whose newest commit predates the calendar window report zero and made the operator guess a
+`--days` value; every repository analyzed in this project's own sessions needed that guess.
+An explicit `--since`/`--days` window that still returns zero after the existing trunk
+fallback widens automatically to the newest `CONFIG.MAX_COMMITS`, ignoring the requested
+boundary, and the run states plainly (in both the JSON and the HTML) that it widened and from
+what boundary. The actual analyzed span is always reported, never the requested window or
+"today" -- see CLAUDE.md's "Analysis Window" section for the field names and the HTML masthead
+behavior.
+
+Fixing the window does not fix a sample spread thin across many abandoned branches (30 stale
+branches still contributes about one commit each to a HEAD-anchored top-N slice when none of
+them has more than a handful of commits total). These are separate defects. The chosen fix for
+the branch-spread case is visibility, not a filter: `analyzed_branch_commit_counts` and
+`branches_with_analyzed_commits` in the summary, and a masthead phrase pairing the commit count
+with the branch count, so a reader sees "50 commits ..., across 7 branches" and knows what they
+are looking at. No recency bound is invented for this; a repo owner wanting one would need to
+label it a convention, which is exactly what this project avoided doing here.
+
+Neither change touches `.github/workflows/code-metrics.yml` or `pr-metrics.yml`, which window
+against the GitHub REST API on their own schedule -- out of scope for this pair of issues.
+
 ## Per-Repo Configuration Overrides
 
 `lib/config.js`'s `CONFIG` is the defaults layer, shared by the local script and both GitHub
@@ -106,12 +194,57 @@ because it is wrong for every other repo the tool is pointed at. Those facts bel
 **Precedence, highest first:**
 
 1. CLI flags — the existing `--since` and `--days` on `local-code-metrics.js`.
-2. `.codemetrics.json` in the analysis target, resolved from `process.cwd()`.
-3. `lib/config.js`'s own defaults.
+2. An explicit `--config <path>` (code-quality-metrics-ap7).
+3. `.codemetrics.json` in the analysis target, resolved from `process.cwd()`.
+4. `lib/config.js`'s own defaults.
 
-Three tiers, not `lib/env.js`'s four: `loadEnv` needs a tool-local `.env` tier because a secret
-has to live somewhere outside the repo under analysis; configuration does not, because
-`lib/config.js` already is that tier.
+Three tiers when `--config` is not passed, matching `lib/env.js`'s reasoning: `loadEnv` needs a
+tool-local `.env` tier because a secret has to live somewhere outside the repo under analysis;
+configuration does not, because `lib/config.js` already is that tier. Four tiers when `--config`
+is passed — see below for why that tier exists and how it composes with tier 3.
+
+**`--config <path>` (code-quality-metrics-ap7): an override from outside the analysis target.**
+Tier 2's own `.codemetrics.json` mechanism covers a repository the operator owns — it can be
+committed there. It does not cover running this tool in a scripted way against a repository the
+operator does not control, where committing a file into someone else's repo is not an option and
+writing one into every fresh clone before each run does not scale. `--config` supplies the same
+override shape from a path the operator does control, independent of the target's own tree.
+`resolveConfigOverrides(defaults, targetDir, explicitConfigPath)` takes this as its third
+parameter — the same function tier 3 already used, not a new module.
+
+- **A repo-keyed section inside `lib/config.js` was considered and rejected**, the same way it was
+  for tier 3 (code-quality-metrics-wcj): a per-target fact living in config shared by the local
+  script and both workflows is the defect this whole mechanism exists to avoid, not a fix for it.
+  `--config` was rejected once already, during `wcj`'s own design, on the grounds that "the caller
+  must remember it on every invocation." That objection is about a *human* caller; a script that
+  invokes this tool does not forget a flag, so the objection does not hold for the scripted case
+  this issue was filed for.
+- **Missing or non-file path fails loudly.** A `--config` path that does not exist, or that names a
+  directory rather than a file, throws immediately (`--config path not found: <path>` /
+  `--config path is a directory, not a file: <path>`) rather than silently falling back to the
+  target's own `.codemetrics.json` or to defaults. A scripted run has nobody watching it in real
+  time, so a typo'd path must be loud, not swallowed into an unnoticed default run. This is
+  deliberately different from a missing tier-3 `.codemetrics.json`, which is the ordinary
+  unconfigured case and stays silent.
+- **Composes with tier 3, rather than replacing it.** Both a target-local `.codemetrics.json` and
+  an explicit `--config` file are applied, in precedence order (target file first, `--config`
+  second), rather than `--config` displacing the target file entirely. The existing array-union
+  semantics (see Class A below) already establish the norm this follows: an operator adding an
+  override must never be the reason a target repo's own already-committed conventions silently
+  stop applying. A class A array key unions across all three tiers that can contribute a value —
+  defaults, target file, `--config` file. A class B scalar key from `--config` wins over the same
+  key from the target file, since `--config` is the higher tier, but still leaves
+  `classBOverridden` (and therefore `config_sources.class_b_overridden`) true exactly as a
+  target-file-only override would.
+- **Format is JSON for this tier too**, for the same reason as tier 3 below.
+- **`config_sources.files` names whichever file actually contributed an override**, `--config`'s
+  path included, alongside the target file's own path when both contribute. `lib/report.js`'s
+  `buildMetricCatalog` reads only `config_sources.class_b_overridden`, never which route produced
+  it, so a class B override withholds the `duplication_density_pct` verdict identically whichever
+  tier supplied it.
+- Neither GitHub workflow gains a `--config` flag: they run inside the target repository's own
+  checkout, where the tier-3 `.codemetrics.json` resolution from `process.cwd()` already works,
+  so they have no scripted-external-repo case to cover.
 
 **Format is JSON, not JS.** A `.js` config file would mean `require()`-ing arbitrary code from
 the repository under analysis, and this tool is routinely pointed at repos the operator does not
@@ -279,6 +412,25 @@ bd automatically syncs with git:
 For more details, see README.md and docs/QUICKSTART.md.
 
 ## Quality Gates
+
+**A green suite does not prove the work is committed.** Verify git state directly; do not infer
+it from test results. After any merge or commit you intend to report as done:
+
+```bash
+git log --oneline -1          # is HEAD what you think it is?
+git status --short            # is anything still uncommitted?
+```
+
+This is not pedantry. In one session a `git stash` run during an investigation, while a merge
+was staged, silently cleared `MERGE_HEAD` and converted the merge into ordinary working-tree
+edits. The file contents were all present, so the suite passed at the expected count and the
+work was reported as merged. Only the commit was missing, and the branch had to be rebuilt.
+`git stash` is not safe to run mid-merge; finish or abort the merge first.
+
+The same principle covers the stale-base problem above: a stale tree is internally consistent
+and its own tests pass. Test results tell you the code in the working tree is coherent. They
+tell you nothing about which commit you are on, whether it is the one you meant, or whether
+your changes are recorded anywhere durable.
 
 Run these after each implementation step, not only at the end of a session:
 

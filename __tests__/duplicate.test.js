@@ -193,6 +193,67 @@ describe('runDuplicateAnalysis', () => {
     const result = runDuplicateAnalysis(['src/lib/git.js']);
     expect(result).toEqual({ findings: [], statistics: null });
   });
+
+  // code-quality-metrics-tjn: jscpd does not recognize every language (Elixir's .ex/.exs among
+  // them, verified live against remote_retro). When it recognizes none of the scanned files, it
+  // still exits 0 and writes a report with statistics.total.sources: 0 -- a report shaped exactly
+  // like a real, perfect "0% duplication, nothing to flag" measurement. The two are told apart by
+  // a second, cheap jscpd pass with min-lines/min-tokens relaxed to 1: a genuinely supported
+  // language will register at least one source at that floor; an unsupported one still won't.
+  describe('unsupported-language detection (code-quality-metrics-tjn)', () => {
+    const ZERO_SOURCES_STATS = {
+      clones: 0, duplicatedLines: 0, duplicatedTokens: 0, lines: 0, tokens: 0,
+      sources: 0, percentage: 0, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0
+    };
+
+    test('probes with relaxed min-lines/min-tokens only after the real scan finds zero sources', () => {
+      fs.readFileSync.mockReturnValue(JSON.stringify({ duplicates: [], statistics: { total: ZERO_SOURCES_STATS } }));
+
+      runDuplicateAnalysis(['lib/foo.ex']);
+
+      expect(execSync).toHaveBeenCalledTimes(2);
+      const probeCommand = execSync.mock.calls[1][0];
+      expect(probeCommand).toContain('--min-lines 1');
+      expect(probeCommand).toContain('--min-tokens 1');
+    });
+
+    test('does not probe at all when the real scan already found sources', () => {
+      fs.readFileSync.mockReturnValue(JSON.stringify({
+        duplicates: [FIXTURE_DUPLICATE],
+        statistics: { total: FIXTURE_STATISTICS_TOTAL }
+      }));
+
+      runDuplicateAnalysis(['src/lib/git.js', 'src/lib/metrics.js']);
+
+      expect(execSync).toHaveBeenCalledTimes(1);
+    });
+
+    test('reports unsupportedExtensions and null statistics when the relaxed probe also finds zero sources', () => {
+      fs.readFileSync.mockReturnValue(JSON.stringify({ duplicates: [], statistics: { total: ZERO_SOURCES_STATS } }));
+
+      const result = runDuplicateAnalysis(['lib/foo.ex', 'lib/bar.exs']);
+
+      expect(result).toEqual({ findings: [], statistics: null, unsupportedExtensions: ['.ex', '.exs'] });
+    });
+
+    test('GUARD: keeps the real (genuine) statistics, with no unsupportedExtensions field, when the relaxed probe finds sources', () => {
+      // A real, if trivial, measurement (every scanned file fell below the configured
+      // min-lines/min-tokens floor) must stay distinguishable from an unsupported language: the
+      // relaxed probe finding sources > 0 proves the language IS recognized, so the original
+      // zero-source result from the real scan is genuine and must pass through unchanged.
+      fs.readFileSync
+        .mockReturnValueOnce(JSON.stringify({ duplicates: [], statistics: { total: ZERO_SOURCES_STATS } }))
+        .mockReturnValueOnce(JSON.stringify({
+          duplicates: [],
+          statistics: { total: { ...ZERO_SOURCES_STATS, sources: 2, lines: 4 } }
+        }));
+
+      const result = runDuplicateAnalysis(['a.js', 'b.js']);
+
+      expect(result).toEqual({ findings: [], statistics: ZERO_SOURCES_STATS });
+      expect(result.unsupportedExtensions).toBeUndefined();
+    });
+  });
 });
 
 describe('resolveModuleNeighbors', () => {
