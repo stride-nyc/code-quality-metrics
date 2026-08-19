@@ -727,6 +727,64 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.project_lifecycle_signals.scaffold_root_detected).toBe(false);
   });
 
+  // code-quality-metrics-zkhq, GitHub #71 part 1: mirrors the --history override test above
+  // exactly. Detection alone would say established (default fixture: no root commit found);
+  // the override forces initial-build for this invocation without changing what detection
+  // itself reported.
+  test('a --lifecycle override forces project_lifecycle, recording both the override and what detection actually found', async () => {
+    const summary = await collectLocalMetrics({ lifecycle: 'initial-build' }).then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_detected).toBe('established');
+    expect(summary.project_lifecycle_override).toBe('initial-build');
+  });
+
+  test('a repo-local .codemetrics.json lifecycle key overrides project_lifecycle when no CLI flag is given', async () => {
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ lifecycle: 'initial-build' }));
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_detected).toBe('established');
+    expect(summary.project_lifecycle_override).toBe('initial-build');
+  });
+
+  // [guard] proves CLI wins over the config-file key rather than the file silently taking
+  // precedence, mirroring the CLI-over-config-file precedence every other override in this
+  // tool already follows.
+  test('[guard] a --lifecycle CLI flag takes precedence over a conflicting .codemetrics.json lifecycle key', async () => {
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ lifecycle: 'established' }));
+
+    const summary = await collectLocalMetrics({ lifecycle: 'initial-build' }).then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary.project_lifecycle_override).toBe('initial-build');
+  });
+
+  // [guard] proves the no-override case still reports project_lifecycle_detected equal to
+  // project_lifecycle and a null override, matching history_granularity's own shape.
+  test('[guard] reports project_lifecycle_override as null and project_lifecycle_detected equal to project_lifecycle when no override is given', async () => {
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.project_lifecycle).toBe('established');
+    expect(summary.project_lifecycle_detected).toBe('established');
+    expect(summary.project_lifecycle_override).toBeNull();
+  });
+
   test('writes local_metrics_summary.json with history_granularity detected as granular when no squash signals are present', () => {
     return collectLocalMetrics().then(() => {
       const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));

@@ -118,10 +118,10 @@ function fetchBranchCommits(ref, sinceStr) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -149,6 +149,15 @@ function parseCliArgs(argv) {
         throw new Error(`--history must be 'granular' or 'squashed', got '${history}'`);
       }
       options.history = history;
+      i++;
+    } else if (argv[i] === '--lifecycle') {
+      // code-quality-metrics-zkhq, GitHub #71 part 1: mirrors --history's own shape exactly.
+      if (!argv[i + 1]) throw new Error("--lifecycle requires 'initial-build' or 'established'");
+      const lifecycle = argv[i + 1];
+      if (lifecycle !== 'initial-build' && lifecycle !== 'established') {
+        throw new Error(`--lifecycle must be 'initial-build' or 'established', got '${lifecycle}'`);
+      }
+      options.lifecycle = lifecycle;
       i++;
     } else if (argv[i] === '--config') {
       if (!argv[i + 1]) throw new Error('--config requires a path');
@@ -203,7 +212,7 @@ function logNoCommitsAnalyzed() {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -233,7 +242,7 @@ async function collectLocalMetrics(options = {}) {
   Object.assign(CONFIG, effectiveConfig);
   const config_sources = {
     files: configSources.map(source => source.file),
-    overrides: configSources.reduce((acc, source) => Object.assign(acc, source.overrides), {}),
+    overrides: configSources.reduce((acc, source) => Object.assign(acc, source.overrides), /** @type {Record<string, unknown>} */ ({})),
     class_b_overridden: classBOverridden
   };
 
@@ -705,9 +714,18 @@ async function collectLocalMetrics(options = {}) {
   // Distinct from both, and paired with root_commit_detection_failed below so the failure
   // is visible in the written summary rather than reading as a confident verdict either way
   // (code-quality-metrics-dqri).
-  const project_lifecycle = rootCommitDetectionFailed
+  const detectedLifecycle = rootCommitDetectionFailed
     ? 'undetermined'
     : (includesRepositoryRoot ? 'initial-build' : 'established');
+
+  // Operator override (code-quality-metrics-zkhq, GitHub #71 part 1): mirrors --history's own
+  // shape exactly. CLI (options.lifecycle) takes precedence over a repo-local
+  // .codemetrics.json's own `lifecycle` key (config_sources.overrides.lifecycle, already
+  // resolved to the correct file-precedence winner by resolveConfigOverrides/lib/repoConfig.js
+  // -- 'lifecycle' is a META key there, recognized but never merged into `effective`, since it
+  // is not a CONFIG value), which in turn takes precedence over the structural detection above.
+  const project_lifecycle_override = options.lifecycle ?? config_sources.overrides.lifecycle ?? null;
+  const project_lifecycle = project_lifecycle_override ?? detectedLifecycle;
 
   // Generate summary statistics
   const summary = {
@@ -734,11 +752,15 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
     // Project lifecycle (code-quality-metrics-31w): see the rootCommitShas/includesRepositoryRoot
-    // comments above. project_lifecycle_signals is reported for audit/debugging even though
-    // includesRepositoryRoot alone decides project_lifecycle -- there is no confidence axis to
-    // track here, unlike history_granularity, since this is a structural fact rather than a
-    // detection with a raw guess that might be overridden.
+    // comments above. project_lifecycle is the effective value (project_lifecycle_override when
+    // one is given, the structural detection otherwise); project_lifecycle_detected is always the
+    // raw structural result regardless of any override -- the same shape history_granularity /
+    // history_granularity_detected / history_granularity_override already follow
+    // (code-quality-metrics-zkhq, GitHub #71 part 1), so the detected value stays visible
+    // alongside the override rather than being replaced by it.
     project_lifecycle,
+    project_lifecycle_detected: detectedLifecycle,
+    project_lifecycle_override,
     project_lifecycle_signals: {
       window_includes_repository_root: includesRepositoryRoot,
       repository_root_commit_count: rootCommitShas.length,
@@ -932,7 +954,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -940,7 +962,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--config <path>]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>]');
     process.exit(1);
   }
 

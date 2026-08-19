@@ -446,8 +446,26 @@ the repository stays misclassified until either that configuration is added or t
 override below is used. `__tests__/scaffoldRootDetection.test.js` exercises the 73V shape with
 `ANALYSIS_IGNORE_PATTERNS` configured this way, and states the caveat inline.
 
-An operator override for a repository this detection still gets wrong is documented separately
-below (`--lifecycle`, code-quality-metrics-zkhq).
+**Operator override: `--lifecycle` (code-quality-metrics-zkhq, GitHub #71 part 1).** Direct
+precedent: `--history` already lets an operator override squash-merge detection when the
+heuristic is wrong, with `history_granularity_detected` and `history_granularity_override`
+reported separately from the effective `history_granularity` so the raw detection stays visible
+even when overridden. `--lifecycle initial-build|established` (plus a matching `lifecycle` key in
+`.codemetrics.json`) follows the identical shape: `project_lifecycle` is the effective value (the
+override when one is given, the structural detection otherwise), `project_lifecycle_detected` is
+always the raw structural result regardless of any override, and `project_lifecycle_override` is
+the override itself or `null`. CLI takes precedence over the `.codemetrics.json` key, matching
+every other CLI-flag-plus-config-key pair in this tool. The `lifecycle` key is recognized by
+`lib/repoConfig.js` as a META key: it is not a `CONFIG` value, so unlike `DUPLICATE_IGNORE_PATTERNS`
+or `DUPLICATE_MIN_LINES` it is never merged into the `effective` object `resolveConfigOverrides`
+builds — it is only recorded in `sources` (and, once merged, `config_sources.overrides.lifecycle`)
+so `local-code-metrics.js` can read it back out, letting it coexist with a real `CONFIG` override
+in the same file without tripping the "not a recognized override key" guard.
+
+This is the general answer for any repository the structural detection gets wrong — including a
+bare LICENSE/README scaffold under default configuration, per the caveat above — while scaffold
+detection itself remains the automatic answer for the common case once a repository's own
+`ANALYSIS_IGNORE_PATTERNS` already excludes its non-code bootstrap paths.
 
 ### Metric 1: Large Commit Percentage
 
@@ -1421,11 +1439,16 @@ Single summary object for the analysis run:
   history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
 
   // Project lifecycle (code-quality-metrics-31w): see "Project Lifecycle and Change-Size
-  // Withholding" above. A purely structural detection -- no confidence axis and no override,
-  // unlike history_granularity above, since there is no raw guess to resolve or overrule.
+  // Withholding" above. project_lifecycle is the effective value used for banding decisions;
+  // project_lifecycle_detected is always the raw structural result (windowIncludesRepositoryRoot
+  // against the effective root sha(s)) regardless of any override -- the same
+  // detected/effective/override shape history_granularity above already follows
+  // (code-quality-metrics-zkhq, GitHub #71 part 1).
   // "undetermined" (code-quality-metrics-dqri) is a third, distinct value: the repository-root
   // query itself failed, so neither "initial-build" nor "established" was ever confirmed.
   project_lifecycle: "initial-build" | "established" | "undetermined",
+  project_lifecycle_detected: "initial-build" | "established" | "undetermined",  // unaffected by project_lifecycle_override
+  project_lifecycle_override: "initial-build" | "established" | null,  // the --lifecycle CLI flag, or a .codemetrics.json `lifecycle` key, if either was given (CLI wins over the config-file key)
   project_lifecycle_signals: {
     window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict,
                                                  // checked against the effective root sha(s)

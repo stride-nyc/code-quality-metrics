@@ -153,6 +153,45 @@ describe('resolveConfigOverrides — rejected keys', () => {
   });
 });
 
+// code-quality-metrics-zkhq, GitHub #71 part 1: the project_lifecycle operator override gets
+// a .codemetrics.json key too, mirroring --history's own shape. 'lifecycle' is not a CONFIG
+// key (it is not merged into `effective`, which stays exactly the CONFIG-shaped object it
+// always was) -- it is recognized here only so it does not trip the "not a recognized
+// override key" guard when it coexists with a real CONFIG override in the same file. The
+// caller (local-code-metrics.js) reads it back out of `sources`.
+describe('resolveConfigOverrides — lifecycle (code-quality-metrics-zkhq)', () => {
+  test('recognizes a lifecycle key, records it in sources, and does not merge it into effective', () => {
+    const targetDir = makeTempDir('cqm-lifecycle-');
+    writeConfigFile(targetDir, { lifecycle: 'initial-build' });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir);
+
+    expect(result.effective).toEqual(SAMPLE_DEFAULTS);
+    expect(result.sources).toEqual([
+      { file: path.join(targetDir, '.codemetrics.json'), overrides: { lifecycle: 'initial-build' } }
+    ]);
+  });
+
+  test('rejects a lifecycle value other than initial-build or established', () => {
+    const targetDir = makeTempDir('cqm-lifecycle-bad-');
+    writeConfigFile(targetDir, { lifecycle: 'sortof' });
+
+    expect(() => resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir)).toThrow(/must be 'initial-build' or 'established'/);
+  });
+
+  // [guard] proves 'lifecycle' coexists with a real CONFIG override in the same file
+  // rather than tripping the unrecognized-key guard for either key.
+  test('coexists with a class A override in the same file', () => {
+    const targetDir = makeTempDir('cqm-lifecycle-coexist-');
+    writeConfigFile(targetDir, { lifecycle: 'established', DUPLICATE_IGNORE_PATTERNS: ['**/designs/**'] });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir);
+
+    expect(result.effective.DUPLICATE_IGNORE_PATTERNS).toEqual(['**/deps/**', '**/vendor/**', '**/designs/**']);
+    expect(result.sources[0].overrides.lifecycle).toBe('established');
+  });
+});
+
 describe('resolveConfigOverrides — purity', () => {
   test('never mutates the defaults object passed in', () => {
     const targetDir = makeTempDir('cqm-purity-');
