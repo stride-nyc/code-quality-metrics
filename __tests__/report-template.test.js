@@ -782,6 +782,32 @@ describe('renderReportHtml metric group headings (code-quality-metrics-yte)', ()
     expect(dupSection).toContain('Not measurable');
   });
 
+  // [guard] not a called-shot RED: closes the loop between report.test.js's catalog-level
+  // membership assertion and the actual markup, so a mismatch introduced only in
+  // rendering (not in the group-assignment table) would still be caught here. Proven by
+  // mutation: reassigning avg_lines_changed to 'Pace and direction' in
+  // lib/report.js's METRIC_GROUP_BY_KEY changed the distribution to [6, 3, 3, 4, 1] and
+  // failed this test (also would have failed report.test.js's own membership test, since
+  // the mutation was upstream of both).
+  it('renders exactly seventeen metric cards distributed 6/4/3/3/1 across the five headings, with no extra heading anywhere in the page', () => {
+    const summary = fixtureSummary();
+    const duplicates = fullDuplicatesForGrouping();
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    expect(catalog).toHaveLength(17);
+
+    const headingRegex = /<h2 class="metric-category-heading">([^<]+)<\/h2>/g;
+    const renderedHeadings = [...html.matchAll(headingRegex)].map(m => m[1]);
+    expect(renderedHeadings).toEqual(METRIC_GROUP_ORDER);
+
+    const sections = html.split('<section class="metric-category">').slice(1);
+    expect(sections).toHaveLength(5);
+    const cardCounts = sections.map(section => (section.match(/<article class="metric-card"/g) || []).length);
+    expect(cardCounts).toEqual([6, 4, 3, 3, 1]);
+    expect(cardCounts.reduce((a, b) => a + b, 0)).toBe(17);
+  });
+
   it('renders all five documented group headings, in the fixed order, even when a later group carries the highest concern this run', () => {
     // test_coverage_rate (Test practice) is driven to its critical-ish low end so a
     // concern-only sort would put the "Test practice" group first; the fixed group order
