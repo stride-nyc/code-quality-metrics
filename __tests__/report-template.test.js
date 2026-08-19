@@ -83,6 +83,17 @@ function duplicateSection(html) {
   return html.slice(start, end);
 }
 
+// Scopes an assertion to the masthead only (code-quality-metrics-g39): the branch list moved
+// out of it into Analysis Scope, so a test asserting the masthead does NOT carry the branch
+// list would pass vacuously against the whole page (the names still appear further down) if it
+// were not scoped to just this element.
+function mastheadSection(html) {
+  const start = html.indexOf('<header class="masthead">');
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = html.indexOf('</header>', start) + '</header>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -97,14 +108,25 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/<title>[^<]+<\/title>/);
   });
 
-  it('renders masthead context from the summary: branches, workflow type, and commit counts', () => {
+  it('renders workflow type and commit counts in the masthead', () => {
     const html = renderReportHtml(fixtureArgs());
+    const masthead = mastheadSection(html);
 
-    expect(html).toContain('feature_branch');
-    expect(html).toContain('main');
-    expect(html).toContain('feature/foo');
-    expect(html).toContain('42');
-    expect(html).toContain('30');
+    expect(masthead).toContain('feature_branch');
+    expect(masthead).toContain('42');
+    expect(masthead).toContain('30');
+  });
+
+  // code-quality-metrics-g39: a reader on a many-branch repository (measured: remote_retro,
+  // 30 branch names before a single number) met a wall of branch names before the commit count
+  // or the span. The names move to Analysis Scope; the masthead keeps only the count of
+  // contributing branches ("across N branches"), already covered by the test below.
+  it('does not render the branch name list in the masthead', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'feature/a-third-branch'] }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).not.toContain('feature/foo');
+    expect(masthead).not.toContain('feature/a-third-branch');
   });
 
   // code-quality-metrics-g10 hard requirement: a HEAD-anchored run never applied a day-based
