@@ -63,6 +63,11 @@ function mockExecSequence(...values) {
     // Answer it out of band too, with a single parent -- i.e. "not a merge" --
     // so every commit under test is still analyzed rather than skipped.
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    // Tests predating project-lifecycle detection supply no value for the
+    // repository-root-commit query (`git rev-list --max-parents=0 --all`). Answer it out of
+    // band too, defaulting to "no root commit found" (project_lifecycle: established) so
+    // every prior test's positional values still line up.
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -84,6 +89,7 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // Answer it out of band too, with a single parent -- i.e. "not a merge" --
     // so every commit under test is still analyzed rather than skipped.
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -102,6 +108,26 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     if (typeof command === 'string' && command.includes('--merges')) return mergesOutput;
     if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
     if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return '';
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
+/**
+ * Like mockExecSequence, but answers the repository-root-commit query (`git rev-list
+ * --max-parents=0 --all`) with rootCommitsOutput instead of the "no root commit found"
+ * default. Positional values cover every other command.
+ */
+function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    if (typeof command === 'string' && command.includes('--max-parents=0')) return rootCommitsOutput;
     const val = values[i] ?? '';
     i++;
     return val;
@@ -421,6 +447,42 @@ describe('collectLocalMetrics — successful run', () => {
     expect(typeof summary.message_quality_pct).toBe('string');
     expect(['harmonious-high-achiever', 'foundational-challenges', 'legacy-bottleneck', 'mixed-signals'])
       .toContain(summary.dora_archetype);
+  });
+
+  test('writes local_metrics_summary.json with project_lifecycle detected as initial-build when the analyzed window includes the repository\'s root commit (code-quality-metrics-31w)', async () => {
+    // SHA is the sole analyzed commit (this describe block's default fixture). Answering
+    // `git rev-list --max-parents=0 --all` with that same SHA is the structural fact this
+    // toolkit's greenfield detection acts on: the analyzed window includes the repository's
+    // own first commit.
+    mockExecSequenceWithRootCommits(
+      SHA,
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('initial-build');
+  });
+
+  // [guard] proven by mutation: hardcoding includesRepositoryRoot to true in
+  // local-code-metrics.js fails this test, expecting 'established' but receiving
+  // 'initial-build' -- reverted after confirming.
+  test('[guard] writes project_lifecycle as established when the root-commit query matches none of the analyzed commits (default fixture)', async () => {
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('established');
+    expect(summary.project_lifecycle_signals).toEqual({
+      window_includes_repository_root: false,
+      repository_root_commit_count: 0
+    });
   });
 
   test('writes local_metrics_summary.json with history_granularity detected as granular when no squash signals are present', () => {

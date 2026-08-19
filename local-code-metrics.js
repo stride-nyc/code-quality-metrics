@@ -24,7 +24,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -426,6 +426,21 @@ async function collectLocalMetrics(options = {}) {
   const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
   const historyGranularity = options.history ?? detectedForWithholding;
 
+  // Project lifecycle (code-quality-metrics-31w): purely structural, no tuned number. Every
+  // reference window this toolkit's bands were calibrated on measures maintenance-era work on
+  // a decades-old codebase (calibration/observations.json's brownfield-only-lifecycle
+  // reservation, high severity), and several bands are biased against a genuine initial build
+  // in the same direction, toward a worse verdict (see lib/report.js's WITHHELD_WHEN_GREENFIELD
+  // comment for the citations). Rather than invent an age or commit-count cutoff, this checks
+  // one fact: does the analyzed window include the repository's own first commit(s)?
+  // `git rev-list --max-parents=0 --all` finds those roots across every ref, not just
+  // branchesToAnalyze, since the question is about the repository's whole history, independent
+  // of workflow_type -- unlike history_granularity above, no feature-branch special case is
+  // needed here: a commit's SHA either is one of the repository's roots or it is not,
+  // regardless of which ref found it.
+  const rootCommitLog = runGitCommand('git rev-list --max-parents=0 --all');
+  const rootCommitShas = rootCommitLog ? rootCommitLog.split('\n').filter(Boolean) : [];
+
   // Analyze commits in detail. uniqueCommits is a concatenation of per-branch results in
   // branch-iteration order, not a globally date-sorted list, so slicing it directly would keep
   // whichever MAX_COMMITS commits were encountered first rather than the newest MAX_COMMITS
@@ -621,6 +636,15 @@ async function collectLocalMetrics(options = {}) {
   }
   const branches_with_analyzed_commits = Object.keys(analyzed_branch_commit_counts).length;
 
+  // See the rootCommitShas comment above: this is the actual structural check, run once the
+  // final analyzed commit set (metrics) is known, against the whole repository's root
+  // commit(s) fetched earlier.
+  const includesRepositoryRoot = windowIncludesRepositoryRoot({
+    analyzedShas: metrics.map(m => m.full_sha),
+    rootShas: rootCommitShas
+  });
+  const project_lifecycle = includesRepositoryRoot ? 'initial-build' : 'established';
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -645,6 +669,16 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_confidence: detectedGranularity.confidence,
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
+    // Project lifecycle (code-quality-metrics-31w): see the rootCommitShas/includesRepositoryRoot
+    // comments above. project_lifecycle_signals is reported for audit/debugging even though
+    // includesRepositoryRoot alone decides project_lifecycle -- there is no confidence axis to
+    // track here, unlike history_granularity, since this is a structural fact rather than a
+    // detection with a raw guess that might be overridden.
+    project_lifecycle,
+    project_lifecycle_signals: {
+      window_includes_repository_root: includesRepositoryRoot,
+      repository_root_commit_count: rootCommitShas.length
+    },
     config_sources,
     analysis_exclusions,
     vendored_generated_share,
