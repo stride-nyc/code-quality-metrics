@@ -186,6 +186,21 @@ function resolveHistoryGranularityForWithholding(detectedGranularity, workflowTy
 }
 
 /**
+ * Reports the single graceful "nothing to analyze" outcome, used at both points that can
+ * reach it: no commits were found in the window at all (uniqueCommits.length === 0), and
+ * commits were found but every one of them failed analysis (metrics.length === 0 despite a
+ * non-empty uniqueCommits -- code-quality-metrics-1g6j). Both are the same outcome from the
+ * report's point of view -- zero analyzable commits -- so they share one message rather than
+ * inventing a second way of saying it.
+ */
+function logNoCommitsAnalyzed() {
+  console.log('⚠️ No commits found in the analysis period.');
+  console.log('This could mean:');
+  console.log('  • No development activity in the analysis period');
+  console.log(`  • Try a wider window: node local-code-metrics.js --days 90`);
+}
+
+/**
  * Main analysis function
  * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
@@ -398,10 +413,7 @@ async function collectLocalMetrics(options = {}) {
   }
 
   if (uniqueCommits.length === 0) {
-    console.log('⚠️ No commits found in the analysis period.');
-    console.log('This could mean:');
-    console.log('  • No development activity in the analysis period');
-    console.log(`  • Try a wider window: node local-code-metrics.js --days 90`);
+    logNoCommitsAnalyzed();
     return;
   }
 
@@ -482,6 +494,22 @@ async function collectLocalMetrics(options = {}) {
   }
 
   console.log('\n');
+
+  // code-quality-metrics-1g6j: uniqueCommits was non-empty (the guard above already ruled
+  // out zero commits found), but every one of them can still fail analyzeCommit (lib/git.js)
+  // -- a true merge commit by its own parent-count check, or a genuinely failed `git show
+  // --numstat` -- leaving metrics empty regardless. Math.min(...[]) is Infinity and
+  // Math.max(...[]) is -Infinity, so computing analyzedSpanStart/End below would throw
+  // `RangeError: Invalid time value` rather than reporting the same "nothing to analyze"
+  // outcome the zero-commits guard above already reports gracefully. Absent, not null or a
+  // placeholder, is the right shape for analyzed_span_start/end here: a span over zero
+  // commits does not exist, and returning before the summary is built (as the zero-commits
+  // guard above already does) keeps the report and local_metrics_summary.json in agreement
+  // by both omitting it identically, rather than one inventing a placeholder the other lacks.
+  if (metrics.length === 0) {
+    logNoCommitsAnalyzed();
+    return;
+  }
 
   // Statistical distributions
   const lineSizes = metrics.map(m => m.total_additions + m.total_deletions);

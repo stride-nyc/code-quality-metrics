@@ -388,6 +388,36 @@ describe('collectLocalMetrics — early exits', () => {
 
     expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
+
+  // code-quality-metrics-1g6j: uniqueCommits (git log) is non-empty here -- one commit on
+  // feature/x -- but every commit's `git show --numstat` genuinely fails, so analyzeCommit
+  // (lib/git.js) returns null for each one and `metrics` ends up empty even though commits
+  // were found. That gap is not covered by the uniqueCommits.length === 0 guard above.
+  test('returns without writing files (rather than throwing) when every commit in the window fails analysis', async () => {
+    const SHA = 'a'.repeat(40);
+    execSync.mockImplementation(command => {
+      const cmd = typeof command === 'string' ? command : String(command);
+      if (cmd.includes('rev-parse --show-toplevel')) return FAKE_ROOT;
+      if (cmd.includes('remote get-url')) return FAKE_REMOTE;
+      if (cmd === 'git branch -a') return '  feature/x';
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('%cn')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40); // single parent: not a merge commit
+      if (cmd.includes('--max-parents=0')) return '';
+      if (cmd.includes('%H|%ai')) return `${SHA}|2026-08-10T10:00:00Z|Dev|feat: add thing`;
+      if (cmd.includes('--numstat')) {
+        throw new Error(`fatal: bad object ${SHA}`);
+      }
+      return '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('No commits found in the analysis period'));
+  });
 });
 
 describe('collectLocalMetrics — successful run', () => {
