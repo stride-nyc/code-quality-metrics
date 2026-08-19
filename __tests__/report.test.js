@@ -439,7 +439,7 @@ describe('buildMetricCatalog with an unsupported-language duplication scan (code
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
       statistics: null,
       static_duplicates: [],
-      unsupportedExtensions: ['.ex', '.exs']
+      unsupported_extensions: ['.ex', '.exs']
     }));
     const density = entries.find(e => e.key === 'duplication_density_pct');
 
@@ -458,7 +458,7 @@ describe('buildMetricCatalog with an unsupported-language duplication scan (code
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
       statistics: null,
       static_duplicates: [],
-      unsupportedExtensions: ['.ex', '.exs']
+      unsupported_extensions: ['.ex', '.exs']
     }));
     const density = entries.find(e => e.key === 'duplication_density_pct');
 
@@ -473,7 +473,7 @@ describe('buildMetricCatalog with an unsupported-language duplication scan (code
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
       statistics: null,
       static_duplicates: [],
-      unsupportedExtensions: ['.ex', '.exs']
+      unsupported_extensions: ['.ex', '.exs']
     }));
 
     expect(entries.find(e => e.key === 'duplication_lines')).toBeUndefined();
@@ -481,7 +481,7 @@ describe('buildMetricCatalog with an unsupported-language duplication scan (code
     expect(entries.find(e => e.key === 'duplication_density_pct')).toBeDefined();
   });
 
-  it('[guard] leaves the normal statistics-driven density gauge intact when unsupportedExtensions is absent', () => {
+  it('[guard] leaves the normal statistics-driven density gauge intact when unsupported_extensions is absent', () => {
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
     const density = entries.find(e => e.key === 'duplication_density_pct');
 
@@ -489,10 +489,10 @@ describe('buildMetricCatalog with an unsupported-language duplication scan (code
     expect(density.descriptiveNote).toBeUndefined();
   });
 
-  it('[guard] a genuine zero-source measurement (no unsupportedExtensions field) still renders as a normal gauge, not informational', () => {
+  it('[guard] a genuine zero-source measurement (no unsupported_extensions field) still renders as a normal gauge, not informational', () => {
     // Distinguishes lib/duplicate.js's own genuine-zero case (every scanned file supported
     // but none met the min-lines/min-tokens floor) from the unsupported-language case: only
-    // the presence of unsupportedExtensions should switch this tile to informational.
+    // the presence of unsupported_extensions should switch this tile to informational.
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
       statistics: { clones: 0, duplicatedLines: 0, duplicatedTokens: 0, lines: 0, tokens: 0, sources: 0, percentage: 0, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
     }));
