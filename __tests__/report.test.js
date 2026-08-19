@@ -1,7 +1,7 @@
 'use strict';
 
 const { THRESHOLDS } = require('../lib/thresholds');
-const { buildMetricCatalog, buildGaugeSvgParts } = require('../lib/report');
+const { buildMetricCatalog, buildGaugeSvgParts, groupForMetricKey } = require('../lib/report');
 
 function fullSummary(overrides) {
   return Object.assign({
@@ -584,6 +584,38 @@ describe('buildMetricCatalog metric groups (code-quality-metrics-yte)', () => {
 
     const distinctGroups = new Set(entries.map(e => e.group));
     expect(distinctGroups).toEqual(new Set(Object.values(EXPECTED_GROUP_BY_KEY)));
+  });
+
+  // [guard] not a called-shot RED: this test was already green on arrival, since
+  // groupForMetricKey's throw was written as part of the previous cycle's implementation
+  // (needed to keep buildMetricCatalog itself from silently producing an ungrouped entry).
+  // Kept as its own case so removing the throw -- letting an unrecognized key fall through
+  // to `undefined` and render with no heading, the "other" bucket this ticket forbids -- is
+  // caught here directly rather than only incidentally by the membership test above.
+  it('[guard] throws rather than silently omitting a group for an unrecognized catalog key', () => {
+    expect(() => groupForMetricKey('totally_unknown_key')).toThrow(/totally_unknown_key/);
+  });
+
+  // [guard] not a called-shot RED: grouping is a post-hoc filter over an array
+  // buildMetricCatalog already sorts by concern (pre-existing behavior, covered by "sorts the
+  // returned entries by concern descending" above); attaching `.group` does not touch that
+  // sort. Kept as its own case to pin the specific concern this ticket is required to
+  // preserve within one named group, rather than relying on the generic sort test to cover it
+  // incidentally.
+  it('[guard] preserves concern order inside a group after grouping: "Change size and scope" keeps its concern-sorted order', () => {
+    const entries = buildMetricCatalog(fullSummary({
+      large_commits_pct: '35.00',
+      sprawling_commits_pct: '19.00'
+    }));
+    const groupKeys = entries.filter(e => e.group === 'Change size and scope').map(e => e.key);
+    expect(groupKeys).toEqual([
+      'large_commits_pct',
+      'sprawling_commits_pct',
+      'p90_lines_changed',
+      'p90_files_changed',
+      'net_additions_ratio_median',
+      'avg_lines_changed'
+    ]);
   });
 });
 
