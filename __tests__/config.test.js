@@ -26,4 +26,8 @@ describe('CONFIG duplicate detection defaults', () => {
   test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
     expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
   });
+
+  test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
+    expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
+  });
 });
