@@ -72,6 +72,17 @@ function fixtureArgs(summaryOverrides) {
   return { summary, metrics, catalog, fontData };
 }
 
+// Scopes an assertion to the Duplicate Code detail section only, so a match against the
+// unrelated "Not measurable" metric tile elsewhere in the document can never make a
+// duplicate-section assertion pass for the wrong reason (the vacuous-green trap this ticket
+// warns about: a fixture that produces no duplicates for an unrelated reason).
+function duplicateSection(html) {
+  const start = html.indexOf('<section class="duplicate-code">');
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = html.indexOf('</section>', start) + '</section>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -583,6 +594,73 @@ describe('renderReportHtml', () => {
     expect(html).toContain('Duplicate Code');
     expect(html).not.toContain('No semantic findings');
     expect(html.toLowerCase()).toContain('not measured');
+  });
+
+  it('makes no claim that Layer 1 ran or that no static duplicates were found when layers_run.static is "unmeasured"', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 2,
+      static_duplicates: [],
+      semantic_findings: [],
+      unsupported_extensions: ['.ex', '.exs'],
+      layers_run: { static: 'unmeasured', semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).not.toContain('Layer 1 (static) ran');
+    expect(section).not.toContain('No static duplicates found');
+  });
+
+  it('names the unsupported extensions and states the measurement does not exist when layers_run.static is "unmeasured", matching the metric tile\'s own wording', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 2,
+      static_duplicates: [],
+      semantic_findings: [],
+      unsupported_extensions: ['.ex', '.exs'],
+      layers_run: { static: 'unmeasured', semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section.toLowerCase()).toContain('not measurable');
+    expect(section).toContain('.ex');
+    expect(section).toContain('.exs');
+  });
+
+  it('GUARD: still reports a genuine zero as "No static duplicates found" and "Layer 1 (static) ran" when layers_run.static is true (a supported language with no duplication)', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 4,
+      static_duplicates: [],
+      semantic_findings: [],
+      statistics: { clones: 0, duplicatedLines: 0, duplicatedTokens: 0, lines: 900, tokens: 4200, sources: 4, percentage: 0, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 },
+      layers_run: { static: true, semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).toContain('No static duplicates found');
+    expect(section).toContain('Layer 1 (static) ran');
+    expect(section.toLowerCase()).not.toContain('not measurable');
+  });
+
+  it('states Layer 1 did not run, with no "ran", "no static duplicates found", or "not measurable" claim, when layers_run.static is false', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 0,
+      static_duplicates: [],
+      semantic_findings: [],
+      layers_run: { static: false, semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section).toContain('did not run');
+    expect(section).not.toContain('Layer 1 (static) ran');
+    expect(section).not.toContain('No static duplicates found');
+    expect(section.toLowerCase()).not.toContain('not measurable');
   });
 
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
