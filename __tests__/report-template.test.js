@@ -612,6 +612,23 @@ describe('renderReportHtml', () => {
     expect(section).not.toContain('No static duplicates found');
   });
 
+  it('names the unsupported extensions and states the measurement does not exist when layers_run.static is "unmeasured", matching the metric tile\'s own wording', () => {
+    const args = fixtureArgs();
+    args.duplicates = {
+      files_scanned: 2,
+      static_duplicates: [],
+      semantic_findings: [],
+      unsupported_extensions: ['.ex', '.exs'],
+      layers_run: { static: 'unmeasured', semantic: false }
+    };
+    const html = renderReportHtml(args);
+    const section = duplicateSection(html);
+
+    expect(section.toLowerCase()).toContain('not measurable');
+    expect(section).toContain('.ex');
+    expect(section).toContain('.exs');
+  });
+
   it('omits the Duplicate Code section entirely when no duplicates data is given', () => {
     const html = renderReportHtml(fixtureArgs());
     expect(html).not.toContain('Duplicate Code');
