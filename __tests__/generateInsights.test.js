@@ -25,7 +25,7 @@ function makeMetric(overrides = {}) {
     files_changed: 2,
     test_files_count: 1,
     prod_files_count: 1,
-    test_first_indicator: true,
+    test_prod_cochange_commit: true,
     sprawling_commit: false,
     source_branch: 'feature/x',
     binary_files: 0,
@@ -157,23 +157,13 @@ describe('generateInsights', () => {
     expect(insights.some(i => i.includes('test-only commits'))).toBe(false);
   });
 
-  test('emits warning (not critical) for avg_lines_changed between healthy and critical', () => {
-    const band = THRESHOLDS.AVG_LINES_CHANGED;
-    const value = (band.healthy + band.critical) / 2;
-    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: value.toFixed(2) }), []);
-    expect(warnings.some(w => w.includes('High average lines per commit'))).toBe(true);
-    expect(warnings.some(w => w.includes('Very high'))).toBe(false);
-  });
-
-  // avg_lines_changed is three-band under era:current (calibration/derive-bands.js:
-  // two distinct repos corroborate the max, nodejs/node and postgres/postgres) --
-  // unlike the prior pooled-derivation band, where it was two-band, a value above
-  // its critical bound must now read as critical, the same as any other
-  // three-band metric.
-  test('emits critical warning for avg_lines_changed above critical', () => {
-    const value = THRESHOLDS.AVG_LINES_CHANGED.critical + 50;
-    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: String(value) }), []);
-    expect(warnings.some(w => w.includes('Very high average lines per commit'))).toBe(true);
+  // AVG_LINES_CHANGED lost its band (code-quality-metrics-6dg): three independent published
+  // fits agree per-commit line count is heavy-tailed with no finite mean, so a mean-based
+  // warning would score against a statistic the population does not have. generateInsights()
+  // no longer reads avg_lines_changed at all, however extreme the value.
+  test('never emits a lines-per-commit warning for avg_lines_changed, however extreme the value (band dropped, not re-tiered)', () => {
+    const { warnings } = generateInsights(makeSummary({ avg_lines_changed: '999999.00' }), []);
+    expect(warnings.some(w => w.includes('lines per commit'))).toBe(false);
   });
 
   // --- AI pattern detection ---

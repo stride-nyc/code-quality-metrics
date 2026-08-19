@@ -96,6 +96,30 @@ describe('renderReportHtml', () => {
     expect(html).toContain('30');
   });
 
+  it('renders the detected history granularity and confidence in the masthead', () => {
+    const html = renderReportHtml(fixtureArgs({
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'high',
+      history_granularity_override: null
+    }));
+
+    expect(html).toContain('granular');
+    expect(html).toContain('high confidence');
+  });
+
+  it('records that a human overrode the heuristic, and what the heuristic itself found, in the masthead', () => {
+    const html = renderReportHtml(fixtureArgs({
+      history_granularity: 'granular',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
+      history_granularity_override: 'granular'
+    }));
+
+    expect(html).toContain('overridden');
+    expect(html).toContain('squashed');
+  });
+
   it('renders a verdict line derived from summary.dora_archetype', () => {
     const harmonious = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(harmonious).toMatch(/class="verdict"/);
@@ -117,12 +141,33 @@ describe('renderReportHtml', () => {
     expect(html).toContain('data-status="warning"');
   });
 
+  // classifyDoraArchetype (lib/metrics.js) dropped the uncovered_prod_rate arm from
+  // foundational-challenges: UNCOVERED_PROD_RATE is two-band with no critical bound to
+  // compare against, so the archetype is large-commit only now. The verdict string must
+  // not keep describing the dropped arm.
+  it('does not describe foundational-challenges as a coverage-gap signal, since the condition no longer tests uncovered_prod_rate', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'foundational-challenges' }));
+    expect(html).not.toContain('coverage-gap');
+  });
+
   it('renders harmonious-high-achiever as good and mixed-signals as neutral, distinct from foundational-challenges', () => {
     const good = renderReportHtml(fixtureArgs({ dora_archetype: 'harmonious-high-achiever' }));
     expect(good).toContain('class="verdict" data-status="good"');
 
     const neutral = renderReportHtml(fixtureArgs({ dora_archetype: 'mixed-signals' }));
     expect(neutral).toContain('class="verdict" data-status="neutral"');
+  });
+
+  it('suppresses the archetype verdict and explains why when history_granularity is squashed', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed', dora_archetype: undefined }));
+    expect(html).toContain('class="verdict" data-status="neutral"');
+    expect(html).toMatch(/pull request/);
+    expect(html).not.toContain('No archetype could be determined from the current signals.');
+  });
+
+  it('does not double the word "suppressed" in the verdict line', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed', dora_archetype: undefined }));
+    expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
   it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
@@ -244,6 +289,57 @@ describe('renderReportHtml', () => {
 
     const findingsSection = html.slice(html.indexOf('<section class="findings">'), html.indexOf('</section>', html.indexOf('<section class="findings">')));
     expect(findingsSection).not.toContain('Semantic duplicates');
+  });
+
+  // code-quality-metrics-3b6: a silent exclusion is the same defect class as the silent
+  // inclusion code-quality-metrics-y8j fixes, so the report must say what was excluded, not
+  // only the summary JSON. Both assertions below configure real, non-trivial values (not an
+  // empty pattern list) so a stub returning static markup could not satisfy them.
+  it('renders the configured ANALYSIS_IGNORE_PATTERNS exclusion: count, line share, and patterns', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/bin/**', '**/obj/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 1500,
+        excluded_lines_pct: '42.00'
+      },
+      vendored_generated_share: {
+        patterns: ['**/deps/**'],
+        files_count: 0,
+        lines_count: 0,
+        lines_pct: '0.00'
+      }
+    }));
+
+    expect(html).toContain('3');
+    expect(html).toContain('42.00');
+    expect(html).toContain('**/bin/**');
+  });
+
+  // The higher-value half (code-quality-metrics-3b6): visible even when nothing is
+  // configured -- analysis_exclusions.patterns is empty here, but vendored_generated_share
+  // still has to show up because its own patterns (CONFIG.DUPLICATE_IGNORE_PATTERNS) are
+  // never empty by default.
+  it('renders the vendored/generated default share even when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: {
+        patterns: ['**/deps/**', '**/vendor/**'],
+        files_count: 12,
+        lines_count: 8000,
+        lines_pct: '61.50'
+      }
+    }));
+
+    expect(html).toContain('12');
+    expect(html).toContain('61.50');
+    expect(html).toContain('**/vendor/**');
+  });
+
+  it('omits the exclusion section entirely, without throwing, when the summary predates this feature (both fields absent)', () => {
+    expect(() => renderReportHtml(fixtureArgs())).not.toThrow();
+    const html = renderReportHtml(fixtureArgs());
+    expect(html).not.toContain('Analysis Scope');
   });
 
   it('renders a footer', () => {

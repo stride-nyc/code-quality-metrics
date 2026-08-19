@@ -265,6 +265,10 @@ critical extreme by nodejs/node and curl/curl -- see `calibration/`):
 
 **A confound that matters more than the selectivity**: large commits are disproportionately not ordinary development. Hindle et al. (MSR 2008) hand-read 2,000 of the largest commits across nine projects and found the tail dominated by auto-generated documentation, branch merges, copyright-year sweeps, license changes, external module imports, and reformatting. D'Ambros, Lanza and Robbes (WCRE 2009) manually inspected the transactions in their three-system corpus that touched more than 100 classes and reported that "the vast majority... concerned license changes, Javadoc and documentation updates." Hattori and Lanza (ASE 2008) found bug fixes are the smallest commits in their nine-project corpus, not the largest. A rising large-commit rate can therefore reflect more vendoring or mechanical sweeps rather than more drift. This project's own calibration data hit the same pattern: `calibration/research-findings.md` records observation windows where a single vendored import dominated commit-size statistics.
 
+**What `ANALYSIS_IGNORE_PATTERNS` fixes here, and what it does not (code-quality-metrics-y8j, -3yd, -1tp, -3b6)**: until this key existed, nothing let a vendored or generated path count as anything other than production code in `large_commit`, `sprawling_commit`, the line-count distributions, prod/test classification, or `uncovered_prod_rate` — `DUPLICATE_IGNORE_PATTERNS` only ever reached the duplicate detector. Measured on stride-nyc/dotnetdependencytracer: 789 of 1972 tracked paths are committed `bin/` and `obj/` build output, and one commit changed 560,857 lines across 196 files, landing in `avg_lines_changed`, `p90_lines_changed`, and both percentage rates with full weight. A repo can now list such paths in its own `.codemetrics.json` so they count as neither test nor production, and `local_metrics_summary.json` (`vendored_generated_share`) reports the share matching the existing vendored/generated defaults even when nothing is configured, so the distortion is visible before anyone has set anything.
+
+The edge that remains: a human still has to notice the distortion and write the pattern. Nothing in this toolkit detects that a repository *should* configure `ANALYSIS_IGNORE_PATTERNS` and did not — `vendored_generated_share` reports what matches `DUPLICATE_IGNORE_PATTERNS`'s own defaults (`deps/`, `vendor/`, `third_party/`, `node_modules/`, `generated/`, lock files), which does not include `bin/`/`obj/` or any other build-output convention outside that list, so a .NET repository committing build output the way dotnetdependencytracer does gets no automatic flag from this share either, only from a human reading the raw size-shaped numbers and recognizing they look wrong. This is the same limitation the calibration method already lives with by hand: `calibration/observations.json` excludes a window only after a person notices and writes a note explaining why (two nodejs/node windows over a Web Platform Tests fixture import and a vendored dependency sync; one django window over a translations sync). State this plainly rather than implying the problem is solved: the mechanism exists now; the detection of when to use it does not.
+
 ---
 
 ### Metric 2: Sprawling Commit Percentage
@@ -300,11 +304,11 @@ django/django and curl/curl):
 
 ### Metric 3: Three-Way Test Coverage Classification
 
-**What it measures**: Replaces the binary `test_first_indicator` with three distinct commit categories, each carrying different signal quality for AI drift detection.
+**What it measures**: Replaces the binary `test_prod_cochange_commit` (renamed from `test_first_indicator` under code-quality-metrics-36d) with three distinct commit categories, each carrying different signal quality for AI drift detection.
 
 | Category | Formula | Per-commit flag | Summary field |
 |----------|---------|----------------|---------------|
-| Test Coverage | test AND prod files in same commit | `test_first_indicator` | `test_coverage_rate` |
+| Test Coverage | test AND prod files in same commit | `test_prod_cochange_commit` | `test_coverage_rate` |
 | Test Isolation | test files only (no prod files) | `test_only_commit` | `test_isolation_rate` |
 | Uncovered Prod | prod files only AND large commit | `uncovered_prod_commit` | `uncovered_prod_rate` |
 
@@ -344,15 +348,44 @@ same teens-to-thirties range as the 23% derived here.
 
 **Why `uncovered_prod_rate` matters**: A commit that is both prod-only and large is the clearest AI drift signal in this toolkit — it matches the pattern of a developer accepting a large AI-generated code block without writing any tests. `test_isolation_rate` is a positive signal: test-only commits indicate TDD red-phase work or deliberate test improvements, both of which the binary metric incorrectly classified as "bad".
 
-**The same-commit heuristic is a published-noisy proxy for what this metric reaches for.**
-`test_coverage_rate` and `test_first_indicator` measure co-occurrence in one commit, not
-sequencing. Sun et al. (TOSEM 2023) exists specifically to test whether same-commit
-co-occurrence identifies genuine test/production co-evolution and reports "the pervasive
-existence of noise". Borle et al. (EMSE 2018) make the same point in their own threats-to-validity
-section: "In a git history, test first could look like testing at the same time, or even testing
-later depending on how the git commits were formed." This does not change what the field measures
-in this release -- `test_first_indicator` still means same-commit co-occurrence, exactly as coded
-in `lib/git.js` -- but the label should not be read as evidence of test-first *sequencing*.
+**The same-commit heuristic is a published-noisy proxy for what this metric reaches for, which is
+why the per-commit flag is named for co-occurrence rather than ordering.** `test_coverage_rate`
+and `test_prod_cochange_commit` measure co-occurrence in one commit, not sequencing. The field was
+previously named `test_first_indicator`, a name this project has withdrawn (code-quality-metrics-36d)
+because it asserted an ordering the same-commit check cannot observe. Three peer-reviewed sources
+support the withdrawal:
+
+- Sun, Yan, Liu, Xia, Lei & Lo (TOSEM 32(6) art. 152, 2023, doi 10.1145/3607183) exist
+  specifically to test whether same-commit co-occurrence identifies genuine test/production
+  co-evolution and report "the pervasive existence of noise" in samples identified this way, with
+  a six-category noise taxonomy.
+- Borle, Feghhi, Stroulia, Greiner & Hindle (EMSE 2018, doi 10.1007/s10664-017-9576-3) make the
+  same point in their own threats-to-validity section: "In a git history, test first could look
+  like testing at the same time, or even testing later depending on how the git commits were
+  formed."
+- Marsavina, Romano & Zaidman (SCAM 2014, Section V.A) report that test changes triggered by a
+  production change often land in a *later* commit rather than the same one, so "a number of
+  subsequent commits have to be inspected" before the pairing this metric looks for would even
+  appear.
+
+`test_prod_cochange_commit` still means same-commit co-occurrence, exactly as coded in
+`lib/git.js`, and the rename does not change what it measures or claim the noise these sources
+document has been resolved -- it only stops the field's own name from making a claim (test-first
+sequencing) the measurement cannot support. The rename also penalises, by omission, the deliberate
+practice of landing a failing test and its production code as two separate atomic commits: that
+practice looks identical to test-after work under this same-commit check.
+
+Fucci, Turhan & Oivo (TSE 43(7):597-614, 2017) bear on the same question from a different angle: in
+their controlled study, *sequencing* (the share of test-first development cycles) dropped out of
+both their quality and productivity models, while *granularity* (cycle length) and *uniformity*
+(consistency of cycle length) survived as predictors. That result points toward commit size and
+batch consistency, both of which this toolkit already measures (Metrics 1 and 4), as the
+better-founded proxies for the underlying practice this metric reaches for, rather than ordering.
+
+**No study cited here relates a co-change rate to a defect or other quality outcome.** Nothing in
+this section, or in `test_coverage_rate`'s calibrated band above, should be read as
+quality-validated: the band says where this population's rate sits relative to a six-repository
+benchmark, not that a higher rate produces fewer defects or higher quality code.
 
 **DORA connection**: none directly. Automated testing is not among the seven capabilities in DORA's 2025 AI Capabilities Model (*State of AI-Assisted Software Development 2025*, p. 50), which names clear AI stance, healthy data ecosystems, AI-accessible internal data, strong version control practices, working in small batches, user-centric focus, and quality internal platforms. This metric rests on general software engineering practice, not on a DORA finding. An earlier version of this document called testing DORA's "single strongest predictor"; that claim was not supported by the report and has been removed.
 
@@ -367,8 +400,8 @@ in `lib/git.js` -- but the label should not be read as evidence of test-first *s
 p50_lines_changed    : median commit size (lines)
 p90_lines_changed    : 90th percentile commit size
 p95_lines_changed    : 95th percentile commit size
-stddev_lines_changed : standard deviation
-avg_lines_changed    : mean (kept for backwards compatibility)
+stddev_lines_changed : standard deviation (informational only -- see below; not a scored metric)
+avg_lines_changed    : mean (informational only -- see below; kept for backwards compatibility)
 commit_size_trend    : "growing" | "stable" | "shrinking"
 ```
 
@@ -384,12 +417,30 @@ slope < 0: "shrinking"
 
 **Risk signal**: `commit_size_trend: "growing"` combined with `velocity_trend: "accelerating"`. This is a hypothesis held by this toolkit, not a DORA finding. The phrase "volume without discipline" was previously attributed to DORA here; it appears in no DORA publication and has been removed.
 
-**Thresholds** (`AVG_LINES_CHANGED` and `P90_LINES_CHANGED` in `lib/thresholds.js`):
+**No band for `avg_lines_changed` (`code-quality-metrics-6dg`)**: `avg_lines_changed` and
+`stddev_lines_changed` are reported descriptively, with no healthy/critical boundary and no
+gauge -- `AVG_LINES_CHANGED` no longer has a key in `lib/thresholds.js` at all, and it is not
+merely re-tiered. Three independent published fits agree the per-commit line-count population is
+heavy-tailed with no finite mean: Kolassa, Riehle and Salim (SOFSEM 2013, Table 2; arXiv:1408.4974)
+fit a Generalized Pareto Distribution to 8.7 million commits with shape ξ = 1.4617 (a GPD has a
+finite mean only when ξ < 1 and finite variance only when ξ < 0.5 -- this population has neither);
+Arafat and Riehle (HICSS 2009, Table 4) independently fit a power law with exponent −1.8612 on the
+same underlying database; Hattori and Lanza (EVOL 2008, §3) confirm a Pareto fit by Q-Q plot for
+files per commit across nine projects. Kolassa's own empirical table (Table 1) shows the practical
+consequence directly: mean 465.72 sits above the reported 90th percentile (261) of the same
+distribution, against a median of 16 -- the mean is not a stable center of this population, and
+the standard deviation built on that mean is not a meaningful dispersion measure for a
+distribution whose variance is itself undefined. This toolkit's own calibration data independently
+rediscovered the same failure mode: `calibration/observations.json` records windows excluded
+because a single vendored import or translation sync destroyed the mean while the percentile and
+count metrics in the same window survived unaffected. The average and standard deviation are still
+reported for reference -- removing the fields would be a breaking change to `local_metrics_
+summary.json`'s schema for both GitHub Actions workflows and any other consumer -- but neither
+carries a verdict; the percentiles below carry the load this band used to carry.
+
+**Thresholds** (`P90_LINES_CHANGED` in `lib/thresholds.js`):
 | Metric | Range | Signal |
 |--------|-------|--------|
-| `avg_lines_changed` | ≤ 140 | Healthy: at or below the 75th percentile of the benchmark (three-band; nodejs/node and postgres/postgres both corroborate the extreme) |
-| `avg_lines_changed` | 140–200 | Warning |
-| `avg_lines_changed` | > 200 | Critical |
 | `p90_lines_changed` | ≤ 260 | Healthy: at or below the 75th percentile of the benchmark (two-band; only nodejs/node sits near the extreme, so no critical bound is reported) |
 | `p90_lines_changed` | > 260 | Warning |
 
@@ -402,6 +453,30 @@ opposite directions. Neither source proposes 260 or 261 as a healthy line; both 
 percentiles. What is citable is a position, not a boundary: this repository sits above the 90th
 percentile of a large published open-source commit-size distribution, not that it has crossed a
 review-effectiveness threshold.
+
+**Limitation: sampling variance of a high quantile from a heavy-tailed distribution
+(`code-quality-metrics-6dg`)**: No source reviewed by this project estimates the sampling
+variance of a percentile computed on a heavy-tailed distribution, and this is a genuine gap in
+the literature, not merely an omission here. This toolkit computes `p90_lines_changed` over
+windows as small as 50 commits, where the empirical p90 is the 45th order statistic of that
+window -- a single-sample estimate whose own variance is unknown and, given the tail shape above,
+plausibly large. `calibration/derive-bands.js` compounds this by taking the 75th percentile of
+twelve such per-repo p90 values to set the `healthy` bound: a percentile of a percentile, with no
+published method to say how stable that second-order statistic is either. Hattori and Lanza make
+a direct, related objection to splitting Pareto-distributed commit populations into quantiles at
+all:
+
+> "Since commits follow a Pareto distribution, it does not make sense to split them into
+> quartiles, for example, because the number of commits with only one file is around the 50th
+> percentile in most cases. Although we could use the approximate distribution function found for
+> each project to calculate an exact division, this is not a generalized approach that could be
+> directly applied to other open source projects." (EVOL 2008, §3, p. 4)
+
+No published method reviewed here resolves either problem, and this toolkit does not attempt to
+invent one. State the limitation plainly: `p90_lines_changed` and the calibrated band built on it
+should be read as a rough position, not a precisely estimated boundary, and a project's own p90
+can plausibly move a large amount between two 50-commit windows for reasons that have nothing to
+do with a change in practice.
 
 ---
 
@@ -434,6 +509,19 @@ are descriptive percentiles from unrelated populations, not proposed healthy lin
 support is the restatement "this repository's file-scope sits above the 90th percentile of these
 published distributions", not a claim that a review-effectiveness or architectural-scatter
 threshold has been crossed.
+
+**Limitation: sampling variance of a high quantile from a heavy-tailed distribution
+(`code-quality-metrics-6dg`)**: The same gap documented in Metric 4 applies here, and this is the
+metric Hattori and Lanza measured directly: they count commit size in files, the exact unit of
+this metric, over 72,351 commits across nine projects, and found "almost all q-q plots
+approximate a straight line, which confirms that they follow a Pareto distribution" (EVOL 2008,
+§3) before objecting explicitly to splitting such a population into quantiles at all (quoted in
+full in Metric 4). `p90_files_changed` is computed over windows as small as 50 commits (the 45th
+order statistic of that window), and `calibration/derive-bands.js` then takes the 75th percentile
+of twelve such per-repo p90 values to set the `healthy` bound above -- a percentile of a
+percentile, with no published method available to estimate how stable either statistic is on a
+population this shaped. Read the resulting bound as a rough position, not a precisely estimated
+boundary.
 
 ---
 
@@ -617,13 +705,19 @@ matched by `DUPLICATE_IGNORE_PATTERNS`.
 `node_modules/`, `generated/` and common lock files — added after a vendored `deps/` sync on
 nodejs/node moved measured duplication from 5.12% to 15.09% with no change in practice).
 
-**Thresholds** (`DUPLICATION_PCT` in `lib/thresholds.js`; three-band, corroborated at the
-critical extreme by nodejs/node, postgres/postgres and curl/curl):
+**Thresholds** (`DUPLICATION_PCT` in `lib/thresholds.js`; two-band, no corroborated critical
+extreme: only curl/curl sits within 15% of the worst observed value):
 | Range | Signal |
 |-------|--------|
-| ≤ 6% | Healthy: at or below the 75th percentile of the benchmark |
-| 6–6.5% | Warning |
-| > 6.5% | Critical: at or above the worst value three reference repositories all produced |
+| ≤ 2% | Healthy: at or below the 75th percentile of the benchmark |
+| > 2% | Warning |
+
+Re-derived at `DUPLICATE_MIN_LINES` 10 and `DUPLICATE_MIN_TOKENS` 100 (`code-quality-metrics-8ad`).
+The prior band, healthy 6 and critical 6.5 as three-band, was derived at 5/50 and left in place
+when the detector was raised, so duplication was scored roughly three times more permissively
+than the reference set warranted, against a critical line the re-measured data does not support.
+**A band on this metric is comparable only at the detector settings it was derived at**, which is
+now gated by `__tests__/thresholdProvenance.test.js`.
 
 **The literature does not support reading duplication as a defect signal.** Rahman, Bird and
 Devanbu (MSR 2010, four C projects, 116-155 monthly snapshots each): "we find that clones may be
@@ -657,48 +751,93 @@ failed or skipped call cannot be read as a clean result.
 
 ## Derived Metrics
 
-### Per-Commit Outlier Flag
+### Per-Commit Outlier Flag (withdrawn)
 
-**What it measures**: Whether an individual commit is a statistical outlier relative to the rest of the analysis window.
+**Status**: withdrawn under code-quality-metrics-496. This toolkit no longer computes or reports
+a per-commit outlier flag. `local_commit_metrics.json` no longer includes an `outlier` field.
 
-**Formula**:
-```
-mean_lines   = mean(all commit sizes)
-stddev_lines = standardDeviation(all commit sizes)
-outlier      = (total_additions + total_deletions) > (mean_lines + 2 × stddev_lines)
-```
+**What it used to measure**: whether an individual commit was a statistical outlier relative to
+the rest of the analysis window, originally `outlier = size > mean + 2 × stddev`.
 
-**Per-commit field**: `outlier: boolean`
+**Why it was withdrawn, not re-tuned**: the original rule was non-monotonic in the wrong
+direction. Because mean and stddev are not stable statistics for this distribution (a generalized
+Pareto with shape 1.4617 has no finite mean, and no finite variance above shape 0.5 — see Metric
+4's heavy-tail discussion), adding one sufficiently large commit to a window pulled the cutoff up
+enough to un-flag commits that were already flagged, even though those commits did not change
+size. Measured on a 39-commit window (max 2925 lines): the cutoff was 1721, flagging
+1800/2200/2925; adding one 6518-line commit raised the cutoff to 2867 and un-flagged 1800 and
+2200; adding two more extreme commits raised it to 5873 and un-flagged 2925 as well. The worse the
+drift in a window, the fewer commits the old rule flagged — the inverse of what the flag was for.
 
-**Use**: Displayed in the sample commits table in console output. Useful for manual investigation: outlier commits are the ones most likely to warrant direct review.
+Two candidate replacements were measured and rejected in turn:
+
+- **A bare p95 cutoff** (already computed, and the first candidate this issue proposed) inverts
+  on the same reproduction: adding the 6518-line commit un-flags 2200 (cutoff moves 1840 → 2236).
+  A window-relative percentile is still pulled toward a newly added extreme value near the tail.
+- **A Tukey fence (Tukey, 1977) on log-transformed commit sizes**, at the "far out" 3×IQR
+  multiplier, does not invert on that same reproduction (Q1/Q3 sit deep in the body rather than
+  near the tail, so one added extreme value shifts them only by the gap between two pre-existing
+  body values). But on the bug's own realistic window shape — a body itself spanning orders of
+  magnitude (single-digit to several-hundred-line commits, median 90) rather than the narrow body
+  used in the first reproduction — the log-scale IQR is large enough that the fence lands in the
+  tens of thousands of lines: it required upward of ~28,600 lines to fire at all in that window,
+  and never fired on the bug's own measured commits (1800–12000 lines). A rule that never fires on
+  the distribution it targets passed a monotonicity test only because nothing was ever flagged —
+  the same vacuous-green shape as an always-false predicate, just reached by a real formula rather
+  than a stub.
+
+A wider sweep (6 rules — Tukey at k=1.5/2/3 on raw values, Hampel at k=3/5/8 — over 3000
+randomized heavy-tailed windows, each grown by appending 1–3 larger values) found every
+window-relative rule violates monotonicity 45–70% of the time. An absolute cutoff scores 0%
+violations by construction, because it does not depend on the window's contents, but no absolute
+multiplier of `CONFIG.LARGE_COMMIT_THRESHOLD` has any empirical grounding — introducing one here
+would reintroduce exactly the kind of unbacked magic number this toolkit removed elsewhere (see
+code-quality-metrics-251 and code-quality-metrics-4hu). Consistent with how this project handled
+`message_quality_pct`'s and `net_additions_ratio_median`'s bands (see Metric 7, Metric 8, and the
+Key Metrics table in `CLAUDE.md`): when a construct cannot support its claim, the claim is
+withdrawn rather than shipped in a weaker form.
+
+**What still covers this need**: `p50_lines_changed`, `p90_lines_changed`, and
+`p95_lines_changed` in `local_metrics_summary.json` describe the window's distribution without
+claiming any single commit is exceptional. `large_commit` (Metric 1) remains as the absolute,
+non-window-relative size flag — its threshold is a calibrated band position, not a per-window
+statistic, so it does not have this monotonicity problem.
+
+**Known residual**: `lib/git.js`'s `analyzeCommit` still stamps a placeholder `outlier: false` on
+every commit object it returns; `local-code-metrics.js` deletes the field before writing
+`local_commit_metrics.json` so the withdrawn construct does not resurface as a silent, permanent
+`false`. Removing the placeholder at its source in `lib/git.js` is left as follow-up work, since
+`lib/git.js` was out of scope for this fix.
 
 ---
 
 ### DORA Archetype Classification
 
-**What it measures**: Which of four DORA team archetypes best describes the commit patterns in the analysis window. This is a heuristic classification based on the composite of all eight metrics, intended to contextualize threshold readings rather than replace them.
+**What it measures**: Which of four DORA-named team archetypes best describes the commit patterns in the analysis window. This is a heuristic classification based on four of the eight metrics above (large commits, sprawling commits, test coverage rate, uncovered prod rate), intended to contextualize threshold readings rather than replace them. Message quality plays no part in it: its own band was demoted to informational (see Metric 8), and scoring this archetype against an un-banded metric would reinstate the exact verdict that removal rejected.
 
-**Classification logic** (evaluated in order):
+**Classification logic** (evaluated in order; `classifyDoraArchetype` in `lib/metrics.js` reads each boundary directly from `THRESHOLDS` in `lib/thresholds.js`, not a separate copy, so a recalibration of any of these bands moves this classifier's boundary too):
 
 ```
 harmonious-high-achiever:
-  large_commits_pct < 20
-  AND sprawling_commits_pct < 10
-  AND test_coverage_rate > 50
-  AND uncovered_prod_rate < 10
-  AND message_quality_pct > 60
+  large_commits_pct < LARGE_COMMITS_PCT.healthy        (currently 19)
+  AND sprawling_commits_pct < SPRAWLING_COMMITS_PCT.healthy   (currently 18)
+  AND test_coverage_rate > TEST_COVERAGE_RATE.healthy  (currently 23)
+  AND uncovered_prod_rate < UNCOVERED_PROD_RATE.healthy (currently 13)
 
 legacy-bottleneck:
-  sprawling_commits_pct > 25
-  AND large_commits_pct > 30
+  sprawling_commits_pct > SPRAWLING_COMMITS_PCT.critical (currently 20)
+  AND large_commits_pct > LARGE_COMMITS_PCT.critical      (currently 30)
 
 foundational-challenges:
-  large_commits_pct > 40
-  OR uncovered_prod_rate > 20
+  large_commits_pct > LARGE_COMMITS_PCT.critical          (currently 30)
 
 mixed-signals:
   (all other combinations)
 ```
+
+`uncovered_prod_rate` is a two-band metric with no `.critical` value (see Metric 3), so
+`foundational-challenges` has only the large-commit path above; it no longer has a second,
+test-discipline path.
 
 **Field**: `dora_archetype: "harmonious-high-achiever" | "foundational-challenges" | "legacy-bottleneck" | "mixed-signals"`
 
@@ -707,8 +846,8 @@ mixed-signals:
 | Archetype | What It Suggests |
 |-----------|-----------------|
 | `harmonious-high-achiever` | Strong foundation; AI tools likely amplifying positive outcomes |
-| `foundational-challenges` | Weak testing/batch discipline; AI tools likely accelerating debt |
-| `legacy-bottleneck` | Architectural scatter; AI making cross-cutting changes worse |
+| `foundational-challenges` | Elevated large-commit rate alone; AI tools likely accelerating debt |
+| `legacy-bottleneck` | Architectural scatter combined with large commits; AI making cross-cutting changes worse |
 | `mixed-signals` | Inconsistent patterns; investigate specific outliers |
 
 **Limitation**: This classification is based on a 30-day window of at most 50 commits. It is a directional signal, not a definitive assessment. Teams near archetype boundaries should look at individual metric thresholds, not just the archetype label.
@@ -844,6 +983,11 @@ const CONFIG = {
   LARGE_COMMIT_THRESHOLD: 100,        // lines changed threshold for large_commit flag
   SPRAWLING_COMMIT_THRESHOLD: 5,      // files changed threshold for sprawling_commit flag
 
+  // Paths excluded from the commit-shape metrics entirely (code-quality-metrics-y8j):
+  // a matched path counts as neither test nor production. Default is empty, deliberately --
+  // see "What ANALYSIS_IGNORE_PATTERNS fixes here, and what it does not" above.
+  ANALYSIS_IGNORE_PATTERNS: [],
+
   // Message quality
   MESSAGE_QUALITY_MIN_WORDS: 10,      // minimum word count for a "specific" message
                                       // (applies when message doesn't match conventional format)
@@ -894,13 +1038,24 @@ Array of `CommitMetric` objects, one per analyzed commit:
   test_files_count: number,
   prod_files_count: number,
 
+  // Excluded and vendored/generated volume (code-quality-metrics-1tp, -3b6). Excluded fields
+  // are 0 unless ANALYSIS_IGNORE_PATTERNS is configured; vendored_default_* is computed
+  // always, against DUPLICATE_IGNORE_PATTERNS's own defaults, regardless of configuration.
+  excluded_files_count: number,
+  excluded_additions: number,
+  excluded_deletions: number,
+  vendored_default_files_count: number,
+  vendored_default_additions: number,
+  vendored_default_deletions: number,
+
   // Derived flags
-  test_first_indicator: boolean,
+  test_prod_cochange_commit: boolean,
   large_commit: boolean,
   sprawling_commit: boolean,
   change_ratio: string,         // "X.XX" or "inf"
-  outlier: boolean,             // true if > mean + 2σ for this analysis window
   commit_type: "feature_branch" | "trunk",  // "trunk" when the repo has no feature branches (see workflow_type below)
+  // Note: no `outlier` field. The per-commit outlier flag was withdrawn (code-quality-metrics-496);
+  // see the Derived Metrics > Per-Commit Outlier Flag (withdrawn) section above.
 
   // Message quality (new)
   message_quality: boolean,     // true if message meets quality threshold
@@ -928,6 +1083,21 @@ Single summary object for the analysis run:
   workflow_type: "feature_branch" | "trunk",  // "trunk" when no feature branches exist; the default branch was analyzed directly
   branches_analyzed: string[],      // feature branches found, or [resolved default branch] when workflow_type is "trunk"
   branch_commit_counts: Record<string, number>,
+
+  // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
+  // is the same defect class as the silent inclusion code-quality-metrics-y8j fixes.
+  analysis_exclusions: {
+    patterns: string[],             // effective ANALYSIS_IGNORE_PATTERNS, [] by default
+    excluded_files_count: number,
+    excluded_lines_count: number,
+    excluded_lines_pct: string      // "XX.XX", share of total lines analyzed
+  },
+  vendored_generated_share: {
+    patterns: string[],             // DUPLICATE_IGNORE_PATTERNS's own defaults, always non-empty
+    files_count: number,
+    lines_count: number,
+    lines_pct: string               // "XX.XX", computed even when nothing is configured
+  },
 
   // Core metrics
   large_commits_pct: string,        // "XX.XX"
@@ -999,8 +1169,11 @@ directory; it does not shell out to git or recompute any metric from source.
 ### Threshold Source of Truth
 
 `lib/thresholds.js` holds the healthy/warning/critical boundary for every
-metric in a single `THRESHOLDS` object, for example
-`LARGE_COMMITS_PCT: { healthy: 20, critical: 40 }`. Both `lib/metrics.js`
+metric that carries one in a single `THRESHOLDS` object, for example
+`LARGE_COMMITS_PCT: { healthy: 19, critical: 30 }`. Message quality and net
+additions ratio carry no key here at all — both were demoted to
+informational, reported without a verdict (see each one's own comment in
+`lib/thresholds.js` and Metrics 7 and 8 below). Both `lib/metrics.js`
 (which classifies individual commits and drives the console report and DORA
 archetype logic) and `lib/report.js` (which builds the drift report's metric
 catalog and gauge bands) read their boundaries from this same object. Moving

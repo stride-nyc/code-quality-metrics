@@ -24,7 +24,7 @@ jobs:
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
             const { THRESHOLDS } = require('./lib/thresholds');
-            const { scoreMessageQuality, classifyDoraArchetype, isTestFile } = require('./lib/metrics');
+            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath } = require('./lib/metrics');
             const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
             const { getAnthropicClient, analyzeDuplicatesWithClaude } = require('./lib/claude');
 
@@ -54,6 +54,27 @@ jobs:
               per_page: 100
             });
 
+            // Verified NOT affected by the merge double-count fixed in code-metrics.yml under
+            // code-quality-metrics-9vg (which lists commits per branch via listCommits/getCommit
+            // and can retain a two-parent merge alongside the child it duplicates). Two reasons,
+            // both structural rather than incidental:
+            //   1. pulls.listCommits lists only commits reachable from the PR head that are not
+            //      already reachable from the PR base -- the same shape as `git log base..head`.
+            //      The merge commit GitHub's "Merge pull request" button creates lands on the
+            //      base branch, and only exists once the PR merges. This workflow runs on
+            //      `opened`/`synchronize`, strictly before that merge commit exists, so it can
+            //      never appear in this PR's own commit list.
+            //   2. A merge commit can still appear here if a contributor merges another branch
+            //      (e.g. the base) into their PR branch mid-review. But getCommit diffs it
+            //      against its first parent, which is the PR's own preceding commit -- not a
+            //      sibling already present in this same commits array -- so that diff does not
+            //      reproduce any other entry already being counted. The exact-duplicate shape
+            //      the fix addresses (merge and child both present, both showing identical
+            //      stats) requires the merge's *child* to independently appear in the same
+            //      listing, which a PR's own commit history does not produce.
+            // No filtering added here as a result. If PR history ever includes a merge commit
+            // whose second parent is itself later force-included (e.g. two open PRs sharing
+            // a merge sha), re-open code-quality-metrics-9vg rather than re-deriving this.
             const commits = await github.paginate(github.rest.pulls.listCommits, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -63,8 +84,13 @@ jobs:
 
             console.log(`Analyzing ${commits.length} commits and ${files.length} files in PR`);
 
-            const testFiles = files.filter(f => isTestFile(f.filename));
-            const prodFiles = files.filter(f => !isTestFile(f.filename));
+            // A path matching ANALYSIS_IGNORE_PATTERNS counts as neither test nor production
+            // (code-quality-metrics-4fc, mirroring lib/git.js's analyzeCommit under
+            // code-quality-metrics-1tp): excluded from classification and from the file
+            // count sprawling_commit is judged against below.
+            const countableFiles = files.filter(f => !isExcludedPath(f.filename));
+            const testFiles = countableFiles.filter(f => isTestFile(f.filename));
+            const prodFiles = countableFiles.filter(f => !isTestFile(f.filename));
 
             // ---------------------------------------------------------------
             // Per-commit analysis
@@ -79,8 +105,12 @@ jobs:
                   ref: commit.sha
                 });
 
-                const commitTestFiles = detail.data.files?.filter(f => isTestFile(f.filename)) || [];
-                const commitProdFiles = detail.data.files?.filter(f => !isTestFile(f.filename)) || [];
+                // Same exclusion as the PR-level countableFiles above (code-quality-metrics-4fc):
+                // files_changed below stays the raw, honest count.
+                const commitAllFiles = detail.data.files || [];
+                const commitCountableFiles = commitAllFiles.filter(f => !isExcludedPath(f.filename));
+                const commitTestFiles = commitCountableFiles.filter(f => isTestFile(f.filename));
+                const commitProdFiles = commitCountableFiles.filter(f => !isTestFile(f.filename));
 
                 const prodChanges = commitProdFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0);
                 const testChanges = commitTestFiles.reduce((sum, f) => sum + f.additions + f.deletions, 0);
@@ -94,15 +124,20 @@ jobs:
                   message,
                   author: commit.commit.author.name,
                   date: new Date(commit.commit.author.date).toLocaleDateString(),
-                  files_changed: detail.data.files?.length || 0,
+                  files_changed: commitAllFiles.length,
                   prod_files: commitProdFiles.length,
                   test_files: commitTestFiles.length,
                   prod_changes: prodChanges,
                   test_changes: testChanges,
                   total_changes: detail.data.stats.additions + detail.data.stats.deletions,
                   large_commit: prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
-                  sprawling_commit: (detail.data.files?.length || 0) > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
-                  test_first_indicator: commitTestFiles.length > 0 && commitProdFiles.length > 0,
+                  sprawling_commit: commitCountableFiles.length > CONFIG.SPRAWLING_COMMIT_THRESHOLD,
+                  // Same-commit co-occurrence, not an ordering claim -- see
+                  // code-quality-metrics-36d and lib/git.js's analyzeCommit for the
+                  // citations (Sun et al. TOSEM 2023, Borle et al. EMSE 2018,
+                  // Marsavina et al. SCAM 2014) behind renaming this away from
+                  // test_first_indicator.
+                  test_prod_cochange_commit: commitTestFiles.length > 0 && commitProdFiles.length > 0,
                   test_only_commit: commitTestFiles.length > 0 && commitProdFiles.length === 0,
                   uncovered_prod_commit: commitTestFiles.length === 0 && commitProdFiles.length > 0 && prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD,
                   test_only: commitTestFiles.length > 0 && commitProdFiles.length === 0,
@@ -149,7 +184,7 @@ jobs:
 
             const largeCommits = commitMetrics.filter(c => c.large_commit).length;
             const sprawlingCommits = commitMetrics.filter(c => c.sprawling_commit).length;
-            const testFirstCommits = commitMetrics.filter(c => c.test_first_indicator).length;
+            const cochangeCommits = commitMetrics.filter(c => c.test_prod_cochange_commit).length;
             const testOnlyCommits = commitMetrics.filter(c => c.test_only).length;
             const prodOnlyCommits = commitMetrics.filter(c => c.prod_only).length;
             const qualityCommits = commitMetrics.filter(c => c.message_quality).length;
@@ -164,8 +199,8 @@ jobs:
 
             const largePct = commitMetrics.length > 0 ? (largeCommits / commitMetrics.length * 100) : 0;
             const sprawlingPct = commitMetrics.length > 0 ? (sprawlingCommits / commitMetrics.length * 100) : 0;
-            const testFirstPct = commitMetrics.length > 0 ? (testFirstCommits / commitMetrics.length * 100) : 0;
-            const testCoveragePct = testFirstPct;
+            const cochangePct = commitMetrics.length > 0 ? (cochangeCommits / commitMetrics.length * 100) : 0;
+            const testCoveragePct = cochangePct;
             const uncoveredProdPct = commitMetrics.length > 0 ? (commitMetrics.filter(c => c.uncovered_prod_commit).length / commitMetrics.length * 100) : 0;
             const msgQualityPct = commitMetrics.length > 0 ? (qualityCommits / commitMetrics.length * 100) : 0;
 
@@ -177,6 +212,33 @@ jobs:
             })();
 
             // ---------------------------------------------------------------
+            // Minimum-sample guard for rate verdicts (code-quality-metrics-w9f)
+            // ---------------------------------------------------------------
+
+            // THRESHOLDS.LARGE_COMMITS_PCT, .SPRAWLING_COMMITS_PCT and .TEST_COVERAGE_RATE are
+            // calibrated from 50-commit repo-window samples (see lib/thresholds.js). A rate over
+            // this PR's own n=1..~10 commits can only take a handful of discrete values (0%,
+            // 1/n%, ..., 100%), so at n=1 the rate is either 0% or 100% and comparing it to a
+            // p75-of-window band is not a meaningful comparison -- the same reasoning that
+            // already kept P90_FILES_CHANGED off prodFilesCount above (a p90 across many commits
+            // in a time window is not the same measurement as one PR's raw count). Below this
+            // guard, the rate is still reported (DORA table, Commit Analysis table) but no
+            // pass/fail verdict is drawn from it.
+            //
+            // MIN_COMMITS_FOR_RATE_VERDICT is a convention chosen for this guard, not a value
+            // derived from calibration/observations.json or any cited source -- unlike the
+            // bands it gates comparisons against. Nothing in the calibration data speaks to how
+            // small a sample can get before a rate stops being informative; 5 is picked only as
+            // a round number clearly smaller than the 50-commit windows the bands were derived
+            // from, and clearly large enough that a single commit cannot swing the rate between
+            // 0% and 100%.
+            const MIN_COMMITS_FOR_RATE_VERDICT = 5;
+            const hasEnoughCommitsForRateVerdict = commitMetrics.length >= MIN_COMMITS_FOR_RATE_VERDICT;
+            const smallSampleNote = (commitMetrics.length > 0 && !hasEnoughCommitsForRateVerdict)
+              ? `_Sample size (${commitMetrics.length} commit${commitMetrics.length === 1 ? '' : 's'}) is below the ${MIN_COMMITS_FOR_RATE_VERDICT}-commit convention for a rate verdict (code-quality-metrics-w9f): large-commit %, sprawling-commit % and test/prod co-change rate are reported below without a pass/fail judgement._`
+              : '';
+
+            // ---------------------------------------------------------------
             // Development pattern detection
             // ---------------------------------------------------------------
 
@@ -184,11 +246,22 @@ jobs:
               /refactor|cleanup|reorganize|extract|rename/i.test(c.message)
             );
 
-            const hasIncrementalPattern = commitMetrics.length > 1 &&
-              commitMetrics.every(c => c.prod_changes < 200);
+            // hasIncrementalPattern withdrawn (code-quality-metrics-4hu): every commit under a
+            // hardcoded 200 production-line cutoff had no calibration basis at all, and no
+            // repo-window statistic in lib/thresholds.js measures the same thing (a single
+            // commit's raw line count, not a distribution percentile). avgCommitSize is already
+            // reported below in the Commit Analysis table, so no information is lost by dropping
+            // the pattern claim.
 
-            const hasTestDiscipline = commitMetrics.length > 0 &&
-              (testFirstCommits / commitMetrics.length) > 0.5;
+            // hasHighCochangeRate now gates on THRESHOLDS.TEST_COVERAGE_RATE.healthy instead of an
+            // uncalibrated 50% cutoff (code-quality-metrics-4hu): cochangePct is the same
+            // construct test_coverage_rate bands (same-commit test+prod co-occurrence rate, not
+            // an ordering claim -- code-quality-metrics-36d), just measured over this PR's
+            // commits instead of a repo-window sample. Also gated on
+            // hasEnoughCommitsForRateVerdict (code-quality-metrics-w9f): below that sample size
+            // the rate is not compared to the band at all.
+            const hasHighCochangeRate = hasEnoughCommitsForRateVerdict &&
+              cochangePct > THRESHOLDS.TEST_COVERAGE_RATE.healthy;
 
             // ---------------------------------------------------------------
             // Size classification
@@ -198,39 +271,54 @@ jobs:
             const concerns = [];
             const strengths = [];
 
-            if (prodChanges > 500) {
-              sizeLabel = 'extra-large';
-              concerns.push('Very large production changes - consider breaking into smaller PRs');
-            } else if (prodChanges > 200) {
+            // The >500 and >200 tiers this used to carry (extra-large / large, each with its own
+            // concern) are withdrawn (code-quality-metrics-4hu): neither had a calibration basis,
+            // and 500 is the same magic number already withdrawn from code-metrics.yml's p90
+            // bullet under code-quality-metrics-251. Only the >100 tier remains, referencing
+            // CONFIG.LARGE_COMMIT_THRESHOLD instead of a separate hardcoded literal, since that
+            // setting already has a home (it is the same detector setting large_commit applies
+            // per-commit above). prodChanges is already reported above in the Production Code
+            // breakdown, so no information is lost by dropping the finer-grained tiers.
+            if (prodChanges > CONFIG.LARGE_COMMIT_THRESHOLD) {
               sizeLabel = 'large';
-              concerns.push('Large production changes - review carefully');
-            } else if (prodChanges > 100) {
-              sizeLabel = 'medium';
             }
 
-            if (prodFilesCount > 10) {
-              concerns.push('Many production files changed - possible scope creep');
+            // prodFilesCount > 10 concern withdrawn (code-quality-metrics-4hu): no calibration
+            // basis, and P90_FILES_CHANGED (healthy 8) measures a different statistic -- a p90
+            // across many commits in a time window, not a single PR's raw file count -- so
+            // forcing that band onto this literal would be the wrong-unit mistake this project
+            // has already made once with squashed history. prodFilesCount is already reported
+            // above in the Production Code breakdown.
+
+            // largeCommits/sprawlingCommits concerns now gate on the calibrated critical bounds
+            // the DORA table below already displays for the identical construct (percentage of
+            // commits flagged large/sprawling within this PR's commit sample), rather than the
+            // previously uncalibrated 50%/30% cutoffs (code-quality-metrics-4hu). The message
+            // text also now interpolates CONFIG.LARGE_COMMIT_THRESHOLD/SPRAWLING_COMMIT_THRESHOLD
+            // instead of restating 100/5 as separate literals (code-quality-metrics-vom). Both
+            // are also gated on hasEnoughCommitsForRateVerdict (code-quality-metrics-w9f): at
+            // n=1 a rate can only be 0% or 100%, so comparing it to a window-calibrated critical
+            // bound is not a meaningful comparison below that sample size.
+            if (hasEnoughCommitsForRateVerdict &&
+                largeCommits > commitMetrics.length * (THRESHOLDS.LARGE_COMMITS_PCT.critical / 100)) {
+              concerns.push(`${largeCommits}/${commitMetrics.length} commits exceed ${CONFIG.LARGE_COMMIT_THRESHOLD} production lines`);
             }
 
-            if (largeCommits > commitMetrics.length * 0.5) {
-              concerns.push(`${largeCommits}/${commitMetrics.length} commits exceed 100 production lines`);
+            if (hasEnoughCommitsForRateVerdict &&
+                sprawlingCommits > commitMetrics.length * (THRESHOLDS.SPRAWLING_COMMITS_PCT.critical / 100)) {
+              concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than ${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files`);
             }
 
-            if (sprawlingCommits > commitMetrics.length * 0.3) {
-              concerns.push(`${sprawlingCommits}/${commitMetrics.length} commits touch more than 5 files`);
-            }
+            // Message quality verdict withdrawn (code-quality-metrics-4hu): this used to push a
+            // concern against a hardcoded 40% cutoff while the DORA table two sections below
+            // states "no band, see spec" for the same value -- a contradiction inside one PR
+            // comment. MESSAGE_QUALITY_PCT carries no key in lib/thresholds.js (the metric was
+            // found to measure Conventional Commits adoption rather than informativeness, and
+            // 40 was never derived from anything). The value is still reported, without a
+            // verdict, in the DORA table and the Commit Analysis table below.
 
-
-            if (msgQualityPct < 40) {
-              concerns.push(`Message quality ${msgQualityPct.toFixed(0)}% is below 40% - consider more descriptive commit messages`);
-            }
-
-            if (hasIncrementalPattern) {
-              strengths.push('Incremental development pattern detected');
-            }
-
-            if (hasTestDiscipline) {
-              strengths.push('Strong test-first discipline across commits');
+            if (hasHighCochangeRate) {
+              strengths.push('High test/prod co-change rate across commits');
             }
 
             if (hasRefactoringPattern) {
@@ -264,23 +352,24 @@ jobs:
               if (prodOnlyCommits === commitMetrics.length) {
                 testConcerns.push('All commits lack test coverage');
               }
-            } else if (testRatio < 0.3) {
-              testAdequacy = 'needs-improvement';
-              testConcerns.push('Low test coverage ratio - consider adding more tests');
-            } else if (testRatio >= 0.3 && testRatio <= 2.0) {
-              testAdequacy = 'good';
-              testPraise.push('Good balance of production and test code');
             } else {
-              testAdequacy = 'excellent';
-              testPraise.push('Comprehensive test coverage');
+              // No calibrated band exists for this ratio (code-quality-metrics-a1n):
+              // it never appears in lib/thresholds.js or calibration/derive-bands.js, and
+              // the two numeric ranges this used to display (0.3-2.0 gating the verdict,
+              // 0.5-2.0 in the displayed target) disagreed with each other. Report the
+              // ratio descriptively rather than attaching an uncalibrated verdict to it.
+              testAdequacy = 'measured';
             }
 
             // ---------------------------------------------------------------
             // DORA archetype
             // ---------------------------------------------------------------
 
+            // message_quality_pct is not passed here: classifyDoraArchetype (lib/metrics.js)
+            // reads only large-commit, sprawling, test-coverage and uncovered-prod from
+            // THRESHOLDS, so message quality has no part in the archetype (code-quality-metrics-4hu).
             const archetype = commitMetrics.length > 0
-              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2), message_quality_pct: msgQualityPct.toFixed(2) })
+              ? classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2) })
               : 'mixed-signals';
 
             const archetypeDescriptions = {
@@ -305,7 +394,7 @@ jobs:
               const flags = [
                 c.large_commit ? 'large' : '',
                 c.sprawling_commit ? 'sprawling' : '',
-                c.test_first_indicator ? 'test+prod' : '',
+                c.test_prod_cochange_commit ? 'test+prod' : '',
                 !c.message_quality ? 'vague-msg' : ''
               ].filter(Boolean).join(', ');
               return `**${c.sha}** ${c.author} (${c.date})\n\`${c.message}\`\n${c.prod_changes} prod lines, ${c.files_changed} files${flags ? ` [${flags}]` : ''}`;
@@ -321,7 +410,7 @@ jobs:
               '|------------|--------|-------|--------|',
               `| Small Batches | Large commit % | ${largePct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.LARGE_COMMITS_PCT.healthy, THRESHOLDS.LARGE_COMMITS_PCT.critical)} |`,
               `| Small Batches | Sprawling commit % | ${sprawlingPct.toFixed(0)}% | ${formatBand('below', THRESHOLDS.SPRAWLING_COMMITS_PCT.healthy, THRESHOLDS.SPRAWLING_COMMITS_PCT.critical)} |`,
-              `| Version Control | Test-first discipline | ${testFirstPct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} |`,
+              `| Version Control | Test/prod co-change rate | ${cochangePct.toFixed(0)}% | ${formatBand('above', THRESHOLDS.TEST_COVERAGE_RATE.healthy, null)} |`,
               `| Version Control | Message quality | ${msgQualityPct.toFixed(0)}% | no band, see spec |`,
               `| AI Risk Signal | Net additions ratio (median) | ${medianAdditionsRatio.toFixed(2)} | no band, see spec |`
             ].join('\n') : '';
@@ -378,9 +467,9 @@ jobs:
               '',
               '| Metric | Value |',
               '|--------|-------|',
-              `| Large commits (>100 prod lines) | ${largeCommits}/${commitMetrics.length} (${largePct.toFixed(0)}%) |`,
-              `| Sprawling commits (>5 files) | ${sprawlingCommits}/${commitMetrics.length} (${sprawlingPct.toFixed(0)}%) |`,
-              `| Test-first discipline | ${testFirstCommits}/${commitMetrics.length} (${testFirstPct.toFixed(0)}%) |`,
+              `| Large commits (>${CONFIG.LARGE_COMMIT_THRESHOLD} prod lines) | ${largeCommits}/${commitMetrics.length} (${largePct.toFixed(0)}%) |`,
+              `| Sprawling commits (>${CONFIG.SPRAWLING_COMMIT_THRESHOLD} files) | ${sprawlingCommits}/${commitMetrics.length} (${sprawlingPct.toFixed(0)}%) |`,
+              `| Test/prod co-change rate | ${cochangeCommits}/${commitMetrics.length} (${cochangePct.toFixed(0)}%) |`,
               `| Message quality | ${qualityCommits}/${commitMetrics.length} (${msgQualityPct.toFixed(0)}%) |`,
               `| Median net additions ratio | ${medianAdditionsRatio.toFixed(2)} |`,
               `| Test-only commits | ${testOnlyCommits} |`,
@@ -391,15 +480,17 @@ jobs:
               testAdequacy !== 'n/a' ? [
                 '## Test Coverage',
                 '',
-                `**Test Adequacy:** ${testAdequacy}`,
+                testAdequacy === 'measured'
+                  ? `**Test-to-Production Ratio:** ${testRatio.toFixed(2)}:1 (no calibrated target for this ratio; reported descriptively)`
+                  : `**Test Adequacy:** ${testAdequacy}`,
                 '',
                 testPraise.length > 0 ? testPraise.map(p => `- ${p}`).join('\n') : '',
-                testConcerns.length > 0 ? testConcerns.map(c => `- ${c}`).join('\n') : '',
-                '',
-                '**Target ratio:** 0.5-2.0 test lines per production line'
+                testConcerns.length > 0 ? testConcerns.map(c => `- ${c}`).join('\n') : ''
               ].join('\n') : '',
               '',
               doraSection,
+              '',
+              smallSampleNote,
               '',
               duplicationSection,
               '',

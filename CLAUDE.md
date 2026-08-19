@@ -45,15 +45,16 @@ Three public components sharing pure-computation logic via `lib/`:
 1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
 
    The `lib/` directory contains the internal modules:
-   - `lib/config.js` — CONFIG object; single source of truth for all thresholds (**shared with workflows**)
+   - `lib/config.js` — CONFIG object; detector and analysis settings (large/sprawling commit cutoffs, message-quality word count, AI pre-filter and duplicate-detector tuning, test-file patterns), the single source of truth for those settings (**shared with workflows**)
+   - `lib/thresholds.js` — THRESHOLDS object; the calibrated healthy/critical verdict bands each metric is scored against, the single source of truth for those bands (**shared with workflows**)
    - `lib/statistics.js` — statistical distributions (p50/p90/p95/stddev), velocity and trend (**shared with workflows**)
    - `lib/metrics.js` — message quality scoring, DORA archetype classification, test file detection, insights generation (**shared with workflows**)
    - `lib/git.js` — git shell commands, log parsing, per-commit analysis, diff extraction (local only — workflows use REST API)
    - `lib/claude.js` — Anthropic client setup, commit pre-filtering, diff-level API analysis (local only — workflows use GitHub-managed auth)
 
-2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Requires `lib/config.js`, `lib/statistics.js`, and `lib/metrics.js` via `require()`. Outputs a JSON artifact and creates a GitHub issue with the summary.
+2. **`.github/workflows/code-metrics.yml`**: Weekly GitHub Actions workflow. Uses the GitHub API to analyze feature branches from the past 30 days. Requires `lib/config.js`, `lib/statistics.js`, `lib/metrics.js`, and `lib/thresholds.js` via `require()`. Outputs a JSON artifact and creates a GitHub issue with the summary.
 
-3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js`, `lib/metrics.js`, `lib/duplicate.js`, and `lib/claude.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, development pattern detection, and two-layer duplicate code detection (Layer 1 jscpd always-on; Layer 2 semantic via Claude when `ANTHROPIC_API_KEY` is set).
+3. **`.github/workflows/pr-metrics.yml`**: Per-PR GitHub Actions workflow. Requires `lib/config.js`, `lib/thresholds.js`, `lib/metrics.js`, `lib/duplicate.js`, and `lib/claude.js` via `require()`. Posts a detailed comment on each PR with commit-by-commit analysis, test adequacy, development pattern detection, and two-layer duplicate code detection (Layer 1 jscpd always-on; Layer 2 semantic via Claude when `ANTHROPIC_API_KEY` is set).
 
 ## Key Metrics and Thresholds
 
@@ -76,12 +77,20 @@ enforces this at runtime — never reads a `null` critical bound as zero).
 | Sprawling commit % (>5 files) | ≤18% | >20% | three-band |
 | Test coverage rate (test+prod co-occurrence) | ≥23% | — | two-band |
 | Uncovered prod rate | ≤13% | — | two-band |
-| Commit message quality % | ≥66% | — | two-band |
-| Avg lines changed | ≤140 | >200 | three-band |
+| Commit message quality % | — | — | informational |
+| Avg lines changed | — | — | informational |
 | p90 lines changed | ≤260 | — | two-band |
 | p90 files changed | ≤8 | — | two-band |
-| Net additions ratio (median) | ≤0.63 | >0.79 | three-band |
-| Duplication density % | ≤6% | >6.5% | three-band |
+| Net additions ratio (median) | — | — | informational |
+| Duplication density % | ≤2% | — | two-band |
+
+Three rows read informational because their bands were withdrawn on evidence, not because
+they are unmeasured: each value is still computed and reported, with no verdict attached.
+Message quality was found to measure Conventional Commits adoption rather than informativeness.
+Net additions ratio used a churn denominator the source literature discards. Avg lines changed
+has no finite mean to band: three independent published fits put commit size on a heavy-tailed
+distribution, and a generalized Pareto with shape above 1 has no finite mean at all. Seven
+metrics carry a band; three of those have a critical bound.
 
 Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
 
@@ -99,16 +108,16 @@ reservations. Do not cite these numbers as validated outcome thresholds.
 
 ### DORA Archetype Classification
 
-The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape, and all five boundary values are unsourced. Do not read the field as a DORA classification.
+The summary includes a `dora_archetype` field classifying the repository into one of four archetypes. **The names are borrowed from DORA, the method is not.** DORA derives seven archetypes from cluster analysis of survey responses covering burnout, friction and delivery instability; this derives four from commit shape. `classifyDoraArchetype` (`lib/metrics.js`) reads its boundaries directly from the calibrated bands in `lib/thresholds.js` rather than a separate hand-copied set, so every boundary value it compares against (large-commit healthy and critical, sprawling-commit healthy and critical, test-coverage healthy, uncovered-prod healthy) traces to the same calibration as the Key Metrics table above, and the function holds no hardcoded numeric literal at all. Only the *grouping* of those signals into four named archetypes is this toolkit's own invention; DORA does not publish this grouping, and message-quality no longer plays any part in it (its own band was demoted to informational — see below). Do not read the field as a DORA classification.
 
-It classifies the repository based on large commit %, sprawling commit %, test-first %, and message quality %:
+It classifies the repository based on large commit %, sprawling commit %, test coverage rate, and uncovered prod rate, evaluated in this order:
 
 | Archetype | Signal |
 |-----------|--------|
-| `harmonious-high-achiever` | All four metrics in healthy range |
-| `legacy-bottleneck` | High sprawl (>25%) + high large commits (>30%) |
-| `foundational-challenges` | Large commits >40%, or low test discipline + elevated large commits |
-| `mixed-signals` | No clear archetype threshold breached |
+| `harmonious-high-achiever` | large commits below `LARGE_COMMITS_PCT.healthy` AND sprawling commits below `SPRAWLING_COMMITS_PCT.healthy` AND test coverage above `TEST_COVERAGE_RATE.healthy` AND uncovered prod below `UNCOVERED_PROD_RATE.healthy` (currently ≤19%, ≤18%, ≥23%, ≤13%) |
+| `legacy-bottleneck` | sprawling commits above `SPRAWLING_COMMITS_PCT.critical` AND large commits above `LARGE_COMMITS_PCT.critical` (currently >20%, >30%) |
+| `foundational-challenges` | large commits above `LARGE_COMMITS_PCT.critical` (currently >30%) alone — `uncovered_prod_rate` has no critical bound to add a second path |
+| `mixed-signals` | none of the above |
 
 ### Claude API Integration (Optional)
 
@@ -122,7 +131,7 @@ The script degrades gracefully when the key is absent. No SDK install is require
 
 ## Configuration
 
-Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is the single source of truth for **all three components**. The GitHub Actions workflows `require('./lib/config')` directly — changing a value in `lib/config.js` propagates automatically to the local script and both workflows. No manual synchronization needed. Key values:
+Two files hold configuration, each the single source of truth for a different kind of value, both shared across all three components. `CONFIG` in `lib/config.js` holds detector and analysis settings: what counts as a large or sprawling commit, the message-quality word count, the AI pre-filter and duplicate-detector tuning, and test-file patterns. `THRESHOLDS` in `lib/thresholds.js` holds the calibrated healthy/critical verdict bands described in Key Metrics and Thresholds above. Both GitHub Actions workflows `require('./lib/config')` and `require('./lib/thresholds')` directly, so a change to either file propagates automatically to the local script and both workflows with no manual synchronization — but the workflows do not surface a target for every band `THRESHOLDS` holds. Between them, `code-metrics.yml` and `pr-metrics.yml` display a target for large-commit %, sprawling-commit %, test-coverage rate, test-isolation rate, and uncovered-prod rate; `avg_lines_changed`, `p90_lines_changed`, `p90_files_changed`, and `duplication_pct` are computed and included in the summary JSON but shown without a target in either workflow. Key `CONFIG` values:
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -134,7 +143,8 @@ Thresholds are configured in the `CONFIG` object in `lib/config.js`, which is th
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
 | `DUPLICATE_MIN_LINES` | 10 | Minimum lines for jscpd to flag a duplicate block |
 | `DUPLICATE_MIN_TOKENS` | 100 | Minimum tokens for jscpd to flag a duplicate block |
-| `DUPLICATE_IGNORE_PATTERNS` | `[]` | Glob patterns for jscpd to ignore (e.g. generated files) |
+| `DUPLICATE_IGNORE_PATTERNS` | 9 patterns | Globs jscpd ignores: vendored (`deps`, `vendor`, `third_party`, `node_modules`), generated, and four lock files. Per-repo additions go in the target's `.codemetrics.json`, not here (class A, so bands still apply) |
+| `ANALYSIS_IGNORE_PATTERNS` | 0 patterns | Globs excluded from the commit-shape metrics (large/sprawling commit, the line-count distributions, prod/test classification, uncovered prod rate): a matched path counts as neither test nor production. Default is empty, deliberately: seeding it would change every existing measurement, including the calibration observations. Per-repo additions go in the target's `.codemetrics.json` (class A, so bands still apply) |
 
 Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
 
@@ -142,7 +152,9 @@ Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST
 
 The defaults (`DUPLICATE_MIN_LINES: 10`, `DUPLICATE_MIN_TOKENS: 100`) match what SonarQube uses for its own duplicated-lines gate, so the measured percentage is comparable to the roughly 3 to 23 percent range published across clone studies with stated methods. They were previously 5 and 50, half of Sonar's minimum in both dimensions; Wagner et al. measured the same three systems at both settings and found roughly a threefold difference, so position in that published range depends more on detector settings than on the codebase. Raising them lost the one alignment this toolkit had with a primary source, since 5 lines matched GitClear's definition of a duplicate block. The trade is deliberate: GitClear's floor is for detecting a clone, Sonar's is for calling one a quality problem, and this toolkit reports a rate rather than a clone list.
 
-The examples below predate the change and one is now moot: the Java row recommends exactly the new global default. Other languages may still need higher values to suppress boilerplate:
+**Following any of the three blocks below costs the verdict, not just the number.** `DUPLICATE_MIN_LINES` and `DUPLICATE_MIN_TOKENS` are the two "class B" keys a repo-local `.codemetrics.json` can override (`lib/repoConfig.js`, documented in `AGENTS.md`'s "Per-Repo Configuration Overrides"); before that mechanism existed, this table was aspirational, since there was nowhere to put a per-repo value. It is mechanical now, but only partly: every block changes at least one class B key, and `lib/report.js`'s `buildMetricCatalog` withholds the `duplication_density_pct` verdict for the run whenever `summary.config_sources.class_b_overridden` is true, the same way squashed history withholds the commit-unit verdicts. The value is still measured and reported; there is just no healthy/critical call attached, because the band above was derived at the default 10/100 sensitivity and a percentage measured at a different sensitivity is not comparable to it (the threefold difference cited above). A verdict for that language returns only once a reference set is measured and derived at its settings through `calibration/derive-bands.js`.
+
+The examples below predate the per-repo override mechanism and one is now moot: the Java row recommends exactly the new global default. Other languages may still need higher values to suppress boilerplate, but adopting any of them via `.codemetrics.json` gets a working override and a withheld verdict, not a working override with the band intact:
 
 ```js
 // Java — longer method signatures and boilerplate

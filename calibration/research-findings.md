@@ -3638,7 +3638,17 @@ Does not support:
   quality *before and after* AI adoption on the same repositories.
 - No study measures commit message quality against AI adoption at all, in either design.
 - No published figure supports a *healthy line* for any of these metrics.
-- The `dora_archetype` boundary values (large-commit >30%/>40%, sprawl >25%) find no support anywhere.
+- The *grouping* of signals into four named `dora_archetype` labels (`harmonious-high-achiever`,
+  `legacy-bottleneck`, `foundational-challenges`, `mixed-signals`) finds no support anywhere; DORA
+  does not publish this grouping and no other source does either. This is narrower than it used to
+  be: `classifyDoraArchetype` (`lib/metrics.js`) now reads every boundary it compares (large-commit
+  healthy/critical, sprawling healthy/critical, test-coverage healthy, uncovered-prod healthy)
+  directly from `THRESHOLDS` in `lib/thresholds.js`, the same calibration behind the Key Metrics
+  table, and holds no hardcoded numeric literal of its own. The specific figures this bullet used to
+  quote (large-commit >40%, sprawl >25%) are themselves stale hand-copied values from before that
+  change; the current calibrated bounds are large-commit critical >30% and sprawling critical >20%
+  (`lib/thresholds.js`), and `foundational-challenges` no longer has a second, OR'd path through low
+  test-first discipline.
 
 **On constructing a pre-AI baseline from published data: it cannot be done in a way that answers the
 question.** The obstacles are concrete:

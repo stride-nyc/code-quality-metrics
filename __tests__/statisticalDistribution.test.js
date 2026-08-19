@@ -56,20 +56,15 @@ describe('computeStatistics', () => {
     expect(computeStatistics(sizes, timestamps).trend).toBe('stable');
   });
 
-  it('marks an extreme value as outlier when it exceeds mean + 2*stddev', () => {
+  it('does not return an isOutlier predicate (withdrawn — code-quality-metrics-496)', () => {
+    // The per-commit outlier flag this predicate backed was withdrawn, not re-tuned: every
+    // window-relative cutoff measured (mean + 2*stddev, a bare p95, a log-scale Tukey fence at
+    // several multipliers) either violated monotonicity or went inert on this toolkit's own
+    // heavy-tailed data. See metrics-specification.md's Per-Commit Outlier Flag section.
     const sizes = [10, 10, 10, 10, 10, 10, 10, 10, 10, 1000];
     const now = Date.now();
     const timestamps = sizes.map((_, i) => now + i * 1000);
     const result = computeStatistics(sizes, timestamps);
-    expect(result.isOutlier(1000)).toBe(true);
-    expect(result.isOutlier(10)).toBe(false);
-  });
-
-  it('no values are outliers when distribution is uniform', () => {
-    const sizes = [50, 50, 50, 50];
-    const now = Date.now();
-    const timestamps = sizes.map((_, i) => now + i * 1000);
-    const result = computeStatistics(sizes, timestamps);
-    expect(result.isOutlier(50)).toBe(false);
+    expect(result).not.toHaveProperty('isOutlier');
   });
 });

@@ -27,6 +27,29 @@ describe('CONFIG duplicate detection defaults', () => {
     expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
   });
 
+  // code-quality-metrics-wcj: '**/designs/**' was a fact about one target repo
+  // (stride-nyc/flight-info-spike) sitting in defaults shared by every consumer.
+  // It moves to that repo's own .codemetrics.json (see lib/repoConfig.js and
+  // AGENTS.md's "Per-Repo Configuration Overrides" section for the mechanism),
+  // not into this shared file.
+  test('CONFIG.DUPLICATE_IGNORE_PATTERNS no longer carries the flight-info-spike-specific **/designs/** pattern', () => {
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).not.toContain('**/designs/**');
+  });
+});
+
+// code-quality-metrics-3yd: the direct fix for code-quality-metrics-y8j. Nothing today lets a
+// path count as neither test nor production; ANALYSIS_IGNORE_PATTERNS is the mechanism.
+// DEFAULT MUST BE EMPTY: seeding it with the vendored/generated patterns already in
+// DUPLICATE_IGNORE_PATTERNS would change every existing measurement, including the 34
+// calibration observations __tests__/thresholdProvenance.test.js gates against CONFIG. An
+// empty default keeps every current number identical -- this test is what makes that
+// provable rather than assumed.
+describe('CONFIG analysis-exclusion defaults', () => {
+  test('CONFIG.ANALYSIS_IGNORE_PATTERNS defaults to an empty array', () => {
+    expect(Array.isArray(CONFIG.ANALYSIS_IGNORE_PATTERNS)).toBe(true);
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toHaveLength(0);
+  });
+
   test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {
     expect(CONFIG.AI_DUPLICATE_MAX_FILES).toBe(40);
   });

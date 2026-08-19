@@ -11,12 +11,22 @@
  * a threshold change is always a reviewed commit rather than a side effect of
  * re-running a script.
  *
- * Usage: node calibration/derive-bands.js [--json] [--era current|pre-ai]
+ * Usage: node calibration/derive-bands.js [--json] [--era current|pre-ai] [--population granular|squash-merge]
  *
  * --era is optional and defaults to no filter: every observation with
  * include_in_derivation true is pooled regardless of which era it was measured in,
  * matching this script's behaviour before the era field existed. Pass --era to derive
  * bands from a single era's observations only.
+ *
+ * --population is optional and defaults to 'granular', unlike --era: a squash-merge
+ * reference set (one commit is a whole pull request) and the granular one (one commit is
+ * an individual commit) describe different units and must never be pooled
+ * (code-quality-metrics-7sk), so the default has to actively exclude squash-merge
+ * observations rather than pool everything. Every observation recorded before the
+ * population field existed has no `population` key and is treated as granular, so this
+ * default reproduces exactly what this script already did before any squash-merge
+ * observation existed. Pass --population squash-merge to derive bands from the
+ * squash-merge reference set instead.
  */
 
 const fs = require('fs');
@@ -49,7 +59,7 @@ const NEAR_EXTREME_FRACTION = 0.15;
 /** Metrics where a higher value is worse. */
 const HIGHER_IS_WORSE = [
   'large_commits_pct', 'sprawling_commits_pct', 'uncovered_prod_rate',
-  'avg_lines_changed', 'p90_lines_changed', 'p90_files_changed',
+  'p90_lines_changed', 'p90_files_changed',
   'duplication_pct'
 ];
 
@@ -76,8 +86,17 @@ const HIGHER_IS_BETTER = ['test_coverage_rate'];
  * adoption in a way that makes a band meaningless -- the number mostly
  * answers whether the project uses the format, not whether messages are
  * good.
+ *
+ * avg_lines_changed (code-quality-metrics-k1g): lib/thresholds.js dropped this
+ * band entirely -- three independent published fits put commit size on a
+ * heavy-tailed distribution, and a generalized Pareto fit with shape 1.4617 has
+ * no finite mean, so a band on the mean was unsound at any boundary. p90 and
+ * p95 remain scored since a percentile of a heavy-tailed distribution is still
+ * well defined; only the mean was withdrawn.
  */
-const INFORMATIONAL = ['test_isolation_rate', 'net_additions_ratio_median', 'message_quality_pct'];
+const INFORMATIONAL = [
+  'test_isolation_rate', 'net_additions_ratio_median', 'message_quality_pct', 'avg_lines_changed'
+];
 
 function round(n) {
   if (n >= 100) return Math.round(n / 10) * 10;
@@ -192,6 +211,23 @@ function selectByEra(observations, era) {
   return observations.filter(o => o.era === era);
 }
 
+/**
+ * Filter observations to a single population: 'granular' (one commit is an individual commit)
+ * or 'squash-merge' (one commit is a whole pull request). Unlike selectByEra, this defaults to
+ * 'granular' rather than pooling everything -- the two populations describe different units and
+ * must never be pooled (code-quality-metrics-7sk), so the safe default is the one that matches
+ * every observation recorded before the population field existed: an observation with no
+ * `population` field is treated as granular, so passing no --population flag reproduces exactly
+ * what derive-bands.js already did before any squash-merge observation existed.
+ * @param {Array<object>} observations
+ * @param {string} [population] - 'granular' (default) or 'squash-merge'
+ * @returns {Array<object>}
+ */
+function selectByPopulation(observations, population = 'granular') {
+  if (population === 'squash-merge') return observations.filter(o => o.population === 'squash-merge');
+  return observations.filter(o => (o.population ?? 'granular') === 'granular');
+}
+
 function main() {
   if (!fs.existsSync(OBSERVATIONS)) {
     console.error(`No observations file at ${OBSERVATIONS}. See calibration/README.md.`);
@@ -200,7 +236,9 @@ function main() {
   const data = JSON.parse(fs.readFileSync(OBSERVATIONS, 'utf8'));
   const eraFlagIndex = process.argv.indexOf('--era');
   const era = eraFlagIndex === -1 ? undefined : process.argv[eraFlagIndex + 1];
-  const observations = selectByEra(data.observations, era);
+  const populationFlagIndex = process.argv.indexOf('--population');
+  const population = populationFlagIndex === -1 ? undefined : process.argv[populationFlagIndex + 1];
+  const observations = selectByPopulation(selectByEra(data.observations, era), population);
   const usable = observations.filter(o => o.include_in_derivation);
   const excluded = observations.filter(o => !o.include_in_derivation);
 
@@ -259,4 +297,7 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { deriveBand, describe, percentile, isNearExtreme, selectByEra, NEAR_EXTREME_FRACTION, HIGHER_IS_WORSE, HIGHER_IS_BETTER, INFORMATIONAL };
+module.exports = {
+  deriveBand, describe, percentile, isNearExtreme, selectByEra, selectByPopulation,
+  NEAR_EXTREME_FRACTION, HIGHER_IS_WORSE, HIGHER_IS_BETTER, INFORMATIONAL
+};

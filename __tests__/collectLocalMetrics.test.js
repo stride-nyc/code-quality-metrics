@@ -9,7 +9,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const claude = require('../lib/claude');
 const duplicate = require('../lib/duplicate');
-const { collectLocalMetrics } = require('../local-code-metrics');
+const { collectLocalMetrics, CONFIG } = require('../local-code-metrics');
 
 const FAKE_ROOT = '/fake/repo';
 const FAKE_REMOTE = 'git@github.com:org/repo.git';
@@ -28,6 +28,11 @@ beforeEach(() => {
   duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
   duplicate.resolveModuleNeighbors.mockImplementation(paths => paths);
   claude.runSemanticDuplicateAnalysis.mockResolvedValue({ status: 'skipped', findings: [] });
+  // Default: no repo-local .codemetrics.json — overridden only in the
+  // config-override tests below. jest.clearAllMocks() above clears call
+  // history but not a prior test's mockImplementation, so this has to be
+  // reasserted every test to avoid one test's override leaking into the next.
+  fs.existsSync.mockReturnValue(false);
 });
 
 afterEach(() => {
@@ -45,6 +50,17 @@ function mockExecSequence(...values) {
     // `git branch -a --merged` query. Answer it out of band so it never consumes
     // a positional value, and return empty so nothing is filtered.
     if (typeof command === 'string' && command.includes('--merged')) return '';
+    // Tests predating history-granularity detection supply no value for its two
+    // queries (true merge-commit count, committer names). Answer them out of band
+    // the same way, defaulting to "no merges, no committer names" so detection
+    // still runs (as granular) without every prior test needing a positional value.
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    // Tests predating the merge-commit double-count guard supply no value for
+    // analyzeCommit's own parent-count check (`git show --no-patch --format=%P`).
+    // Answer it out of band too, with a single parent -- i.e. "not a merge" --
+    // so every commit under test is still analyzed rather than skipped.
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     const val = values[i] ?? '';
     i++;
     return val;
@@ -59,6 +75,31 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
   let i = 0;
   execSync.mockImplementation(command => {
     if (typeof command === 'string' && command.includes('--merged')) return mergedOutput;
+    if (typeof command === 'string' && command.includes('--merges')) return '';
+    if (typeof command === 'string' && command.includes('%cn')) return '';
+    // Tests predating the merge-commit double-count guard supply no value for
+    // analyzeCommit's own parent-count check (`git show --no-patch --format=%P`).
+    // Answer it out of band too, with a single parent -- i.e. "not a merge" --
+    // so every commit under test is still analyzed rather than skipped.
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
+    const val = values[i] ?? '';
+    i++;
+    return val;
+  });
+}
+
+/**
+ * Like mockExecSequence, but answers the history-granularity queries (true
+ * merge-commit count, committer names) with the given values instead of the
+ * "no signal" default. Positional values cover every other command.
+ */
+function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, ...values) {
+  let i = 0;
+  execSync.mockImplementation(command => {
+    if (typeof command === 'string' && command.includes('--merged')) return '';
+    if (typeof command === 'string' && command.includes('--merges')) return mergesOutput;
+    if (typeof command === 'string' && command.includes('%cn')) return committerNamesOutput;
+    if (typeof command === 'string' && command.includes('%P')) return 'p'.repeat(40);
     const val = values[i] ?? '';
     i++;
     return val;
@@ -336,6 +377,22 @@ describe('collectLocalMetrics — successful run', () => {
     });
   });
 
+  test('does not write an outlier field on commit metrics (withdrawn — code-quality-metrics-496)', async () => {
+    // No window-relative cutoff (mean+stddev, raw p95, or a log-scale Tukey fence at several
+    // multipliers) can satisfy monotonicity on this toolkit's heavy-tailed commit-size data:
+    // every one measured either un-flags a previously-flagged commit when a larger one joins
+    // the window, or goes inert (never fires) once the window's own body spans orders of
+    // magnitude -- exactly the case this flag was meant to catch. The field is withdrawn
+    // rather than re-tuned, matching how this project handled message_quality_pct and
+    // net_additions_ratio_median. This assertion is deliberately construct-agnostic: it fails
+    // on any implementation that keeps the field, whether monotonic, inverted, or inert.
+    await collectLocalMetrics();
+
+    const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+    const written = JSON.parse(metricsCall[1]);
+    expect(written[0]).not.toHaveProperty('outlier');
+  });
+
   test('writes local_metrics_summary.json with expected shape', async () => {
     await collectLocalMetrics();
 
@@ -364,12 +421,53 @@ describe('collectLocalMetrics — successful run', () => {
       .toContain(summary.dora_archetype);
   });
 
+  test('writes local_metrics_summary.json with history_granularity detected as granular when no squash signals are present', () => {
+    return collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      const summary = JSON.parse(summaryCall[1]);
+      expect(summary.history_granularity).toBe('granular');
+      expect(summary.history_granularity_detected).toBe('granular');
+      expect(summary.history_granularity_confidence).toBe('high');
+      expect(summary.history_granularity_override).toBeNull();
+      expect(summary.history_granularity_signals).toEqual({
+        pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0
+      });
+    });
+  });
+
+  test('a --history override forces history_granularity, recording both the override and what detection actually found', async () => {
+    // Detection alone would say squashed (majority PR-referenced subjects); the
+    // override forces granular for this invocation without changing what detection
+    // itself reported.
+    mockExecSequenceWithHistorySignals(
+      '', 'Dev',
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing (#101)`,
+      NUMSTAT
+    );
+
+    const summary = await collectLocalMetrics({ history: 'granular' }).then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.history_granularity).toBe('granular');
+    expect(summary.history_granularity_detected).toBe('squashed');
+    expect(summary.history_granularity_override).toBe('granular');
+  });
+
   test('writes local_metrics_summary.json with three-way test classification rates', async () => {
     await collectLocalMetrics();
 
     const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
     const summary = JSON.parse(summaryCall[1]);
-    expect(typeof summary.test_coverage_rate).toBe('string');
+    // The fixture's one commit touches both src/app.js (prod) and src/app.test.js
+    // (test) in the same commit, so test_coverage_rate must read 100.00 -- a value
+    // check, not just a type check, so a dangling reference to the old field name
+    // (which would silently compute 0.00 instead of throwing) cannot pass this test.
+    expect(summary.test_coverage_rate).toBe('100.00');
     expect(typeof summary.test_isolation_rate).toBe('string');
     expect(typeof summary.uncovered_prod_rate).toBe('string');
     expect(summary.test_first_pct).toBeUndefined();
@@ -683,8 +781,13 @@ describe('collectLocalMetrics — duplicate detection', () => {
     await collectLocalMetrics();
 
     const logCalls = execSync.mock.calls.map(c => c[0]).filter(c => String(c).includes('git log'));
-    expect(logCalls.length).toBeGreaterThan(0);
-    logCalls.forEach(c => expect(c).toMatch(/--no-merges/));
+    // The history-granularity merge-commit count query (`git log --merges ...`) is a
+    // deliberate exception: its whole purpose is to count the true merges --no-merges
+    // strips from every other git log call, so it is excluded from this assertion rather
+    // than failing it.
+    const analysisLogCalls = logCalls.filter(c => !String(c).includes('--merges '));
+    expect(analysisLogCalls.length).toBeGreaterThan(0);
+    analysisLogCalls.forEach(c => expect(c).toMatch(/--no-merges/));
   });
 
   test('scans for duplicates once, not once per consumer', async () => {
@@ -790,5 +893,168 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(fs.writeFileSync).toHaveBeenCalledTimes(2);
     const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
     expect(dupCall).toBeUndefined();
+  });
+});
+
+describe('collectLocalMetrics — repo-local .codemetrics.json override (code-quality-metrics-wcj)', () => {
+  test('unions a class A override into CONFIG and records it in the summary config_sources', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/flight-info-spike-example/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+    expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/deps/**');
+    expect(summary.config_sources.class_b_overridden).toBe(false);
+    expect(summary.config_sources.files).toHaveLength(1);
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+  });
+
+  // code-quality-metrics-3yd/1tp: ANALYSIS_IGNORE_PATTERNS must be reset-then-applied the
+  // same way DUPLICATE_IGNORE_PATTERNS already is above, or CONFIG_OVERRIDABLE_DEFAULTS
+  // lacking the key makes resolveConfigOverrides's union spread `[...effective[key], ...]`
+  // spread `undefined` the moment a repo actually configures it.
+  test('unions a repo-local ANALYSIS_IGNORE_PATTERNS override into CONFIG and records it in the summary config_sources', async () => {
+    const SHA = 'f'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.overrides.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/bin/**']);
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/bin/**']);
+  });
+
+  // GUARD: proves resolveConfigOverrides is re-applied to CONFIG fresh on every
+  // run rather than accumulating, since CONFIG is a shared, mutated singleton
+  // across every invocation in this same process (this test file included).
+  // Written to catch the exact "reads its own expectation back out of the
+  // code under test" shape called out for this work: without a reset step,
+  // this run would still see the previous run's override and pass for the
+  // wrong reason.
+  test('[guard] resets CONFIG to the true defaults on a run with no override, after a previous run applied one', async () => {
+    const SHA_ONE = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT, FAKE_REMOTE, 'main',
+      `${SHA_ONE}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/flight-info-spike-example/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+    await collectLocalMetrics();
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+
+    const SHA_TWO = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT, FAKE_REMOTE, 'main',
+      `${SHA_TWO}|2024-01-16T10:00:00Z|Dev|feat: add another thing`,
+      `10\t5\tsrc/app2.js`
+    );
+    fs.existsSync.mockReturnValue(false);
+
+    await collectLocalMetrics();
+
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).not.toContain('**/flight-info-spike-example/**');
+    const secondSummaryCall = fs.writeFileSync.mock.calls
+      .filter(c => c[0].includes('local_metrics_summary'))
+      .pop();
+    expect(JSON.parse(secondSummaryCall[1]).config_sources.files).toEqual([]);
+  });
+});
+
+describe('collectLocalMetrics — analysis exclusions and vendored-default share (code-quality-metrics-3b6)', () => {
+  test('writes local_metrics_summary.json with an analysis_exclusions block reporting excluded file/line counts and share', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      // 500 lines in an excluded bin/ file, 10 lines in an ordinary file: 510 total.
+      `500\t0\tbin/Debug/App.dll\n10\t0\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.analysis_exclusions.patterns).toContain('**/bin/**');
+    expect(summary.analysis_exclusions.excluded_files_count).toBe(1);
+    expect(summary.analysis_exclusions.excluded_lines_count).toBe(500);
+    // 500 of 510 total lines analyzed excluded.
+    expect(summary.analysis_exclusions.excluded_lines_pct).toBe('98.04');
+  });
+
+  test('reports zero excluded volume when ANALYSIS_IGNORE_PATTERNS is not configured (default)', async () => {
+    const SHA = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.analysis_exclusions.patterns).toEqual([]);
+    expect(summary.analysis_exclusions.excluded_files_count).toBe(0);
+    expect(summary.analysis_exclusions.excluded_lines_pct).toBe('0.00');
+  });
+
+  // The higher-value half (code-quality-metrics-3b6): visible even when nothing is
+  // configured, since CONFIG.DUPLICATE_IGNORE_PATTERNS's defaults are not empty.
+  test('reports vendored_generated_share even when ANALYSIS_IGNORE_PATTERNS is not configured', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `300\t0\tvendor/lib.js\n10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.vendored_generated_share.files_count).toBe(1);
+    expect(summary.vendored_generated_share.lines_count).toBe(300);
+    // 300 of 310 total lines.
+    expect(summary.vendored_generated_share.lines_pct).toBe('96.77');
   });
 });

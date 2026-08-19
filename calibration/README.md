@@ -68,21 +68,18 @@ commit, so a threshold change is always deliberate.
 ## Reservations
 
 `observations.json` carries a `reservations` array: thirteen recorded concerns
-about using this sample to set thresholds, three of them high severity (a
-pre-AI baseline now exists -- see below -- which downgraded one from high to
-medium; three published transferability findings -- non-transferability across
-projects, context-dependence, and within-project drift over time -- were added
-afterward and one of those is itself high severity). They are kept with the
-evidence rather than in `lib/thresholds.js` so the caveats travel with the
-data, and so adding a reference repository forces a reader to reconsider which
-still apply. `derive-bands.js` prints the high severity ones on every run.
+about using this sample to set thresholds, two of them currently high severity
+(granular-history-only and pre-AI-baseline were each downgraded from high to
+medium once their own suggested remedy was measured -- see below; three published
+transferability findings -- non-transferability across projects, context-dependence,
+and within-project drift over time -- were added afterward and one of those is itself
+high severity). They are kept with the evidence rather than in `lib/thresholds.js` so
+the caveats travel with the data, and so adding a reference repository forces a
+reader to reconsider which still apply. `derive-bands.js` prints the high severity
+ones on every run.
 
-The three that most limit how far these bands can be carried:
+The two that most limit how far these bands can be carried:
 
-- **Granular history only.** The bands are valid for repositories that preserve
-  individual commits. A squash-merge repository yields one commit per pull
-  request, so it will look worse on every size metric for reasons that have
-  nothing to do with practice. Squash repositories need their own reference set.
 - **Circular definition.** The references were chosen because they are considered
   disciplined, and healthy is then defined as what they do. The bands support
   "no worse than these six", which is weaker than "healthy".
@@ -94,9 +91,21 @@ The three that most limit how far these bands can be carried:
   should be read as describing these six repositories rather than generalizing
   to one unlike them.
 
-A third, now medium severity, is worth calling out separately because it drove a
-whole second measurement pass:
+Two more, now medium severity, are worth calling out separately because each drove
+its own follow-up measurement pass:
 
+- **Granular history only (partially addressed).** The bands are valid for
+  repositories that preserve individual commits; a squash-merge repository yields
+  one commit per pull request, so it looked worse on every size metric for reasons
+  that had nothing to do with practice, and every commit-unit verdict was withheld
+  for it. A separate squash-merge reference set now exists (`population:
+  "squash-merge"` in `observations.json`; see "Populations" above) -- five
+  repositories, ten included windows -- with its own bands derivable via
+  `derive-bands.js --population squash-merge`. This is a real remedy, which is why
+  the severity dropped, but not a complete one: the squash-merge set is smaller
+  than the granular one (six repositories, twenty-four included windows pooled
+  across eras), so its own bands carry a wider version of the same
+  two-windows-per-repo and narrow-population reservations.
 - **Pre-AI baseline (partially addressed).** Every window used to be from 2026, so
   the references may already have adopted AI assistance. A pre-2022 (2019-2020)
   window has now been measured for all six repositories -- twelve `era: "pre-ai"`
@@ -123,6 +132,48 @@ here to check that baseline for validity; not to replace it. This is a
 recommendation, not a code change -- `derive-bands.js`'s default behaviour, and
 `lib/thresholds.js` itself, are both unchanged by this decision until someone acts
 on it in its own reviewed commit.
+
+## Populations
+
+Every observation implicitly belongs to a `population`: `"granular"` (one commit is an
+individual commit -- the default, and the only kind that existed before
+code-quality-metrics-7sk) or `"squash-merge"` (one commit is a whole pull request). An
+observation with no `population` field at all is granular; only the squash-merge
+reference set below sets the field explicitly. `derive-bands.js`'s `selectByPopulation`
+defaults to `"granular"` -- unlike `selectByEra`, which pools every era by default --
+because the two populations describe different units and **must never be pooled**: a
+squash-merged commit routinely spans what would have been several granular commits, so
+every size-shaped metric (large/sprawling percentages, p90 lines/files, and duplication_pct
+via the wider file set a "commit" now touches) means something structurally different
+between the two, independent of whether either team's actual practice is any better or
+worse. Pass `--population squash-merge` to derive bands from the squash-merge reference
+set instead; passing no flag reproduces exactly what `derive-bands.js` computed before
+this option existed, since no pre-existing observation carries the field.
+
+The squash-merge reference set exists so that a squash-merging repository -- the more
+common workflow, and one this tool otherwise withholds every commit-unit verdict for
+(`history_granularity: "squashed"`) -- has *some* answer available rather than none.
+It is a separate, smaller population, not a substitute for the granular one: **do not
+compare a squash-merge band to a granular one as if they measured the same thing.**
+
+**Confirming the detector, not just the screening.** `detectHistoryGranularity` (`lib/git.js`)
+now classifies history automatically and is printed in every run's summary
+(`history_granularity_detected`, `_confidence`, `_signals`). Run it on every candidate before
+trusting a manual screening: it agreed with the "already screened as squashing" candidate
+list for apache/kafka, microsoft/playwright (substituted for microsoft/TypeScript -- see
+observations.json), facebook/react and TanStack/query at high confidence, and agreed with
+python/cpython too but only at *low* confidence, which traced to a real detector gap:
+`PR_REFERENCE_PATTERN` (`/\(#\d+\)$/`) did not match GitHub's alternate `(GH-N)`
+backport-reference suffix, which about half of cpython's sampled commits use instead of
+`(#N)`. This undercounted `pr_reference_share`; it did not flip cpython's verdict here, but a
+repository that used *only* the GH-N form and nothing else plausibly could -- see
+code-quality-metrics-wgc. **Fixed**: `PR_REFERENCE_PATTERN` is now `/\((?:#|GH-)\d+\)$/` and
+matches both suffixes. The cpython `merge_style_evidence` notes in `observations.json` describing
+the low-confidence result are left as recorded -- they are accurate history of what the tool
+measured before this fix, not a live reading -- but re-running `detectHistoryGranularity` against
+either cpython window today would combine both suffixes into a single high-confidence
+`pr_reference_share` (the 21/50 + 25/50 = 92% figure quoted above), matching what the manual
+recount already found by hand.
 
 ## Choosing a reference repository
 
@@ -212,3 +263,39 @@ A third round found two more, changing `message_quality_pct` again and
 
 Each round's pre-fix observations are marked `include_in_derivation: false` with a
 reason naming the fixes, rather than deleted.
+
+A fourth event changed `duplication_pct` again, but it is a deliberate config change rather
+than a bug fix, and it is handled differently in the data as a result: `DUPLICATE_MIN_LINES` /
+`DUPLICATE_MIN_TOKENS` were raised from 5/50 to 10/100 (code-quality-metrics-k1g) to match
+SonarQube's own duplicated-lines gate, so the toolkit's number means what the published 3-23
+percent clone-study range means. Every metric *except* `duplication_pct` in the twenty-four
+`include_in_derivation: true` observations (both eras, all six references) is unaffected by this
+change and was not re-measured. Rather than excluding those observations wholesale -- which
+would have discarded twenty-three still-valid metrics per observation to retire one stale one --
+`metrics.duplication_pct` was updated in place to the re-measured 10/100 value (the same pinned
+`repo_head` and commit window, jscpd re-run with the new minimums), and a `duplication_remeasurement`
+field on each observation preserves the superseded 5/50 value, the ratio between them, and the
+tool commit the re-measurement was taken at, so the earlier number is recoverable rather than
+lost. See the measurement task's report for the full old-value/new-value table and whether the
+threefold difference Wagner et al. found held here.
+
+A fifth defect (code-quality-metrics-pke) was found and fixed but, unlike the four above,
+required **no** re-measurement. `analyzeCommit` (`lib/git.js`) computed per-commit stats with
+`git show --numstat`, which diffs a two-parent merge commit against its first parent; for a
+conflict-free merge (GitHub's "Merge pull request" button on a single-commit PR) that reproduces
+one of the merged children's diff exactly, double-counting that change. This is a real defect in
+`analyzeCommit` itself, and ember/git are both true merge-commit workflows, so it looked like it
+should have contaminated this dataset. It did not, because `local-code-metrics.js`'s own commit
+collection already passes `--no-merges` to every `git log` call that builds the list
+`analyzeCommit` is invoked over (commit `fa14708`), and that fix predates the `tool_commit` every
+included observation in this file was measured at. Checked directly rather than assumed: merge
+commits are present in the pinned window for emberjs/ember.js (both included windows) and git/git
+(all four included windows, current + pre-ai) -- 24 to 78 raw merge commits per window -- and
+nodejs/node, postgres/postgres, django/django and curl/curl have zero merge commits in any of
+their eight included windows. For every one of the six windows with merges present, re-running
+the current tool against that window's pinned `repo_head` reproduced the stored observation's
+metrics bit-for-bit, confirming zero merge commits ever entered the analyzed set, before or after
+the `lib/git.js`-level fix. The fix itself moved the guard into `analyzeCommit` so it holds for any
+caller, not only the one `--no-merges` flag -- calling `analyzeCommit` directly on a merge sha,
+bypassing that flag, is exactly how this defect was originally found -- but no observation's
+`metrics` needed updating and no band moved.

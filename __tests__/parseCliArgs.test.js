@@ -32,4 +32,17 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['--since', '2026-04-01'])).toEqual({ since: '2026-04-01' });
     expect(parseCliArgs([])).toEqual({});
   });
+
+  test('rejects a --history value other than granular or squashed', () => {
+    expect(() => parseCliArgs(['--history', 'sortof'])).toThrow(/--history/);
+  });
+
+  test('accepts a valid --history value', () => {
+    expect(parseCliArgs(['--history', 'squashed'])).toEqual({ history: 'squashed' });
+    expect(parseCliArgs(['--history', 'granular'])).toEqual({ history: 'granular' });
+  });
+
+  test('rejects --history given without a value', () => {
+    expect(() => parseCliArgs(['--history'])).toThrow(/--history/);
+  });
 });

@@ -57,7 +57,7 @@ DORA describes seven team archetypes based on the intersection of performance, s
 
 **Harmonious high-achievers**: Strong foundational practices + AI tools = compounding gains. In commit history: small batches, consistent test discipline, stable and measured velocity, high commit message specificity.
 
-**Foundational challenges**: Weak practices + AI tools = compounding debt. In commit history: large commits, low test-first discipline, erratic or accelerating velocity, vague commit messages.
+**Foundational challenges**: Weak practices + AI tools = compounding debt. In commit history: large commits, low test/prod co-change rate, erratic or accelerating velocity, vague commit messages.
 
 Identifying which archetype describes your team helps calibrate which signals to prioritize first.
 
@@ -162,6 +162,18 @@ Provides engineering intelligence with indirect AI drift detection. Monitors pul
 
 [6] DORA. *DORA's Software Delivery Performance Metrics*. dora.dev, 2024. Available: https://dora.dev/guides/dora-metrics/
 
-[7] SonarSource. *The Inevitable Rise of Poor Code Quality in AI-Accelerated Codebases*. Sonar Blog, 2025. Available: https://www.sonarsource.com/blog/the-inevitable-rise-of-poor-code-quality-in-ai-accelerated-codebases/
+[7] **Not used as a source. Retained as a record of where three withdrawn figures came from.**
+SonarSource. *The Inevitable Rise of Poor Code Quality in AI-Accelerated Codebases*. Sonar Blog,
+2025. Available: https://www.sonarsource.com/blog/the-inevitable-rise-of-poor-code-quality-in-ai-accelerated-codebases/
+Fetched 2026-08-18. The article carries no corpus, method, tool or period of its own; every
+statistic in it is attributed to a third party. Among them it attributes a 9 percent climb in bug
+rates, a 91 percent increase in code review time and a 154 percent increase in pull request size to
+the "Google 2025 DORA Report". Three of those four figures were searched for directly in the DORA
+reports and appear in none of them, and they were withdrawn from this project's documentation. This
+blog is the most likely path by which they entered it. Its only duplication statistic restates
+GitClear's eight-fold rise in blocks of five or more duplicated lines, with no denominator of its
+own. Nothing in this document cites it. Do not cite it: any figure it carries needs tracing to the
+primary source, and in these three cases no primary source exists. See the "Provenance failures
+checked and not found" section of metrics-specification.md.
 
 [8] IT Revolution. *AI's Mirror Effect: How the 2025 DORA Report Reveals Your Organization's True Capabilities*. IT Revolution, 2025. Available: https://itrevolution.com/articles/ais-mirror-effect-how-the-2025-dora-report-reveals-your-organizations-true-capabilities/

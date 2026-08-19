@@ -23,15 +23,31 @@ const path = require('path');
 require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff } = require('./lib/git');
+const { resolveConfigOverrides } = require('./lib/repoConfig');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
+// Captured once at module load, before any run can mutate CONFIG via a
+// repo-local override, so every invocation of collectLocalMetrics can reset
+// these four keys to their true defaults before applying its own run's
+// overrides on top. Without this reset, CONFIG (a shared, mutated singleton --
+// every lib/*.js module that required it holds this exact same object) would
+// compound one run's override into the next run in the same process, which is
+// exactly what this project's own test suite would otherwise hit silently.
+const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
+  DUPLICATE_IGNORE_PATTERNS: [...CONFIG.DUPLICATE_IGNORE_PATTERNS],
+  TEST_FILE_PATTERNS: [...CONFIG.TEST_FILE_PATTERNS],
+  DUPLICATE_MIN_LINES: CONFIG.DUPLICATE_MIN_LINES,
+  DUPLICATE_MIN_TOKENS: CONFIG.DUPLICATE_MIN_TOKENS,
+  ANALYSIS_IGNORE_PATTERNS: [...CONFIG.ANALYSIS_IGNORE_PATTERNS]
+});
+
 /**
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, message: string, full_message: string, source_branch?: string }} CommitInfo
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_first_indicator: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, outlier: boolean, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -74,12 +90,13 @@ function parseBranchList(output) {
 }
 
 /**
- * Parse --since <date> / --days <n> CLI flags into a collectLocalMetrics options object.
+ * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
+ * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed' }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -100,6 +117,14 @@ function parseCliArgs(argv) {
       }
       options.days = days;
       i++;
+    } else if (argv[i] === '--history') {
+      if (!argv[i + 1]) throw new Error("--history requires 'granular' or 'squashed'");
+      const history = argv[i + 1];
+      if (history !== 'granular' && history !== 'squashed') {
+        throw new Error(`--history must be 'granular' or 'squashed', got '${history}'`);
+      }
+      options.history = history;
+      i++;
     }
   }
   return options;
@@ -107,11 +132,30 @@ function parseCliArgs(argv) {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string }} [options] CLI window override: since (an explicit
- *   YYYY-MM-DD boundary) takes precedence over days (a count replacing CONFIG.ANALYSIS_DAYS).
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed' }} [options] CLI
+ *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
+ *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
+ *   auto-detection for this invocation only.
  */
 async function collectLocalMetrics(options = {}) {
   const analysisDays = options.days ?? CONFIG.ANALYSIS_DAYS;
+
+  // PRECEDENCE (highest to lowest): CLI flags (--since/--days, applied via
+  // `options` above and parseCliArgs' own flags) > a .codemetrics.json in the
+  // analysis target, resolved from process.cwd() > lib/config.js's own
+  // defaults. See lib/repoConfig.js's own doc comment for the full rationale
+  // (JSON not JS, array union not replace, why this is three tiers and not
+  // loadEnv's four) and AGENTS.md's "Per-Repo Configuration Overrides" section
+  // for an example file. Reset-then-apply every run: see
+  // CONFIG_OVERRIDABLE_DEFAULTS' own comment for why.
+  const { effective: effectiveConfig, sources: configSources, classBOverridden } =
+    resolveConfigOverrides(CONFIG_OVERRIDABLE_DEFAULTS, process.cwd());
+  Object.assign(CONFIG, effectiveConfig);
+  const config_sources = {
+    files: configSources.map(source => source.file),
+    overrides: configSources.reduce((acc, source) => Object.assign(acc, source.overrides), {}),
+    class_b_overridden: classBOverridden
+  };
 
   console.log('=== AI Code Drift Local Analysis ===');
   console.log('');
@@ -265,6 +309,24 @@ async function collectLocalMetrics(options = {}) {
     return;
   }
 
+  // History granularity: independent of workflowType (which only distinguishes
+  // feature-branch from trunk, not squash-merge-delete from direct push -- see
+  // code-quality-metrics-bnq). --no-merges above strips true merge commits from
+  // the analyzed set, so their count is fetched separately here; their presence
+  // is itself evidence FOR granular history (a true merge-button workflow keeps
+  // individual commits, e.g. emberjs), not a squash signal.
+  const historyRefs = branchesToAnalyze.join(' ');
+  const mergeLog = runGitCommand(`git log --merges --since="${sinceStr}" --pretty=format:"%H" ${historyRefs}`);
+  const mergeCommitCount = mergeLog ? mergeLog.split('\n').filter(Boolean).length : 0;
+  const committerLog = runGitCommand(`git log --no-merges --since="${sinceStr}" --pretty=format:"%cn" ${historyRefs}`);
+  const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
+  const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
+  // Undetermined defaults to squashed, not unknown: squash-merge-delete is the more common
+  // workflow, and asserting a verdict against bands that don't apply is a worse error than
+  // withholding one that would have been valid (code-quality-metrics-bnq's notes).
+  const detectedForWithholding = detectedGranularity.value === 'unknown' ? 'squashed' : detectedGranularity.value;
+  const historyGranularity = options.history ?? detectedForWithholding;
+
   // Analyze commits in detail
   const commitsToAnalyze = uniqueCommits.slice(0, CONFIG.MAX_COMMITS);
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
@@ -301,11 +363,17 @@ async function collectLocalMetrics(options = {}) {
   const lineStats = computeStatistics(lineSizes, timestamps);
   const fileStats = computeStatistics(fileCounts, timestamps);
 
-  // Mark outlier commits in-place
-  metrics.forEach(m => {
-    m.outlier = lineStats.isOutlier(m.total_additions + m.total_deletions);
-  });
-
+  // The per-commit outlier flag is withdrawn (code-quality-metrics-496). Every window-relative
+  // cutoff measured -- mean + 2*stddev, a bare p95, and a log-scale Tukey fence at several
+  // multipliers -- either un-flags a commit that was already flagged when a larger commit joins
+  // the window (violating monotonicity 45-70% of the time across 3000 randomized heavy-tailed
+  // windows), or goes inert once the window's own body spans orders of magnitude, exactly the
+  // case this flag exists to catch: on the bug's own measured window, the log-Tukey fence
+  // required upward of ~28,600 lines to fire at all. No absolute alternative was adopted either
+  // (see metrics-specification.md's Per-Commit Outlier Flag section for why). p50/p90/p95 remain
+  // in `local_metrics_summary.json` as the statistics that can support a claim on this
+  // distribution; `large_commit` remains as the absolute, non-window-relative size flag.
+  //
   // Velocity
   const dates = metrics.map(m => m.date);
   const velocity = computeVelocity(dates);
@@ -381,10 +449,38 @@ async function collectLocalMetrics(options = {}) {
     semanticLayerStatus = semanticResult.status === 'unmeasured' ? 'unmeasured' : true;
   }
 
+  // Excluded volume (code-quality-metrics-3b6): a silent exclusion is the same defect class
+  // as the silent inclusion code-quality-metrics-y8j fixes, so this reports what
+  // ANALYSIS_IGNORE_PATTERNS actually removed from the scored metrics -- count, lines, and
+  // share of the total lines analyzed -- following the config_sources precedent for
+  // surfacing something that changes the headline numbers by a lot.
+  const totalLinesAnalyzed = metrics.reduce((sum, m) => sum + m.total_additions + m.total_deletions, 0);
+  const excludedFilesCount = metrics.reduce((sum, m) => sum + (m.excluded_files_count || 0), 0);
+  const excludedLinesCount = metrics.reduce((sum, m) => sum + (m.excluded_additions || 0) + (m.excluded_deletions || 0), 0);
+  const analysis_exclusions = {
+    patterns: CONFIG.ANALYSIS_IGNORE_PATTERNS,
+    excluded_files_count: excludedFilesCount,
+    excluded_lines_count: excludedLinesCount,
+    excluded_lines_pct: totalLinesAnalyzed > 0 ? ((excludedLinesCount / totalLinesAnalyzed) * 100).toFixed(2) : '0.00'
+  };
+
+  // Vendored/generated default share (code-quality-metrics-3b6, the higher-value half):
+  // computed from CONFIG.DUPLICATE_IGNORE_PATTERNS's existing, non-empty defaults
+  // regardless of whether ANALYSIS_IGNORE_PATTERNS is configured, so this is visible on
+  // every repository by default, not only one whose owner has already found the problem.
+  const vendoredFilesCount = metrics.reduce((sum, m) => sum + (m.vendored_default_files_count || 0), 0);
+  const vendoredLinesCount = metrics.reduce((sum, m) => sum + (m.vendored_default_additions || 0) + (m.vendored_default_deletions || 0), 0);
+  const vendored_generated_share = {
+    patterns: CONFIG.DUPLICATE_IGNORE_PATTERNS,
+    files_count: vendoredFilesCount,
+    lines_count: vendoredLinesCount,
+    lines_pct: totalLinesAnalyzed > 0 ? ((vendoredLinesCount / totalLinesAnalyzed) * 100).toFixed(2) : '0.00'
+  };
+
   // Pre-compute pct fields once — reused in both summary object and classifyDoraArchetype call
   const large_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.large_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const sprawling_commits_pct = metrics.length > 0 ? ((metrics.filter(m => m.sprawling_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
-  const test_coverage_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_first_indicator).length / metrics.length) * 100).toFixed(2) : '0.00';
+  const test_coverage_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_prod_cochange_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const test_isolation_rate = metrics.length > 0 ? ((metrics.filter(m => m.test_only_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
   const uncovered_prod_rate = metrics.length > 0 ? ((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length) * 100).toFixed(2) : '0.00';
 
@@ -395,6 +491,14 @@ async function collectLocalMetrics(options = {}) {
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
     workflow_type: workflowType,
+    history_granularity: historyGranularity,
+    history_granularity_detected: detectedGranularity.value,
+    history_granularity_confidence: detectedGranularity.confidence,
+    history_granularity_signals: detectedGranularity.signals,
+    history_granularity_override: options.history ?? null,
+    config_sources,
+    analysis_exclusions,
+    vendored_generated_share,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,
     large_commits_pct,
@@ -416,7 +520,12 @@ async function collectLocalMetrics(options = {}) {
     net_additions_ratio_median: ratioStats.p50,
     net_additions_ratio_p90: ratioStats.p90,
     message_quality_pct,
-    dora_archetype: classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
+    // Suppressed entirely (the key is omitted from the written JSON -- JSON.stringify drops an
+    // undefined value) rather than shown without a verdict, since the archetype is a composite
+    // of the commit-unit metrics withheld above (code-quality-metrics-bnq requirement #5).
+    dora_archetype: historyGranularity === 'squashed'
+      ? undefined
+      : classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };
@@ -514,7 +623,7 @@ async function collectLocalMetrics(options = {}) {
       const flags = [];
       if (commit.large_commit) flags.push('LARGE');
       if (commit.sprawling_commit) flags.push('SPRAWLING');
-      if (commit.test_first_indicator) flags.push('TEST+PROD');
+      if (commit.test_prod_cochange_commit) flags.push('TEST+PROD');
 
       const flagStr = flags.length > 0 ? ` [${flags.join(', ')}]` : '';
       console.log(`${commit.sha}: ${commit.message.substring(0, 60)}... (${lines} lines, ${commit.files_changed} files)${flagStr} [${commit.source_branch}]`);
@@ -558,7 +667,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -566,7 +675,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed]');
     process.exit(1);
   }
 

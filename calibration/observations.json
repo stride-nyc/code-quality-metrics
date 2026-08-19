@@ -1110,10 +1110,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1148,13 +1147,39 @@
         "p90_lines_changed": 175.90000000000003,
         "p90_files_changed": 8.100000000000001,
         "net_additions_ratio_median": 0.6541425818882466,
-        "duplication_pct": 5.598431696244325
+        "duplication_pct": 1.7558332683024716
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 38.1% of window volume (2724 lines, 'deps: update libffi to 3.8.0'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 68. duplication_pct 6.1816 -> 5.5984 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 38.1% of window volume (2724 lines, 'deps: update libffi to 3.8.0'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 68. duplication_pct 6.1816 -> 5.5984 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.59843 (at 5/50) -> 1.75583 (at 10/100), a 3.19x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.598431696244325,
+        "new_value_at_10_100": 1.7558332683024716,
+        "ratio_old_over_new": 3.1884756926019824,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "cb9bb66780936138b360e61d50133fdf080998e3"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "nodejs/node",
@@ -1183,10 +1208,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1221,13 +1245,39 @@
         "p90_lines_changed": 408.3,
         "p90_files_changed": 8.200000000000003,
         "net_additions_ratio_median": 0.6153209109730848,
-        "duplication_pct": 5.232606196319479
+        "duplication_pct": 1.8962875040141134
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 30.3% of window volume (2897 lines, 'deps: update simdjson to 4.6.4'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 98 -> 58. duplication_pct 4.9424 -> 5.2326 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 30.3% of window volume (2897 lines, 'deps: update simdjson to 4.6.4'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 98 -> 58. duplication_pct 4.9424 -> 5.2326 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.23261 (at 5/50) -> 1.89629 (at 10/100), a 2.76x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.232606196319479,
+        "new_value_at_10_100": 1.8962875040141134,
+        "ratio_old_over_new": 2.759394967927044,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "c0327d3cbb982c75cb2233e9f4ed483e39c03c73"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -1256,10 +1306,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1294,13 +1343,39 @@
         "p90_lines_changed": 250.20000000000033,
         "p90_files_changed": 5.0,
         "net_additions_ratio_median": 0.02026198774185795,
-        "duplication_pct": 4.069542820347714
+        "duplication_pct": 0.6533954785032887
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 21.4% of window volume (1366 lines, 'Deprecate Evented and @ember/object/events per RFC 1111'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 42 -> 42 (unchanged). duplication_pct 4.9912 -> 4.0695 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 21.4% of window volume (1366 lines, 'Deprecate Evented and @ember/object/events per RFC 1111'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 42 -> 42 (unchanged). duplication_pct 4.9912 -> 4.0695 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.06954 (at 5/50) -> 0.653395 (at 10/100), a 6.23x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.069542820347714,
+        "new_value_at_10_100": 0.6533954785032887,
+        "ratio_old_over_new": 6.2282996351148325,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "26071400a790fa8c4c81c4485785d613fb8c9702"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -1329,10 +1404,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1367,13 +1441,39 @@
         "p90_lines_changed": 272.40000000000043,
         "p90_files_changed": 6.200000000000003,
         "net_additions_ratio_median": 0.0,
-        "duplication_pct": 1.450625159479459
+        "duplication_pct": 0.1565066677014215
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 43.8% of window volume (2967 lines, 'Remove barrel file imports from internal code for better tree-shaking'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 20.41 -> 18.37. duplication_pct 2.3961 -> 1.4506 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 43.8% of window volume (2967 lines, 'Remove barrel file imports from internal code for better tree-shaking'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 20.41 -> 18.37. duplication_pct 2.3961 -> 1.4506 (vendor/generated/lock exclusion changed the scanned file set). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.45063 (at 5/50) -> 0.156507 (at 10/100), a 9.27x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.450625159479459,
+        "new_value_at_10_100": 0.1565066677014215,
+        "ratio_old_over_new": 9.268775450812845,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "b7bcbe7f43da2e4e86471edf01966210fe00ea0f"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -1402,10 +1502,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1440,13 +1539,39 @@
         "p90_lines_changed": 152.70000000000007,
         "p90_files_changed": 4.100000000000001,
         "net_additions_ratio_median": 0.7864741641337386,
-        "duplication_pct": 0.7217560394513253
+        "duplication_pct": 0.08934358740780968
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 29.6% of window volume (937 lines, 'cat-file: add remote-object-info to batch-command'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 86 -> 84. duplication_pct 0.7218 -> 0.7218 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 29.6% of window volume (937 lines, 'cat-file: add remote-object-info to batch-command'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 86 -> 84. duplication_pct 0.7218 -> 0.7218 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 0.721756 (at 5/50) -> 0.0893436 (at 10/100), a 8.08x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 0.7217560394513253,
+        "new_value_at_10_100": 0.08934358740780968,
+        "ratio_old_over_new": 8.07843137254902,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "18e66859d87fb4b76599f73460b54f0848c76b16"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -1475,10 +1600,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1513,13 +1637,39 @@
         "p90_lines_changed": 106.2,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.3466666666666667,
-        "duplication_pct": 1.2150850559539168
+        "duplication_pct": 0.5345345345345346
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 12.5% of window volume (256 lines, 'promisor-remote: allow a client to store fields'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 90 -> 90 (unchanged). duplication_pct 1.2151 -> 1.2151 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 12.5% of window volume (256 lines, 'promisor-remote: allow a client to store fields'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 90 -> 90 (unchanged). duplication_pct 1.2151 -> 1.2151 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.21509 (at 5/50) -> 0.534535 (at 10/100), a 2.27x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.2150850559539168,
+        "new_value_at_10_100": 0.5345345345345346,
+        "ratio_old_over_new": 2.2731647395092938,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "2cc71917514657b93014134350864f4849edfc83"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -1548,10 +1698,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1586,13 +1735,39 @@
         "p90_lines_changed": 150.4,
         "p90_files_changed": 5.200000000000003,
         "net_additions_ratio_median": 0.3132867132867133,
-        "duplication_pct": 6.466043976467377
+        "duplication_pct": 2.2317177269340647
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 38.0% of window volume (1620 lines, 'Use safer allocation routines in more places of the tree'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 94 -> 92. duplication_pct 6.466 -> 6.466 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 38.0% of window volume (1620 lines, 'Use safer allocation routines in more places of the tree'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 94 -> 92. duplication_pct 6.466 -> 6.466 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 6.46604 (at 5/50) -> 2.23172 (at 10/100), a 2.90x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 6.466043976467377,
+        "new_value_at_10_100": 2.2317177269340647,
+        "ratio_old_over_new": 2.8973395239148068,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "92e20d4a4382810a30bdb394473d6ee891edab73"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -1621,10 +1796,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1659,13 +1833,39 @@
         "p90_lines_changed": 144.0,
         "p90_files_changed": 7.400000000000006,
         "net_additions_ratio_median": 0.3666666666666667,
-        "duplication_pct": 5.484157413972314
+        "duplication_pct": 1.7842269382473
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 57.1% of window volume (5816 lines, 'Add UPDATE/DELETE FOR PORTION OF'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 98. duplication_pct 5.4842 -> 5.4842 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 57.1% of window volume (5816 lines, 'Add UPDATE/DELETE FOR PORTION OF'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 100 -> 98. duplication_pct 5.4842 -> 5.4842 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.48416 (at 5/50) -> 1.78423 (at 10/100), a 3.07x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.484157413972314,
+        "new_value_at_10_100": 1.7842269382473,
+        "ratio_old_over_new": 3.073688271604938,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "be21341e13d996b54ff8a2f1f9c8f4f1b63fc9ea"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -1694,10 +1894,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1732,13 +1931,39 @@
         "p90_lines_changed": 132.00000000000003,
         "p90_files_changed": 7.100000000000001,
         "net_additions_ratio_median": 0.6753246753246753,
-        "duplication_pct": 1.15120067575721
+        "duplication_pct": 0.23772173283456016
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 23.4% of window volume (699 lines, 'Fixed CVE-2026-15830 -- Mitigated potential DoS via nested geometry collections.'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 72 -> 72 (unchanged). duplication_pct 1.1512 -> 1.1512 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 23.4% of window volume (699 lines, 'Fixed CVE-2026-15830 -- Mitigated potential DoS via nested geometry collections.'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 72 -> 72 (unchanged). duplication_pct 1.1512 -> 1.1512 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.1512 (at 5/50) -> 0.237722 (at 10/100), a 4.84x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.15120067575721,
+        "new_value_at_10_100": 0.23772173283456016,
+        "ratio_old_over_new": 4.842639593908629,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "30ebe0001c1d10bebc68567f796d821f7b309f4d"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -1767,10 +1992,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1805,13 +2029,39 @@
         "p90_lines_changed": 113.80000000000001,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.36602870813397126,
-        "duplication_pct": 1.6232857542681218
+        "duplication_pct": 0.21568023304669334
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 14.2% of window volume (258 lines, 'Fixed #36727 -- Deprecated Field.get_placeholder in favor of get_placeholder_sql'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 76 -> 76 (unchanged). duplication_pct 1.6233 -> 1.6233 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 14.2% of window volume (258 lines, 'Fixed #36727 -- Deprecated Field.get_placeholder in favor of get_placeholder_sql'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 76 -> 76 (unchanged). duplication_pct 1.6233 -> 1.6233 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.62329 (at 5/50) -> 0.21568 (at 10/100), a 7.53x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.6232857542681218,
+        "new_value_at_10_100": 0.21568023304669334,
+        "ratio_old_over_new": 7.526353858847561,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "6be668b0cc6524c9900181c5bd8273ef2f256a34"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -1840,10 +2090,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1878,13 +2127,39 @@
         "p90_lines_changed": 285.5,
         "p90_files_changed": 13.100000000000001,
         "net_additions_ratio_median": 0.005263157894736842,
-        "duplication_pct": 6.318784158119338
+        "duplication_pct": 3.7120835171850506
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 19.6% of window volume (1052 lines, 'multi: timeout improvements'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 88 -> 88 (unchanged). duplication_pct 6.3188 -> 6.3188 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 19.6% of window volume (1052 lines, 'multi: timeout improvements'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 88 -> 88 (unchanged). duplication_pct 6.3188 -> 6.3188 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 6.31878 (at 5/50) -> 3.71208 (at 10/100), a 1.70x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 6.318784158119338,
+        "new_value_at_10_100": 3.7120835171850506,
+        "ratio_old_over_new": 1.7022203646191134,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "05ddf5511ac765c8fc4eb44507ab7c585116f665"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -1913,10 +2188,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -1951,13 +2225,39 @@
         "p90_lines_changed": 151.00000000000006,
         "p90_files_changed": 12.000000000000014,
         "net_additions_ratio_median": 0.125,
-        "duplication_pct": 6.219417121435799
+        "duplication_pct": 3.3457779269264654
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "current",
-      "notes": "Top commit is 48.1% of window volume (2100 lines, 'creds: hold credentials'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 84 -> 83.67. duplication_pct 6.2194 -> 6.2194 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes)."
+      "notes": "Top commit is 48.1% of window volume (2100 lines, 'creds: hold credentials'). Directly isolating the two new fixes on this identical pinned commit set (old tool cbfbf9a8 vs new tool fcc40d93): message_quality_pct 84 -> 83.67. duplication_pct 6.2194 -> 6.2194 (unchanged; no vendored/generated/lock content in this window is scanned files). Every other metric field was verified bit-identical between the old-tool and new-tool run on this same pinned commit set (confirmed directly; the only code differences between the two tool commits are the trailer-strip and duplicate-ignore-pattern fixes). Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 6.21942 (at 5/50) -> 3.34578 (at 10/100), a 1.86x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 6.219417121435799,
+        "new_value_at_10_100": 3.3457779269264654,
+        "ratio_old_over_new": 1.8588852151192077,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "614b94eeccc9e798a5592baaa784df763bd85528"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "nodejs/node",
@@ -1986,10 +2286,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2024,13 +2323,39 @@
         "p90_lines_changed": 236.40000000000015,
         "p90_files_changed": 4.100000000000001,
         "net_additions_ratio_median": 0.0,
-        "duplication_pct": 4.157300532922487
+        "duplication_pct": 1.2620075939349547
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 14.7% of window volume (693 lines, 'benchmark,doc,lib,test: capitalize comments'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 14.7% of window volume (693 lines, 'benchmark,doc,lib,test: capitalize comments'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.1573 (at 5/50) -> 1.26201 (at 10/100), a 3.29x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.157300532922487,
+        "new_value_at_10_100": 1.2620075939349547,
+        "ratio_old_over_new": 3.2941961307538365,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "453ed053432e0c1ae34457e5c364b7091af2615e"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "nodejs/node",
@@ -2059,10 +2384,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2097,13 +2421,39 @@
         "p90_lines_changed": 182.3,
         "p90_files_changed": 9.300000000000004,
         "net_additions_ratio_median": 0.1693141980718668,
-        "duplication_pct": 4.644713207999042
+        "duplication_pct": 1.2975210285336085
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 21.1% of window volume (977 lines, 'quic: avoid using private JS fields for now'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 21.1% of window volume (977 lines, 'quic: avoid using private JS fields for now'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.64471 (at 5/50) -> 1.29752 (at 10/100), a 3.58x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.644713207999042,
+        "new_value_at_10_100": 1.2975210285336085,
+        "ratio_old_over_new": 3.5796824142790644,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "c118304ad02d96f330ecd44c6437a1f9c677fc60"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -2132,10 +2482,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2170,13 +2519,39 @@
         "p90_lines_changed": 184.5,
         "p90_files_changed": 21.0,
         "net_additions_ratio_median": 0.41640866873065013,
-        "duplication_pct": 1.3740704817329454
+        "duplication_pct": 0.4980811627337307
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 11.7% of window volume (431 lines, 'Add `codemod` mode for @glimmer/syntax preprocess.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 11.7% of window volume (431 lines, 'Add `codemod` mode for @glimmer/syntax preprocess.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.37407 (at 5/50) -> 0.498081 (at 10/100), a 2.76x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.3740704817329454,
+        "new_value_at_10_100": 0.4980811627337307,
+        "ratio_old_over_new": 2.758728063898915,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "83a0c2fdfa8f22fd353dcab32ea41c4bcacaa379"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "emberjs/ember.js",
@@ -2205,10 +2580,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2243,13 +2617,39 @@
         "p90_lines_changed": 575.0000000000006,
         "p90_files_changed": 23.1,
         "net_additions_ratio_median": 0.003125,
-        "duplication_pct": 7.679088018789562
+        "duplication_pct": 1.7806143265139593
       },
       "dora_archetype": "legacy-bottleneck",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 31.1% of window volume (4217 lines, 'removed module unification usages'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 31.1% of window volume (4217 lines, 'removed module unification usages'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 7.67909 (at 5/50) -> 1.78061 (at 10/100), a 4.31x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 7.679088018789562,
+        "new_value_at_10_100": 1.7806143265139593,
+        "ratio_old_over_new": 4.312605994709411,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "27d547de76b5c19b530cae6b0798075890188d18"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -2278,10 +2678,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2316,13 +2715,39 @@
         "p90_lines_changed": 51.1,
         "p90_files_changed": 3.1000000000000014,
         "net_additions_ratio_median": 0.4285714285714286,
-        "duplication_pct": 0.8600510244338656
+        "duplication_pct": 0.22093053838668103
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 32.6% of window volume (488 lines, 'msvc: support building Git using MS Visual C++'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 32.6% of window volume (488 lines, 'msvc: support building Git using MS Visual C++'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 0.860051 (at 5/50) -> 0.220931 (at 10/100), a 3.89x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 0.8600510244338656,
+        "new_value_at_10_100": 0.22093053838668103,
+        "ratio_old_over_new": 3.8928571428571437,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "ef60740e9efb364d8bb0fba120adecf860cc8ed0"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "git/git",
@@ -2351,10 +2776,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2389,13 +2813,39 @@
         "p90_lines_changed": 57.90000000000003,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.279320987654321,
-        "duplication_pct": 0.5690057896892609
+        "duplication_pct": 0.13616286406960912
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 13.9% of window volume (193 lines, 'worktree: teach \"repair\" to fix outgoing links to worktrees'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 13.9% of window volume (193 lines, 'worktree: teach \"repair\" to fix outgoing links to worktrees'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 0.569006 (at 5/50) -> 0.136163 (at 10/100), a 4.18x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 0.5690057896892609,
+        "new_value_at_10_100": 0.13616286406960912,
+        "ratio_old_over_new": 4.178861788617886,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "a4f324a423ddfe3680bf6105f8c113d0e76305a0"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -2424,10 +2874,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2462,13 +2911,39 @@
         "p90_lines_changed": 150.9,
         "p90_files_changed": 7.100000000000001,
         "net_additions_ratio_median": 0.20855263157894738,
-        "duplication_pct": 5.570542286468944
+        "duplication_pct": 1.7521678149858209
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 39.8% of window volume (2363 lines, 'Represent Lists as expansible arrays, not chains of cons-cells.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 39.8% of window volume (2363 lines, 'Represent Lists as expansible arrays, not chains of cons-cells.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.57054 (at 5/50) -> 1.75217 (at 10/100), a 3.18x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.570542286468944,
+        "new_value_at_10_100": 1.7521678149858209,
+        "ratio_old_over_new": 3.1792287467134095,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "4c3d05d875dd173a81a995c6e14d69496b467eec"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "postgres/postgres",
@@ -2497,10 +2972,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2535,13 +3009,39 @@
         "p90_lines_changed": 185.80000000000007,
         "p90_files_changed": 7.0,
         "net_additions_ratio_median": 0.1380952380952381,
-        "duplication_pct": 5.687213356273241
+        "duplication_pct": 2.2696423976062285
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 21.6% of window volume (860 lines, 'New contrib module, pg_surgery, with heap surgery functions.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 21.6% of window volume (860 lines, 'New contrib module, pg_surgery, with heap surgery functions.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.68721 (at 5/50) -> 2.26964 (at 10/100), a 2.51x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.687213356273241,
+        "new_value_at_10_100": 2.2696423976062285,
+        "ratio_old_over_new": 2.505775078167157,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "69bd60672af63eaa8b19cdcea175df5ff172e80e"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -2570,10 +3070,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2608,13 +3107,39 @@
         "p90_lines_changed": 97.10000000000002,
         "p90_files_changed": 6.100000000000001,
         "net_additions_ratio_median": 0.46179108248073764,
-        "duplication_pct": 1.1480930378259848
+        "duplication_pct": 0.1143394157725742
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 11.2% of window volume (203 lines, 'Fixed #30365 -- Fixed syntax highlighting in SQL examples.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 11.2% of window volume (203 lines, 'Fixed #30365 -- Fixed syntax highlighting in SQL examples.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.14809 (at 5/50) -> 0.114339 (at 10/100), a 10.04x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.1480930378259848,
+        "new_value_at_10_100": 0.1143394157725742,
+        "ratio_old_over_new": 10.04109589041096,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "6485a5f450b3dc60e690c31a75e0e9574a896842"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "django/django",
@@ -2643,10 +3168,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2681,13 +3205,39 @@
         "p90_lines_changed": 87.30000000000004,
         "p90_files_changed": 5.0,
         "net_additions_ratio_median": 0.628667373630258,
-        "duplication_pct": 1.3811838718901914
+        "duplication_pct": 0.3090659340659341
       },
       "dora_archetype": "harmonious-high-achiever",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 30.0% of window volume (641 lines, 'Fixed #31789 -- Added a new headers interface to HttpResponse.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 30.0% of window volume (641 lines, 'Fixed #31789 -- Added a new headers interface to HttpResponse.'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 1.38118 (at 5/50) -> 0.309066 (at 10/100), a 4.47x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 1.3811838718901914,
+        "new_value_at_10_100": 0.3090659340659341,
+        "ratio_old_over_new": 4.468897149938042,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "eaf9764d3bb25970da89de5799d8d308715628ba"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -2716,10 +3266,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2754,13 +3303,39 @@
         "p90_lines_changed": 37.60000000000001,
         "p90_files_changed": 4.0,
         "net_additions_ratio_median": 0.0,
-        "duplication_pct": 4.442450078528158
+        "duplication_pct": 2.533243561689951
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 21.7% of window volume (153 lines, 'http: allow overriding timecond with custom header'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 21.7% of window volume (153 lines, 'http: allow overriding timecond with custom header'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 4.44245 (at 5/50) -> 2.53324 (at 10/100), a 1.75x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 4.442450078528158,
+        "new_value_at_10_100": 2.533243561689951,
+        "ratio_old_over_new": 1.7536608582415807,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "275b74a53d47174fcc29bab2fc23f599e1205f41"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
     },
     {
       "repo": "curl/curl",
@@ -2789,10 +3364,9 @@
         "AI_RISK_ADDITIONS_RATIO": 3,
         "AI_DUPLICATE_MAX_FILES": 40,
         "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
-        "DUPLICATE_MIN_LINES": 5,
-        "DUPLICATE_MIN_TOKENS": 50,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
         "DUPLICATE_IGNORE_PATTERNS": [
-          "**/designs/**",
           "**/deps/**",
           "**/vendor/**",
           "**/third_party/**",
@@ -2827,13 +3401,798 @@
         "p90_lines_changed": 141.40000000000003,
         "p90_files_changed": 7.300000000000004,
         "net_additions_ratio_median": 0.10476190476190475,
-        "duplication_pct": 5.106756236361303
+        "duplication_pct": 2.4859869068503704
       },
       "dora_archetype": "mixed-signals",
       "include_in_derivation": true,
       "exclusion_reason": null,
       "era": "pre-ai",
-      "notes": "Top commit is 20.6% of window volume (605 lines, 'tests: remove pipelining tests'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were."
+      "notes": "Top commit is 20.6% of window volume (605 lines, 'tests: remove pipelining tests'). Screened against several candidate windows in the same neighborhood before landing on this one; candidates dominated by a vendored dependency sync or a release-cycle translation batch were rejected the same way current-era windows in this dataset were. Superseded duplication_pct measurement: re-measured at DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS 10/100 on 2026-08-18 (tool_commit e82e6bfb1b728e509b78e990b34265c616e1b41e), same pinned repo_head and commit window as the rest of this observation. 5.10676 (at 5/50) -> 2.48599 (at 10/100), a 2.05x reduction. See duplication_remeasurement for full detail. Every other metric in this observation is unaffected by this config change and was not re-measured.",
+      "duplication_remeasurement": {
+        "reason": "DUPLICATE_MIN_LINES/DUPLICATE_MIN_TOKENS raised from 5/50 to 10/100 (code-quality-metrics-k1g) so duplication_pct is measured the way SonarQube's own duplicated-lines gate is defined, and so the toolkit's number means what the published 3-23 percent clone-study range means. The value recorded in metrics.duplication_pct above is the re-measured 10/100 figure; the original 5/50 figure this observation was measured at is preserved below rather than discarded. Wagner et al. (SANER 2016) measured the same three systems at both settings and found roughly a threefold difference; see this observation's own ratio for how closely that held here.",
+        "old_value_at_5_50": 5.106756236361303,
+        "new_value_at_10_100": 2.4859869068503704,
+        "ratio_old_over_new": 2.0542168674698793,
+        "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+        "measured_at": "2026-08-18",
+        "config": {
+          "DUPLICATE_MIN_LINES": 10,
+          "DUPLICATE_MIN_TOKENS": 100,
+          "DUPLICATE_IGNORE_PATTERNS": [
+            "**/designs/**",
+            "**/deps/**",
+            "**/vendor/**",
+            "**/third_party/**",
+            "**/node_modules/**",
+            "**/generated/**",
+            "**/package-lock.json",
+            "**/yarn.lock",
+            "**/pnpm-lock.yaml",
+            "**/*.lock"
+          ]
+        },
+        "repo_head_unchanged": "0b4c4145aac87047513e30a348e63fde96da892d"
+      },
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "python/cpython",
+      "url": "https://github.com/python/cpython",
+      "language": "Python/C",
+      "why_reference": "Reference implementation of Python: every change goes through a PEP-governed review process with mandatory core-developer sign-off and a public backward-compatibility/deprecation policy, and it is the most heavily used interpreter in the ecosystem. Screened in calibration/README.md's candidate list as squashing.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity (lib/git.js) returned squashed on both windows, but at low confidence (pr_reference_share 0.42 and 0.44, below the 0.5 high-confidence cutoff) even though squash_committer_share was 1.0 (0.99 on window 2) and merge commits were 0 (1 on window 2). Manual check found why: half of the sampled messages end in GitHub's alternate '(GH-155302)' backport-reference suffix rather than '(#155302)', and PR_REFERENCE_PATTERN (/\\(#\\d+\\)$/ in lib/git.js) only matches the latter. Recounting by hand (`git log --format=%s | grep -c`) found 21/50 matching '(#N)' and a further 25/50 matching '(GH-N)' on window 1 -- 92% combined, which would have been high confidence had the detector recognized both forms. This is a detector defect (regex coverage), not a disagreement about the verdict: both windows still landed on squashed, matching the screening.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "c5168eadf15665310b22ff44e23738034d3e5036",
+      "window": {
+        "since": "2026-07-19",
+        "actual_span": "recent window ending at repo_head; committer-date --since cutoff 2026-07-19"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 414,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 10.0,
+        "sprawling_commits_pct": 10.0,
+        "test_coverage_rate": 66.0,
+        "test_isolation_rate": 10.0,
+        "uncovered_prod_rate": 2.0,
+        "message_quality_pct": 68.0,
+        "avg_lines_changed": 128.14,
+        "p90_lines_changed": 172.3,
+        "p90_files_changed": 4.2,
+        "net_additions_ratio_median": 0.7228195937873357,
+        "duplication_pct": 2.8766447875258083
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "low",
+      "history_granularity_signals": {
+        "pr_reference_share": 0.42028985507246375,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed), consistent with commit-unit verdicts being inapplicable to a squash-merged repository -- recorded as null here for the same reason, not an omission. See merge_style_evidence for the PR_REFERENCE_PATTERN GH-N gap found while confirming this window.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "python/cpython",
+      "url": "https://github.com/python/cpython",
+      "language": "Python/C",
+      "why_reference": "Same reference as above; second, non-overlapping window with the branch ref moved back per calibration/README.md's older-window method.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity again returned squashed at low confidence (pr_reference_share 0.44, squash_committer_share 0.99, 1 merge commit) -- same GH-N regex gap as window 1, verdict unaffected.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "18347417b06d09fa7eeac68f88eb1e720e925c65",
+      "window": {
+        "since": "2026-01-01",
+        "actual_span": "branch ref moved back to 18347417 (git checkout -B main 18347417) before running, per the README's older-window method; --since 2026-01-01 committer-date cutoff"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 332,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 20.0,
+        "sprawling_commits_pct": 18.0,
+        "test_coverage_rate": 44.0,
+        "test_isolation_rate": 8.0,
+        "uncovered_prod_rate": 4.0,
+        "message_quality_pct": 58.0,
+        "avg_lines_changed": 261.3,
+        "p90_lines_changed": 360.5000000000001,
+        "p90_files_changed": 11,
+        "net_additions_ratio_median": 0.6369047619047619,
+        "duplication_pct": 8.910041549197546
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "low",
+      "history_granularity_signals": {
+        "pr_reference_share": 0.4367469879518072,
+        "squash_committer_share": 0.9879518072289156,
+        "merge_commit_count": 1
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "apache/kafka",
+      "url": "https://github.com/apache/kafka",
+      "language": "Java/Scala",
+      "why_reference": "Apache Software Foundation project, governed by the Apache Way's mandatory code-review and lazy-consensus voting process; distributed-systems infrastructure run at extreme scale by the same companies that contribute to it, which puts real production pressure behind the review bar. Screened in calibration/README.md's candidate list as squashing.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity returned squashed at high confidence on both windows: pr_reference_share 1.0, squash_committer_share 1.0, 0 merge commits. Agrees cleanly with the screening.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "dd116f21bb18cc05e8a5ca86a7e1677888b5c63c",
+      "window": {
+        "since": "2026-07-19",
+        "actual_span": "recent window ending at repo_head; committer-date --since cutoff 2026-07-19"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 192,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 20.0,
+        "sprawling_commits_pct": 34.0,
+        "test_coverage_rate": 60.0,
+        "test_isolation_rate": 16.0,
+        "uncovered_prod_rate": 2.0,
+        "message_quality_pct": 96.0,
+        "avg_lines_changed": 180.88,
+        "p90_lines_changed": 470.40000000000003,
+        "p90_files_changed": 12.200000000000003,
+        "net_additions_ratio_median": 0.7074422583404619,
+        "duplication_pct": 3.683164858197061
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "apache/kafka",
+      "url": "https://github.com/apache/kafka",
+      "language": "Java/Scala",
+      "why_reference": "Same reference as above; second, non-overlapping window with the branch ref moved back per calibration/README.md's older-window method.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity again returned squashed at high confidence (pr_reference_share 1.0, squash_committer_share 1.0, 0 merge commits). Agrees cleanly with the screening.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "b3d77f9891f5d656197663f067dd2e61f6edcb58",
+      "window": {
+        "since": "2026-01-01",
+        "actual_span": "branch ref moved back to b3d77f98 (git checkout -B trunk b3d77f98) before running, per the README's older-window method; --since 2026-01-01 committer-date cutoff"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 106,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 34.0,
+        "sprawling_commits_pct": 28.0,
+        "test_coverage_rate": 54.0,
+        "test_isolation_rate": 14.0,
+        "uncovered_prod_rate": 12.0,
+        "message_quality_pct": 92.0,
+        "avg_lines_changed": 286.98,
+        "p90_lines_changed": 900.6,
+        "p90_files_changed": 11,
+        "net_additions_ratio_median": 0.2,
+        "duplication_pct": 3.2316773830477623
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "microsoft/playwright",
+      "url": "https://github.com/microsoft/playwright",
+      "language": "TypeScript",
+      "why_reference": "Microsoft-backed browser-automation framework that displaced Selenium/Puppeteer as the reputational default for reliable, flake-resistant browser testing; typed codebase with cross-browser CI gating every change. Substituted for microsoft/TypeScript, which was screened as squashing but whose main branch has gone nearly dormant (2 commits in the 30 days before measurement -- see notes), making it unusable for a 50-commit window; playwright is Microsoft-maintained and still an actively squash-merged repository.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity returned squashed at high confidence on both windows: pr_reference_share 1.0, squash_committer_share 1.0, 0 merge commits.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "b856094ed589ef2682b34c20a7ab19831aae42db",
+      "window": {
+        "since": "2026-07-19",
+        "actual_span": "recent window ending at repo_head; committer-date --since cutoff 2026-07-19"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 202,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 24.0,
+        "sprawling_commits_pct": 30.0,
+        "test_coverage_rate": 60.0,
+        "test_isolation_rate": 18.0,
+        "uncovered_prod_rate": 2.0,
+        "message_quality_pct": 96.0,
+        "avg_lines_changed": 107.0,
+        "p90_lines_changed": 301.6,
+        "p90_files_changed": 14.300000000000004,
+        "net_additions_ratio_median": 0.4070026592376852,
+        "duplication_pct": 10.45781340385092
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "microsoft/TypeScript (originally selected) was dropped: `git log --since=2026-07-19` on its main branch found only 2 commits, because primary compiler development has moved off this branch (public 'native port' effort); a window that thin cannot stand in for 50 commits of practice. Replaced with microsoft/playwright, same organization, still actively squash-merged. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "microsoft/playwright",
+      "url": "https://github.com/microsoft/playwright",
+      "language": "TypeScript",
+      "why_reference": "Same reference as above; second, non-overlapping window with the branch ref moved back per calibration/README.md's older-window method.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity again returned squashed at high confidence (pr_reference_share 1.0, squash_committer_share 1.0, 0 merge commits).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "98769e3832d8c0e24b62784eb8923a30f5b56309",
+      "window": {
+        "since": "2026-01-01",
+        "actual_span": "branch ref moved back to 98769e38 (git checkout -B main 98769e38) before running, per the README's older-window method; --since 2026-01-01 committer-date cutoff"
+      },
+      "commits_analyzed": 49,
+      "filtered_from": 210,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 30.61,
+        "sprawling_commits_pct": 40.82,
+        "test_coverage_rate": 55.1,
+        "test_isolation_rate": 12.24,
+        "uncovered_prod_rate": 4.08,
+        "message_quality_pct": 95.92,
+        "avg_lines_changed": 200.45,
+        "p90_lines_changed": 412.6,
+        "p90_files_changed": 14.800000000000011,
+        "net_additions_ratio_median": 0.3333333333333333,
+        "duplication_pct": 20.725118086578764
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "49 of 50 commits analyzed: one blob failed to lazy-fetch from the blobless clone's promisor remote ('No stats found for commit'), a further instance of the transient blobless-fetch defect also seen on django/django's 2026-03-02 window in the granular set. duplication_pct (20.73%) is far above every other window measured in either population; the window's largest commit, 'chore(cli): provide skills (#39069)' (3229 lines / 25 files), adds a batch of near-templated skill/config files, which plausibly drives most of the clone count. Recorded as measured rather than excluded, since it is a real window, not a tool defect, but the DUPLICATE_IGNORE_PATTERNS list (deps/vendor/third_party/generated/lockfiles) does not cover a templated-content burst like this one. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "facebook/react",
+      "url": "https://github.com/facebook/react",
+      "language": "JavaScript",
+      "why_reference": "Meta-maintained UI library; changes are dogfooded against Meta's own product surface before merging, giving it a production-correctness bar beyond open-source review alone, and it is the reference implementation for the modern component-based web. Screened in calibration/README.md's candidate list as squashing.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity returned squashed at high confidence on both windows (pr_reference_share 1.0/0.99, squash_committer_share 1.0, 0 merge commits). Agrees cleanly with the screening.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "eb8feb71096eec5c885b2a4c7d8d030d3622f265",
+      "window": {
+        "since": "2026-07-19",
+        "actual_span": "recent window ending at repo_head; committer-date --since cutoff 2026-07-19"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 51,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 44.0,
+        "sprawling_commits_pct": 32.0,
+        "test_coverage_rate": 74.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 14.0,
+        "message_quality_pct": 94.0,
+        "avg_lines_changed": 609.02,
+        "p90_lines_changed": 684.7000000000002,
+        "p90_files_changed": 16,
+        "net_additions_ratio_median": 0.7711868281989946,
+        "duplication_pct": 6.561112252830223
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "filtered_from (51) is only just above commits_analyzed (50): react's main branch had a slow 30-day window at measurement time, so this window is close to its own --since boundary rather than a deep truncation. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "facebook/react",
+      "url": "https://github.com/facebook/react",
+      "language": "JavaScript",
+      "why_reference": "Same reference as above; second, non-overlapping window with the branch ref moved back per calibration/README.md's older-window method.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity again returned squashed at high confidence (pr_reference_share 0.99, squash_committer_share 1.0, 0 merge commits).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "64b4605cb82367fa78a08b99bbee1c800e6af21a",
+      "window": {
+        "since": "2025-11-01",
+        "actual_span": "branch ref moved back to 64b4605c (git checkout -B main 64b4605c) before running, per the README's older-window method; --since widened to 2025-11-01 (rather than 2026-01-01) because react's lower commit velocity did not otherwise reach 50 commits in a non-overlapping window"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 184,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 40.0,
+        "sprawling_commits_pct": 34.0,
+        "test_coverage_rate": 42.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 26.0,
+        "message_quality_pct": 76.0,
+        "avg_lines_changed": 469.56,
+        "p90_lines_changed": 730.6000000000001,
+        "p90_files_changed": 20.500000000000036,
+        "net_additions_ratio_median": 0.6041501976284585,
+        "duplication_pct": 3.9384405004027094
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0.9945652173913043,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "TanStack/query",
+      "url": "https://github.com/TanStack/query",
+      "language": "TypeScript",
+      "why_reference": "Widely regarded as the reference implementation for async server-state management in the React/Vue/Solid ecosystem; a small, elite core team with a strong reputation for rigorous TypeScript API design and documentation quality -- a useful contrast to the large corporate teams elsewhere in this set. Screened in calibration/README.md's candidate list as squashing.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity returned squashed at high confidence on both windows (pr_reference_share 1.0/0.85, squash_committer_share 1.0/0.88, 0 merge commits). Agrees cleanly with the screening.",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "1f631b3604aab6567fb3f6c90646a5a304641546",
+      "window": {
+        "since": "2026-07-19",
+        "actual_span": "recent window ending at repo_head; committer-date --since cutoff 2026-07-19"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 67,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 22.0,
+        "sprawling_commits_pct": 26.0,
+        "test_coverage_rate": 36.0,
+        "test_isolation_rate": 6.0,
+        "uncovered_prod_rate": 14.0,
+        "message_quality_pct": 100.0,
+        "avg_lines_changed": 201.56,
+        "p90_lines_changed": 394.8,
+        "p90_files_changed": 27.400000000000006,
+        "net_additions_ratio_median": 0.7,
+        "duplication_pct": 7.562530652280531
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "TanStack/query",
+      "url": "https://github.com/TanStack/query",
+      "language": "TypeScript",
+      "why_reference": "Same reference as above; second, non-overlapping window with the branch ref moved back per calibration/README.md's older-window method.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity again returned squashed at high confidence (pr_reference_share 0.85, squash_committer_share 0.88, 0 merge commits).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "d68845833b19e9168e6f822b413d5124c8c5904c",
+      "window": {
+        "since": "2025-09-01",
+        "actual_span": "branch ref moved back to d6884583 (git checkout -B main d6884583) before running, per the README's older-window method; --since widened to 2025-09-01 after --since 2026-01-01 found only 20 commits (see the superseded observation below), too thin a sample for this reference set"
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 229,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 26.0,
+        "sprawling_commits_pct": 26.0,
+        "test_coverage_rate": 26.0,
+        "test_isolation_rate": 16.0,
+        "uncovered_prod_rate": 24.0,
+        "message_quality_pct": 100.0,
+        "avg_lines_changed": 228.46,
+        "p90_lines_changed": 419.2,
+        "p90_files_changed": 86,
+        "net_additions_ratio_median": 0.3041666666666667,
+        "duplication_pct": 4.017857142857143
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0.851528384279476,
+        "squash_committer_share": 0.8820960698689956,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": true,
+      "exclusion_reason": null,
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "p90_files_changed (86) reflects TanStack/query's monorepo-wide 'ci: Version Packages' release-bot commits, which touch every published package's package.json/CHANGELOG.md in one commit; this is a structural feature of this monorepo's release process, not an outlier to discard. dora_archetype withheld by the tool itself (history_granularity resolves to squashed); recorded as null for the same reason, not an omission.",
+      "config_correction": "'**/designs/**' was removed from CONFIG.DUPLICATE_IGNORE_PATTERNS (code-quality-metrics-wcj): it was a fact about one target repository sitting in defaults shared by every consumer. This observation was measured with that pattern in the list. The recorded config above has been updated to the current default set so the provenance gate compares like with like, and this field records what changed and why no metric moved.\n\nVERIFIED IMMATERIAL, not assumed: the GitHub trees API was queried for every reference repository at its exact recorded repo_head on 2026-08-18, counting paths matching (^|/)designs/. All eleven repositories returned zero: nodejs/node, emberjs/ember.js, git/git, postgres/postgres, django/django, curl/curl, python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query. The pattern excluded no file in any window, so duplication_pct is unchanged and no re-measurement is required.\n\nNote that the original justification offered for this correction, that each observation's own notes already confirmed the pattern matched nothing, was not true: no note mentioned it. The trees-API check above was run because of that, and is the actual evidence."
+    },
+    {
+      "repo": "TanStack/query",
+      "url": "https://github.com/TanStack/query",
+      "language": "TypeScript",
+      "why_reference": "Same reference as the other TanStack/query observations.",
+      "merge_style": "squashed",
+      "merge_style_evidence": "detectHistoryGranularity returned squashed at high confidence (pr_reference_share 1.0, squash_committer_share 1.0, 0 merge commits).",
+      "measured_at": "2026-08-18",
+      "tool_commit": "e82e6bfb1b728e509b78e990b34265c616e1b41e",
+      "repo_head": "d68845833b19e9168e6f822b413d5124c8c5904c",
+      "window": {
+        "since": "2026-01-01",
+        "actual_span": "same repo_head (d6884583) as the superseding window below, narrower --since"
+      },
+      "commits_analyzed": 20,
+      "filtered_from": 20,
+      "config": {
+        "ANALYSIS_DAYS": 30,
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "AI_ANALYSIS_MAX_COMMITS": 5,
+        "AI_DIFF_MAX_CHARS": 4000,
+        "AI_RISK_ADDITIONS_RATIO": 3,
+        "AI_DUPLICATE_MAX_FILES": 40,
+        "AI_DUPLICATE_MAX_OUTPUT_TOKENS": 8192,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/designs/**",
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 35.0,
+        "sprawling_commits_pct": 30.0,
+        "test_coverage_rate": 30.0,
+        "test_isolation_rate": 10.0,
+        "uncovered_prod_rate": 30.0,
+        "message_quality_pct": 100.0,
+        "avg_lines_changed": 281.4,
+        "p90_lines_changed": 415.80000000000007,
+        "p90_files_changed": 86,
+        "net_additions_ratio_median": 0.4444444444444444,
+        "duplication_pct": 4.5602359525069955
+      },
+      "history_granularity_detected": "squashed",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 1,
+        "squash_committer_share": 1,
+        "merge_commit_count": 0
+      },
+      "dora_archetype": null,
+      "include_in_derivation": false,
+      "exclusion_reason": "Superseded: --since 2026-01-01 found only 20 commits in the 30 days before the 2026-02-01-area pin, too thin a sample for this reference set. Re-run from the identical repo_head with --since widened to 2025-09-01 to reach 50 commits; see the sibling observation with the same repo_head and commits_analyzed 50.",
+      "era": "current",
+      "population": "squash-merge",
+      "notes": "Kept rather than deleted per this file's append-only convention."
     }
   ],
   "reservations": [
@@ -2845,9 +4204,9 @@
     },
     {
       "id": "granular-history-only",
-      "severity": "high",
-      "concern": "All six reference repositories preserve individual commits. They had to: the tool measures commits, and a squash-merge repository yields one commit per pull request, so its numbers describe pull request shape instead of working habits. Roughly twenty one well known projects were rejected on that basis to find six usable, including eslint, prettier, vuejs/core, TypeScript, angular, webpack, babel, react, svelte, jest, express, python/cpython, apache/kafka and kubernetes. Squash merging is the more common workflow, so the reference set is drawn from the minority case.",
-      "implication": "These bands are valid for granular-history repositories, which are the minority. Applied to a squash-merge repository the unit of measurement differs, so it will look worse on every size metric for reasons unrelated to practice. Note also that granular history is not independent of project generation: the six references are predominantly older projects with mailing list or integrator cultures predating the GitHub squash norm, which compounds the narrow-population reservation rather than sitting beside it. Squash repositories need their own reference set and their own bands, and until then their verdicts should be withheld rather than computed."
+      "severity": "medium",
+      "concern": "All six reference repositories preserve individual commits. They had to: the tool measures commits, and a squash-merge repository yields one commit per pull request, so its numbers describe pull request shape instead of working habits. Roughly twenty one well known projects were rejected on that basis to find six usable, including eslint, prettier, vuejs/core, TypeScript, angular, webpack, babel, react, svelte, jest, express, python/cpython, apache/kafka and kubernetes. Squash merging is the more common workflow, so the reference set is drawn from the minority case. Partially addressed (code-quality-metrics-7sk): a separate squash-merge reference set now exists (python/cpython, apache/kafka, microsoft/playwright, facebook/react, TanStack/query; population: \"squash-merge\" in observations.json), with its own bands derivable via `derive-bands.js --population squash-merge`. This downgrades the severity from high to medium, the same way the pre-ai-baseline reservation was downgraded once a pre-ai window existed, but does not retire it: the squash-merge set is 5 repositories and 10 included windows against the granular set's 6 repositories and 24, so it is a thinner population and its own bands carry a wider reservation of the same two-windows-per-repo and narrow-population kind. The two populations must never be pooled (selectByPopulation defaults to granular).",
+      "implication": "These bands are valid for granular-history repositories, which are the minority. Applied to a squash-merge repository the unit of measurement differs, so it will look worse on every size metric for reasons unrelated to practice. Note also that granular history is not independent of project generation: the six references are predominantly older projects with mailing list or integrator cultures predating the GitHub squash norm, which compounds the narrow-population reservation rather than sitting beside it. Squash repositories need their own reference set and their own bands, and until then their verdicts should be withheld rather than computed. A squash-merge repository can now get a real, if provisional, verdict from the squash-merge bands instead of having every commit-unit verdict withheld -- but that verdict rests on a smaller sample than the granular one, so treat it as more provisional still."
     },
     {
       "id": "circular-definition",

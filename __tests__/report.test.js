@@ -83,12 +83,19 @@ describe('buildMetricCatalog', () => {
   // duplication_semantic_findings's own history, code-quality-metrics-82k, where a fixed
   // finite sentinel got outranked by a formula-computed concern once a band narrowed) so
   // neither entry ever competes with a real scored metric in the relevance sort.
-  it('builds net_additions_ratio_median and message_quality_pct as informational entries: no verdict, no gauge, sentinel concern', () => {
+  //
+  // avg_lines_changed joins them here (code-quality-metrics-6dg): three independent
+  // published fits agree commit size is heavy-tailed with no finite mean (Kolassa et al.'s
+  // GPD shape xi = 1.4617, Arafat and Riehle's power law exponent -1.8612, Hattori and
+  // Lanza's Pareto Q-Q fit), so a mean-based band scores against a statistic the population
+  // does not have.
+  it('builds net_additions_ratio_median, message_quality_pct and avg_lines_changed as informational entries: no verdict, no gauge, sentinel concern', () => {
     const entries = buildMetricCatalog(fullSummary());
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
     const messageQuality = entries.find(e => e.key === 'message_quality_pct');
+    const avgLinesChanged = entries.find(e => e.key === 'avg_lines_changed');
 
-    for (const entry of [netAdditions, messageQuality]) {
+    for (const entry of [netAdditions, messageQuality, avgLinesChanged]) {
       expect(entry.hasGauge).toBe(false);
       expect(entry.status).toBe('neutral');
       expect(entry.concern).toBe(-Infinity);
@@ -179,6 +186,78 @@ describe('buildMetricCatalog', () => {
     const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
     expect(netAdditions.healthyBoundary).toBeNull();
     expect(netAdditions.criticalBoundary).toBeNull();
+  });
+});
+
+describe('buildMetricCatalog when history_granularity is squashed', () => {
+  // avg_lines_changed dropped out of this list (code-quality-metrics-6dg): it is already
+  // informational for an unrelated reason (no finite mean for a heavy-tailed distribution),
+  // covered by the guard test below instead of being withheld a second time.
+  const WITHHELD_KEYS = [
+    'large_commits_pct', 'sprawling_commits_pct', 'uncovered_prod_rate', 'test_coverage_rate',
+    'p90_lines_changed', 'p90_files_changed', 'test_isolation_rate',
+    'commit_size_trend', 'velocity_trend'
+  ];
+
+  it('withholds every commit-unit verdict: no gauge, neutral status, sentinel concern, no boundary, and an explanation', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }));
+    for (const key of WITHHELD_KEYS) {
+      const entry = entries.find(e => e.key === key);
+      expect(entry.hasGauge).toBe(false);
+      expect(entry.status).toBe('neutral');
+      expect(entry.concern).toBe(-Infinity);
+      expect(entry.healthyBoundary).toBeNull();
+      expect(entry.criticalBoundary).toBeNull();
+      expect(entry.descriptiveNote).toMatch(/pull request/);
+    }
+  });
+
+  // [guard] duplication measures file contents, not commit shape, so it keeps its verdict
+  // regardless of history_granularity (code-quality-metrics-bnq requirement #4).
+  it('[guard] keeps the duplication density verdict intact when history is squashed', () => {
+    // Sits past healthy, so an intact verdict is a visible one. duplication_pct is
+    // two-band since its re-derivation at 10/100 (code-quality-metrics-8ad), so the
+    // strongest verdict available is 'warning'; asserting 'critical' here would be
+    // asserting a bound the data does not support.
+    const dup = {
+      statistics: { percentage: THRESHOLDS.DUPLICATION_PCT.healthy + 5, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
+      semantic_findings: [],
+      layers_run: { static: true, semantic: false }
+    };
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }), dup);
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+    expect(density.hasGauge).toBe(true);
+    expect(density.status).toBe('warning');
+    expect(density.descriptiveNote).toBeUndefined();
+    expect(density.criticalBoundary).toBeNull();
+  });
+
+  // [guard] message_quality_pct, net_additions_ratio_median and avg_lines_changed already had
+  // their bands dropped for unrelated reasons (code-quality-metrics-6ti, code-quality-metrics-
+  // a9z, code-quality-metrics-6dg) and are already informational; squashing composes with that
+  // rather than adding a second note.
+  it('[guard] leaves message_quality_pct, net_additions_ratio_median and avg_lines_changed unchanged, not double-annotated, when history is squashed', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'squashed' }));
+    const messageQuality = entries.find(e => e.key === 'message_quality_pct');
+    const netAdditions = entries.find(e => e.key === 'net_additions_ratio_median');
+    const avgLinesChanged = entries.find(e => e.key === 'avg_lines_changed');
+    expect(messageQuality.descriptiveNote).not.toMatch(/pull request/);
+    expect(netAdditions.descriptiveNote).not.toMatch(/pull request/);
+    expect(avgLinesChanged.descriptiveNote).not.toMatch(/pull request/);
+  });
+
+  it('[guard] treats unknown the same as squashed: withholds the same commit-unit entries', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'unknown' }));
+    const large = entries.find(e => e.key === 'large_commits_pct');
+    expect(large.status).toBe('neutral');
+    expect(large.concern).toBe(-Infinity);
+  });
+
+  it('[guard] leaves entries untouched when history_granularity is granular', () => {
+    const entries = buildMetricCatalog(fullSummary({ history_granularity: 'granular' }));
+    const large = entries.find(e => e.key === 'large_commits_pct');
+    expect(large.hasGauge).toBe(true);
+    expect(large.descriptiveNote).toBeUndefined();
   });
 });
 
@@ -310,15 +389,20 @@ describe('buildMetricCatalog with duplicates', () => {
     expect(density.status).toBe('good');
   });
 
-  it('computes concern = 1 (critical) for duplication density at its critical boundary', () => {
-    // percentage is read from THRESHOLDS rather than hardcoded so a recalibration
-    // that moves DUPLICATION_PCT.critical doesn't break this test for no reason.
+  it('never reports critical for duplication density, however far past healthy, since it has no critical bound', () => {
+    // This test previously drove percentage to THRESHOLDS.DUPLICATION_PCT.critical and
+    // asserted concern 1. Reading the boundary from THRESHOLDS protected it against a
+    // value change but not against a tier change: the 10/100 re-derivation
+    // (code-quality-metrics-8ad) left duplication_pct two-band, so there is no critical
+    // boundary to sit at. The concern-1 critical path stays covered by
+    // large_commits_pct, which is genuinely three-band.
     const entries = buildMetricCatalog(fullSummary(), fullDuplicates({
-      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: THRESHOLDS.DUPLICATION_PCT.critical, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
+      statistics: { clones: 40, duplicatedLines: 3239, duplicatedTokens: 0, lines: 8232, tokens: 0, sources: 0, percentage: THRESHOLDS.DUPLICATION_PCT.healthy * 20, percentageTokens: 0, newClones: 0, newDuplicatedLines: 0 }
     }));
     const density = entries.find(e => e.key === 'duplication_density_pct');
-    expect(density.concern).toBe(1);
-    expect(density.status).toBe('critical');
+    expect(density.status).toBe('warning');
+    expect(density.concern).toBe(-1);
+    expect(density.criticalBoundary).toBeNull();
   });
 
   it('renders duplicated-lines-out-of-total and clone-count as informational stat cards', () => {
@@ -347,6 +431,42 @@ describe('buildMetricCatalog with duplicates', () => {
   it('adds no duplication entries at all when duplicates is not supplied (existing callers unaffected)', () => {
     const entries = buildMetricCatalog(fullSummary());
     expect(entries.some(e => e.key.startsWith('duplication_'))).toBe(false);
+  });
+});
+
+describe('buildMetricCatalog with a class B config override (code-quality-metrics-wcj)', () => {
+  it('withholds the duplication_density_pct verdict when summary.config_sources.class_b_overridden is true', () => {
+    const summary = fullSummary({
+      config_sources: { files: ['/repo/.codemetrics.json'], overrides: { DUPLICATE_MIN_LINES: 5 }, class_b_overridden: true }
+    });
+    const entries = buildMetricCatalog(summary, fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(false);
+    expect(density.status).toBe('neutral');
+    expect(density.concern).toBe(-Infinity);
+    expect(density.healthyBoundary).toBeNull();
+    expect(density.criticalBoundary).toBeNull();
+    expect(density.descriptiveNote).toMatch(/DUPLICATE_MIN_LINES|DUPLICATE_MIN_TOKENS/);
+  });
+
+  it('[guard] leaves the duplication_density_pct verdict intact when class_b_overridden is false', () => {
+    const summary = fullSummary({
+      config_sources: { files: [], overrides: {}, class_b_overridden: false }
+    });
+    const entries = buildMetricCatalog(summary, fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(true);
+    expect(density.descriptiveNote).toBeUndefined();
+  });
+
+  it('[guard] leaves the duplication_density_pct verdict intact when config_sources is absent entirely', () => {
+    const entries = buildMetricCatalog(fullSummary(), fullDuplicates());
+    const density = entries.find(e => e.key === 'duplication_density_pct');
+
+    expect(density.hasGauge).toBe(true);
+    expect(density.descriptiveNote).toBeUndefined();
   });
 });
 
