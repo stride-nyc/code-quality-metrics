@@ -74,6 +74,15 @@ function mockExecSequence(...values) {
     // never fires and every prior test's positional values still line up.
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
+    // Tests predating the window reproducibility guard (code-quality-metrics-tde9) supply
+    // no value for the independent `git rev-list --count --since=...` cross-check. Answer it
+    // out of band too, defaulting to empty (getExpectedCommitCount treats an unparseable
+    // count as 0, which reads as "unknown" and never triggers the mismatch warning) so it
+    // never consumes a positional value meant for the numstat call that follows it. Matched
+    // on `rev-list` together with `--since` (not `rev-list` alone), so this does not also
+    // swallow the project-lifecycle root-commit query above, which is also a `rev-list` call
+    // but carries no `--since`.
+    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--since')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -102,6 +111,7 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // never fires and every prior test's positional values still line up.
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
+    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--since')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -366,6 +376,63 @@ describe('collectLocalMetrics — CLI window override', () => {
 
     const sawExplicitSince = execSync.mock.calls.some(call => String(call[0]).includes('2026-04-01'));
     expect(sawExplicitSince).toBe(true);
+  });
+});
+
+describe('collectLocalMetrics — window reproducibility guard (code-quality-metrics-tde9)', () => {
+  test('sets window_expected_commit_count from an independent git rev-list count, and warns on a large discrepancy against the selected count', async () => {
+    const SHA = 'a'.repeat(40);
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd.includes('rev-parse')) return FAKE_ROOT;
+      if (cmd.includes('remote get-url')) return FAKE_REMOTE;
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('%cn')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40);
+      // Independent cross-check under test: git itself reports far more commits reachable in
+      // the window than the tool's own git log fetch below will return (1). Matched together
+      // with `--since` so this does not also answer the unrelated project-lifecycle
+      // `git rev-list --max-parents=0 --all` root-commit query, which falls through to the
+      // default '' below (project_lifecycle is not under test here).
+      if (cmd.includes('rev-list') && cmd.includes('--since')) return '178';
+      if (cmd.includes('branch -a')) return 'main';
+      if (cmd.includes('git log') && cmd.includes('--since')) {
+        return `${SHA}|2026-08-09T10:00:00Z|Dev|feat: only commit in window`;
+      }
+      if (cmd.includes('numstat')) return '10\t5\tsrc/app.js';
+      return '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await collectLocalMetrics({ since: '2026-08-01' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.window_expected_commit_count).toBe(178);
+    expect(summary.filtered_from).toBe(1);
+
+    const allLogs = logSpy.mock.calls.flat().join(' ');
+    expect(allLogs).toMatch(/mismatch/);
+  });
+
+  test('leaves window_expected_commit_count null for a HEAD-anchored run (no explicit --since/--days)', async () => {
+    const SHA = 'b'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.window_expected_commit_count).toBeNull();
   });
 });
 

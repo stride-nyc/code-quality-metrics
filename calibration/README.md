@@ -398,6 +398,64 @@ Record why each was chosen.
 6. Re-run `derive-bands.js` and, if a band moves, update `lib/thresholds.js` in
    its own commit citing the change.
 
+## Reproducing a recorded observation
+
+Reproducing an already-recorded entry from a clean clone is a different exercise from
+adding a new one above, and two things beyond `repo_head` have to be right
+(code-quality-metrics-tde9). Verified directly against a fresh, real blobless clone of two
+repositories, not reasoned about:
+
+1. **Clone single-branch, from the start.** Use the exact command step 1 above already
+   gives: `git clone --filter=blob:none --single-branch --branch <default> <url> <dest>`.
+   A plain `git clone` (no `--single-branch`) carries every remote branch as a
+   remote-tracking ref sitting at its own live tip, and `local-code-metrics.js` enumerates
+   branches with `git branch -a`; it then still analyzes whichever of those branches have
+   commits in the requested window, wherever they have moved on to since the observation
+   was recorded. Checking out `repo_head` afterward, or even resetting a local branch of
+   the same name to it (`git checkout -B <default> <repo_head>`), changes nothing on its
+   own, because the *other* branches are still there and still newer -- confirmed against
+   nodejs/node's long-lived `vX.x-staging`/`canary-*` branches and reproduced on a
+   synthetic repository built specifically to carry one contaminating branch. Cloning
+   single-branch is what prevents this; ref surgery after the fact is not a substitute.
+2. **Do not remove the `origin` remote.** Nothing above asks for this, but it is a natural
+   next step to try once single-branch cloning alone does not appear to be enough (it is,
+   if done correctly -- see below), so it is worth ruling out explicitly: a blobless
+   (`--filter=blob:none`) clone fetches missing blob content from `origin` lazily, on
+   demand, and every `git show --numstat` this tool runs against a historical commit needs
+   exactly that. Removing the remote breaks the fetch silently -- `git log`/`git rev-list`
+   traversal still succeeds, since commit and tree objects are never filtered, but
+   per-commit diffing then collapses to whichever few commits happen to need no further
+   blob fetch, which reads as a complete, well-formed report analyzing almost nothing.
+3. **`tool_commit` mattered until #76, and no longer needs to for these two observations.**
+   Following steps 1-2 correctly was necessary but not sufficient at this project's HEAD as
+   of code-quality-metrics-tde9: reproducing the nodejs/node (`repo_head` `cb9bb667`, `since`
+   `2026-08-01`) and curl/curl (`repo_head` `05ddf551`, `since` `2026-08-10`) observations in
+   this file, both recorded at `tool_commit` `fcc40d93`, gave `large_commits_pct` 18 instead
+   of the recorded 14 for nodejs/node at this project's later HEAD, because the newest-
+   `MAX_COMMITS` selection sorted on author date while `--since` filtered on committer date --
+   the two diverge on a rebase-and-land workflow. #76 fixed this by sorting on committer date
+   throughout, and re-verifying both observations against a fresh clone at the current HEAD
+   (post-#76) reproduces `large_commits_pct`, `p90_lines_changed`, `sprawling_commits_pct` and
+   `test_coverage_rate` exactly for both repositories, with `filtered_from` now matching an
+   independent `git rev-list --count` exactly too (178/178 and 65/65). The one field that does
+   *not* match the originally recorded `actual_span` is the span itself: nodejs/node's
+   `analyzed_span_start` moved from `2026-07-15` to `2026-08-08`, since it is now a
+   committer-date figure (when the work landed) rather than an author-date one (when it was
+   originally written) -- an expected, documented consequence of #76, not a discrepancy to
+   chase. Pinning `tool_commit` is still the generally correct instruction for a *future*
+   defect of this shape; it is simply not required for these two observations any more.
+
+`local-code-metrics.js` now cross-checks its own selection against an independent
+`git rev-list --count` over the same resolved ref and warns loudly on a large mismatch, or
+when the analyzed span starts well after the requested `--since` date, or collapses to a
+single day (code-quality-metrics-tde9) -- exactly the three failure signatures a ref-handling
+mistake in steps 1-2 above produces, so getting them wrong now surfaces a warning instead of
+a silent, plausible wrong answer. The span-lag check's threshold (`WINDOW_SPAN_LAG_DAYS`,
+`lib/config.js`) is itself calibrated against the same two reproductions: a real, healthy
+nodejs/node run lands a 7-day lag purely from commit velocity exhausting `MAX_COMMITS`, with
+no contamination involved, so the threshold sits above that observed value rather than on
+top of it.
+
 ## When observations expire
 
 Recorded numbers are only valid for the tool version that produced them. Two
