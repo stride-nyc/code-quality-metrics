@@ -186,7 +186,7 @@ Two files hold configuration, each the single source of truth for a different ki
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
 | `DUPLICATE_MIN_LINES` | 10 | Minimum lines for jscpd to flag a duplicate block |
 | `DUPLICATE_MIN_TOKENS` | 100 | Minimum tokens for jscpd to flag a duplicate block |
-| `DUPLICATE_IGNORE_PATTERNS` | 9 patterns | Globs jscpd ignores: vendored (`deps`, `vendor`, `third_party`, `node_modules`), generated, and four lock files. Per-repo additions go in the target's `.codemetrics.json`, not here (class A, so bands still apply) |
+| `DUPLICATE_IGNORE_PATTERNS` | 11 patterns | Globs jscpd ignores: vendored (`deps`, `vendor`, `third_party`, `node_modules`, `.terraform`), generated, and five lock files including `.terraform.lock.hcl`, which the `*.lock` catch-all misses because its name ends in `.hcl`. Per-repo additions go in the target's `.codemetrics.json`, not here (class A, so bands still apply) |
 | `ANALYSIS_IGNORE_PATTERNS` | 0 patterns | Globs excluded from the commit-shape metrics (large/sprawling commit, the line-count distributions, prod/test classification, uncovered prod rate): a matched path counts as neither test nor production. Default is empty, deliberately: seeding it would change every existing measurement, including the calibration observations. Per-repo additions go in the target's `.codemetrics.json` (class A, so bands still apply) |
 
 Test file detection uses patterns for JS, Python, Go, Java, and C#. Extend `TEST_FILE_PATTERNS` in `lib/config.js` — the change propagates automatically to all three components.
