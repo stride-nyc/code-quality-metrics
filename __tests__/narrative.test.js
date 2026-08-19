@@ -777,4 +777,55 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // REGRESSION GUARD (code-quality-metrics-top7): the same five-repo regeneration produced
+  // two rejections that were CORRECT and must stay rejected, so a fix aimed at the two false
+  // positives above cannot be tuned by loosening this check in general. daloopa presented
+  // "commit size trend" as a Concern even though the metric layer marked it informational
+  // (status neutral, no verdict) this run -- not a called-shot RED, since neither exemption
+  // added above touches the informational-label check this exercises; confirmed still green
+  // after both fixes.
+  test('still rejects a Concern bullet presenting commit size trend as a Concern when it carries no verdict (daloopa correct rejection)', () => {
+    const payload = [{
+      key: 'commit_size_trend',
+      label: 'Commit size trend',
+      value: 'stable',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Commit size trend is worth watching as the team continues shipping AI-assisted changes.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/commit size trend/i);
+  });
+
+  // REGRESSION GUARD (code-quality-metrics-top7): flight-info-spike's correct rejection,
+  // held alongside daloopa's above. It presented "velocity" as a Concern and went further,
+  // claiming "a combination the tool flags as a drift risk" -- a verdict the tool does not
+  // actually raise (velocity_commits_per_day is always informational). No number appears in
+  // this bullet at all, so neither presence-check exemption added above is even reached; the
+  // rejection still comes from the informational-label check alone.
+  test('still rejects a Concern bullet presenting velocity, and a claimed drift risk the tool does not flag, as a Concern (flight-info-spike correct rejection)', () => {
+    const payload = [{
+      key: 'velocity_commits_per_day',
+      label: 'Velocity',
+      value: '3.2',
+      direction: 'informational',
+      status: 'neutral',
+      healthyBoundary: null,
+      criticalBoundary: null,
+      verdict: 'none'
+    }];
+    const bullets = ['Concern: Velocity is elevated alongside growing commit size, a combination the tool flags as a drift risk.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/velocity/i);
+  });
 });
