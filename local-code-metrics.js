@@ -25,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -682,12 +682,22 @@ async function collectLocalMetrics(options = {}) {
   }
   const branches_with_analyzed_commits = Object.keys(analyzed_branch_commit_counts).length;
 
+  // Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71 part 2): a root
+  // commit that introduces no production files (e.g. a GitHub repo-reservation scaffold of
+  // just LICENSE + README) is not the true start of the build. Map each raw root sha to its
+  // effective counterpart -- itself, unless it is a scaffold, in which case the first later
+  // commit that does introduce a production file -- before checking whether the analyzed
+  // window includes "the start of history". See lib/git.js's findEffectiveRootSha for the
+  // full mechanism and its caveats.
+  const effectiveRootShas = rootCommitShas.map(findEffectiveRootSha);
+  const scaffoldRootDetected = rootCommitShas.some((sha, i) => sha !== effectiveRootShas[i]);
+
   // See the rootCommitShas comment above: this is the actual structural check, run once the
-  // final analyzed commit set (metrics) is known, against the whole repository's root
-  // commit(s) fetched earlier.
+  // final analyzed commit set (metrics) is known, against the whole repository's (effective)
+  // root commit(s) fetched earlier.
   const includesRepositoryRoot = windowIncludesRepositoryRoot({
     analyzedShas: metrics.map(m => m.full_sha),
-    rootShas: rootCommitShas
+    rootShas: effectiveRootShas
   });
   // 'undetermined' when the root-commit query itself failed: neither 'established' (which
   // would silently assert brownfield bands apply, exactly the defect this guards against)
@@ -734,7 +744,11 @@ async function collectLocalMetrics(options = {}) {
       repository_root_commit_count: rootCommitShas.length,
       // True when `git rev-list --max-parents=0 --all` itself failed rather than
       // succeeding with no roots -- see project_lifecycle's own comment above.
-      root_commit_detection_failed: rootCommitDetectionFailed
+      root_commit_detection_failed: rootCommitDetectionFailed,
+      // True when at least one raw root commit introduced zero production files and was
+      // replaced by a later effective root (code-quality-metrics-fex3, GitHub #71 part 2) --
+      // see findEffectiveRootSha's own comment for the mechanism and its caveats.
+      scaffold_root_detected: scaffoldRootDetected
     },
     config_sources,
     analysis_exclusions,

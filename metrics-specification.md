@@ -411,6 +411,44 @@ but also the point a reader asks what the report is still for. `lib/report-templ
 from a screen of ungraded tiles: "This report shows shape and trend for those tiles, not a
 grade."
 
+**Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71).** The rule above has a
+second failure mode besides the false negative already described: a root commit that is itself a
+scaffold, not the start of the build. Measured case, stride-nyc/73V: root commit `ec1026c4`
+(2022-01-26) adds only `LICENSE` and `README.md`, then nothing for three years, then 2,928
+commits from 2025-01-24 onward. `windowIncludesRepositoryRoot` checked against the literal root
+sha never includes it — the analyzed window is HEAD-anchored and the real build sits three years
+after that commit — so this repository classified `established` permanently, no matter how the
+window was widened, and every band above was applied to a genuine greenfield project.
+
+`findEffectiveRootSha` (`lib/git.js`) fixes this without a new path pattern or a tuned age/commit
+threshold, reusing the same test/production/excluded classification `analyzeCommit`'s own
+`prodFiles` count already applies: `commitIntroducesProductionFiles` asks whether a commit's
+changed files are all either a test file (`isTestFile`) or an excluded path
+(`isExcludedPath`/`CONFIG.ANALYSIS_IGNORE_PATTERNS`). A root commit that introduces zero
+production files by that rule is a scaffold; `findEffectiveRootSha` walks forward — oldest-first,
+across the whole repository's history via `git log --all --reverse`, the same "whole repository"
+scope `findRepositoryRootShas` already uses — to the first later commit that does introduce one,
+and `local-code-metrics.js` checks the analyzed window against that effective root instead of the
+raw one. `project_lifecycle_signals.scaffold_root_detected` reports whether this substitution
+happened, alongside the existing three signals.
+
+**Caveat: this does not, by itself, catch a bare LICENSE/README-only scaffold.**
+`CONFIG.ANALYSIS_IGNORE_PATTERNS` defaults to empty (`lib/config.js`), so under default
+configuration neither `LICENSE` nor `README.md` is excluded, and neither is a test file — both
+read as "production" by the exact same rule `analyzeCommit`'s `prodFiles` count uses everywhere
+else in this tool. stride-nyc/73V's own root commit (`LICENSE` + `README.md`, nothing else) is
+therefore **not** automatically reclassified as a scaffold under bare defaults; it only is once
+the target repository's own `.codemetrics.json` configures `ANALYSIS_IGNORE_PATTERNS` to exclude
+those paths (an existing, already-shipped override, not a new default pattern this change adds).
+This is a real, stated limitation, not a silent one: a bare LICENSE/README scaffold root that has
+not been excluded this way still anchors `windowIncludesRepositoryRoot` at its literal sha, and
+the repository stays misclassified until either that configuration is added or the `--lifecycle`
+override below is used. `__tests__/scaffoldRootDetection.test.js` exercises the 73V shape with
+`ANALYSIS_IGNORE_PATTERNS` configured this way, and states the caveat inline.
+
+An operator override for a repository this detection still gets wrong is documented separately
+below (`--lifecycle`, code-quality-metrics-zkhq).
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -1389,10 +1427,19 @@ Single summary object for the analysis run:
   // query itself failed, so neither "initial-build" nor "established" was ever confirmed.
   project_lifecycle: "initial-build" | "established" | "undetermined",
   project_lifecycle_signals: {
-    window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict
+    window_includes_repository_root: boolean,  // windowIncludesRepositoryRoot's raw verdict,
+                                                 // checked against the effective root sha(s)
+                                                 // (see scaffold_root_detected below), not the
+                                                 // raw rev-list output
     repository_root_commit_count: number,      // `git rev-list --max-parents=0 --all`'s count
-    root_commit_detection_failed: boolean       // true when that command itself failed, not
+    root_commit_detection_failed: boolean,      // true when that command itself failed, not
                                                  // when it succeeded and simply found none
+    // Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71 part 2): true when
+    // at least one raw root commit introduced zero production files (findEffectiveRootSha,
+    // lib/git.js) and was replaced by the first later commit that does, before the check above
+    // ran. See "Project Lifecycle and Change-Size Withholding" above for the mechanism and its
+    // caveat (a bare LICENSE/README-only scaffold is not caught under default configuration).
+    scaffold_root_detected: boolean
   },
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
