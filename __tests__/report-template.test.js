@@ -190,6 +190,74 @@ describe('renderReportHtml', () => {
     expect(line).not.toContain('confidence');
   });
 
+  // [guard] not a called-shot RED: resolveGranularitySentence's full five-state switch was
+  // written in one pass alongside state 1 above, so states 2-5 below pin down behavior that
+  // already existed rather than driving new production code. Proven by mutation: swapping the
+  // 'high' branch's return for the 'low' branch's text (so a high-confidence trunk-granular
+  // result reads "though the signal is weak") failed this test, expecting "keeps them intact"
+  // but receiving "though the signal is weak: a few subjects reference pull requests" -- reverted
+  // after confirming.
+  it('[guard] states individual commits with no hedge when trunk detection settles granular at high confidence (state 2)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'high'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('Comparing individual commits');
+    expect(line).toContain('keeps them intact');
+  });
+
+  // [guard] proven by mutation: swapping the 'low' branch's text for the 'high' branch's
+  // ("keeps them intact rather than squashing on merge") failed this test, expecting "the signal
+  // is weak" but receiving the high-confidence wording -- reverted after confirming.
+  it('[guard] names the signal as weak when trunk detection settles granular at low confidence (state 3)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'low'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('the signal is weak');
+  });
+
+  // [guard] proven by mutation: dropping state 4's trailing withholding-consequence clause
+  // (leaving only 'Comparing squashed pull requests, not individual commits.') failed this test's
+  // /withheld/ assertion -- reverted after confirming.
+  it('[guard] states squashed pull requests and names the withholding consequence when trunk detection settles squashed (state 4)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'squashed',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'high'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('squashed pull requests, not individual commits');
+    expect(line).toMatch(/withheld/);
+  });
+
+  // [guard] proven by mutation: deleting the `history_granularity_detected === 'unknown'` check
+  // (falling through to the state-4 text unconditionally) failed this test, expecting "The unit
+  // could not be determined" but receiving the state-4 "squashed pull requests, not individual
+  // commits" wording -- reverted after confirming.
+  it('[guard] states the unit could not be determined when trunk detection itself returns unknown (state 5)', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'trunk',
+      history_granularity: 'squashed',
+      history_granularity_detected: 'unknown',
+      history_granularity_confidence: 'low'
+    }));
+    const line = html.slice(html.indexOf('<p class="masthead-granularity">'), html.indexOf('</p>', html.indexOf('<p class="masthead-granularity">')));
+
+    expect(line).toContain('The unit could not be determined');
+    expect(line).toMatch(/withheld/);
+  });
+
   it('records that a human overrode the heuristic, and what the heuristic itself found, in the masthead', () => {
     const html = renderReportHtml(fixtureArgs({
       history_granularity: 'granular',
