@@ -792,7 +792,12 @@ async function collectLocalMetrics(options = {}) {
     // Suppressed entirely (the key is omitted from the written JSON -- JSON.stringify drops an
     // undefined value) rather than shown without a verdict, since the archetype is a composite
     // of the commit-unit metrics withheld above (code-quality-metrics-bnq requirement #5).
-    dora_archetype: historyGranularity === 'squashed'
+    // project_lifecycle === 'initial-build' withholds that same pair (large_commits_pct,
+    // sprawling_commits_pct -- lib/report.js's WITHHELD_WHEN_GREENFIELD_KEYS) for an identical
+    // reason, so the same suppression applies here: a JSON consumer must not read a confident
+    // archetype string built from inputs this same report declares inapplicable to an initial
+    // build (code-quality-metrics-m7kt).
+    dora_archetype: (historyGranularity === 'squashed' || project_lifecycle === 'initial-build')
       ? undefined
       : classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
     config: CONFIG,

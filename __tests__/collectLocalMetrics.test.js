@@ -551,6 +551,33 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.project_lifecycle).toBe('initial-build');
   });
 
+  // code-quality-metrics-m7kt: dora_archetype is a composite of large_commits_pct,
+  // sprawling_commits_pct, test_coverage_rate and uncovered_prod_rate -- two of which
+  // (large/sprawling) have their own verdicts withheld for an initial build (lib/report.js's
+  // WITHHELD_WHEN_GREENFIELD_KEYS). Computing a confident archetype from inputs this same
+  // report declares inapplicable is the defect measured live in flight-info-spike (large
+  // commits at 48.89%, far above the healthy line, rendered as "legacy-bottleneck" with no
+  // caveat in the JSON). Mirrors the precedent already set for squashed history, where
+  // dora_archetype is omitted entirely (JSON.stringify drops an undefined value) rather than
+  // computed and shown without a verdict -- see local-code-metrics.js's comment on that key.
+  test('omits dora_archetype from local_metrics_summary.json when project_lifecycle is initial-build (code-quality-metrics-m7kt)', async () => {
+    mockExecSequenceWithRootCommits(
+      SHA,
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('initial-build');
+    expect(summary).not.toHaveProperty('dora_archetype');
+  });
+
   // [guard] proven by mutation: reverting analyzeCommit's empty-commit fix in lib/git.js
   // (code-quality-metrics-p4c) so the numstat command's empty stdout is again treated as
   // a dropped commit fails this test -- not with 'established' as might be guessed, but

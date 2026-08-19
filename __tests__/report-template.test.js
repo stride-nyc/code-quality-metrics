@@ -421,6 +421,54 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
+  // code-quality-metrics-m7kt: measured live in flight-info-spike, a greenfield window. Its
+  // large_commits_pct (48.89) and sprawling_commits_pct (42.22) entries are withheld by
+  // buildMetricCatalog for project_lifecycle: initial-build (WITHHELD_WHEN_GREENFIELD_KEYS),
+  // which nulls their healthyBoundary/criticalBoundary. describeArchetypeBody consumed that
+  // withheld catalog directly: a withheld entry's direction is rewritten to 'informational', so
+  // archetypeSignalPhrase's higher-is-worse branch never matched and it fell through to the
+  // higher-is-better return, printing "fell below the healthy line at 48.89 (healthy at or
+  // above null)" -- wrong verb (48.89 is far above the healthy line), the literal string
+  // "null" as a boundary, and (from ARCHETYPE_RULE_DESCRIPTIONS) a claimed critical-line
+  // crossing for a signal whose critical band was withheld, not evaluated. The archetype is a
+  // classification built from withheld inputs, so it must be suppressed entirely (matching the
+  // squashed-history precedent above) rather than rendered with a fabricated boundary.
+  // [guard] regression: an established target (project_lifecycle not 'initial-build') has real,
+  // non-withheld bands and must keep rendering the correct verb, bound and direction -- the
+  // exact sentence confirmed correct on remote_retro before this fix ("Large commits crossed
+  // the healthy line at 28 (healthy at or below 19)"). This is the byte-identical-for-
+  // established-targets half of code-quality-metrics-m7kt's acceptance criteria: the greenfield
+  // fix above must not touch this path at all.
+  it('[guard] still names the real bound and correct direction for an established target, not "null"', () => {
+    const html = renderReportHtml(fixtureArgs({
+      large_commits_pct: '28.00',
+      sprawling_commits_pct: '8.00',
+      dora_archetype: 'foundational-challenges'
+    }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).toContain('Large commits crossed the healthy line at 28 (healthy at or below 19)');
+    expect(section).not.toMatch(/null/);
+  });
+
+  it('suppresses the archetype verdict and explains why when project_lifecycle is initial-build, instead of printing a withheld boundary as null', () => {
+    const html = renderReportHtml(fixtureArgs({
+      project_lifecycle: 'initial-build',
+      large_commits_pct: '48.89',
+      sprawling_commits_pct: '42.22',
+      dora_archetype: 'legacy-bottleneck'
+    }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).not.toMatch(/null/);
+    expect(section).not.toMatch(/crossed (their|the) critical/i);
+    expect(section).not.toMatch(/fell below the healthy line/);
+    expect(section).toContain('class="verdict" data-status="neutral"');
+    expect(section).toMatch(/initial build/i);
+  });
+
   it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {
     // code-quality-metrics-yte: the page groups tiles under fixed headings, so the catalog's
     // own concern-descending order no longer holds across the whole page -- only within a
