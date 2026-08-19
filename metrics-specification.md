@@ -232,6 +232,61 @@ citation is out of this document's scope and is tracked on that issue.
 
 ## Metrics Reference
 
+### History Granularity and Commit-Unit Withholding
+
+Nine of the metrics below treat one `git log` entry as one discrete unit of developer work:
+large and sprawling commit percentage, the three-way test-coverage rates, p90 lines/files
+changed, and the commit-size and velocity trends. Their healthy/critical bands (see Threshold
+Provenance above) were calibrated against repositories with granular history, where that
+assumption holds. It does not hold when a commit is actually a squashed pull request: one
+"commit" then represents an unknown number of developer edits, so the band no longer describes
+the thing being measured. `lib/report.js`'s `buildMetricCatalog` withholds the verdict on all
+nine (`WITHHELD_WHEN_SQUASHED_KEYS`) rather than compare a whole-PR-sized value against a
+per-commit band — the value is still reported, with `hasGauge: false`, `status: 'neutral'`, and a
+`descriptiveNote` explaining why, but no healthy/warning/critical call is made.
+
+**Detection.** `detectHistoryGranularity` (`lib/git.js`) estimates `history_granularity_detected`
+from three signals over the analyzed commits: the share of subjects carrying a trailing
+`(#N)`/`(GH-N)` pull-request reference, the share of committer names matching a squash-bot
+pattern, and whether true merge commits are present (evidence *for* granular history, e.g. a
+merge-button workflow, not a squash signal). A majority PR-reference share (`>= 0.5`) reports
+`squashed` at `high` confidence; any smaller non-zero share reports `squashed` at `low`
+confidence; zero share reports `granular`; zero commits reports `unknown`.
+
+**Withholding rule (code-quality-metrics-drv).** `history_granularity_detected` alone is not
+what withholding acts on. `resolveHistoryGranularityForWithholding` (`local-code-metrics.js`)
+first checks `workflow_type`: commits unique to an unmerged feature branch
+(`workflow_type: feature_branch`) are granular by construction — they have not been squashed
+into anything yet — so the gate resolves `history_granularity` to `granular` for withholding
+purposes regardless of what the raw PR-reference signal found. Only when `workflow_type` is
+`trunk` does the raw detected value (falling back to `squashed` when `unknown`, preserving the
+code-quality-metrics-bnq default: asserting a verdict against bands that don't apply is a worse
+error than withholding one that would have been valid) reach the withholding decision. A
+`--history granular|squashed` CLI flag overrides the resolved value for one invocation and is
+recorded separately as `history_granularity_override`; `history_granularity_detected` always
+reports what detection itself found, unaffected by either the gate or the override.
+
+This matters because a single PR-referenced commit subject among many otherwise-granular
+feature-branch commits — a cherry-pick from a squash-merged main, a rebase onto a squash-merging
+main, or a developer simply typing an issue number — used to be enough to classify the entire
+sample `squashed` and silence every one of the nine verdicts. Measured before this fix: 1 of 29
+commits (3.4%) on remote_retro, 7 of 50 (14.0%) on daloopa, both `workflow_type: feature_branch`.
+
+**Three candidate rules were considered; the workflow_type gate was chosen.** Acting on
+confidence alone (withhold on `squashed`/`high`, caveat on `squashed`/`low`) does not resolve the
+underlying category error: a low-confidence squashed *label* on feature-branch commits is still
+describing something that structurally cannot be a squashed pull request, whatever confidence is
+attached to the label. Raising the zero-share threshold above zero would need an invented, unvalidated
+number with no natural boundary to derive it from. Gating on `workflow_type` needed no such
+number: it rests on a structural fact (an unmerged branch's commits cannot yet be the squashed
+result of a merge) rather than a tuned threshold. The trade this rule makes deliberately: a
+feature-branch repository where every commit subject happens to reference a PR (for reasons
+unrelated to squashing, e.g. an issue-tracker convention) now shows verdicts too, where the old
+rule withheld them — a consequence of the same structural fact, not a special case carved out for
+it. Trunk analysis of a repository that genuinely squash-merges is unaffected: those commits on
+main really are whole pull requests, and the gate does not apply outside
+`workflow_type: feature_branch`.
+
 ### Metric 1: Large Commit Percentage
 
 **What it measures**: The proportion of commits that exceed a line-change threshold, used as a proxy for wholesale AI code acceptance.
@@ -1083,6 +1138,19 @@ Single summary object for the analysis run:
   workflow_type: "feature_branch" | "trunk",  // "trunk" when no feature branches exist; the default branch was analyzed directly
   branches_analyzed: string[],      // feature branches found, or [resolved default branch] when workflow_type is "trunk"
   branch_commit_counts: Record<string, number>,
+
+  // History granularity (code-quality-metrics-bnq, code-quality-metrics-drv): see "History
+  // Granularity and Commit-Unit Withholding" below for what each field means and how
+  // history_granularity is resolved from history_granularity_detected.
+  history_granularity: "granular" | "squashed",             // used to decide withholding; a --history override wins here
+  history_granularity_detected: "granular" | "squashed" | "unknown",  // detectHistoryGranularity's raw verdict, unaffected by the override or the workflow_type gate
+  history_granularity_confidence: "high" | "low",
+  history_granularity_signals: {
+    pr_reference_share: number,       // share of subjects carrying a trailing (#N)/(GH-N) reference
+    squash_committer_share: number,
+    merge_commit_count: number
+  },
+  history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
 
   // Excluded and vendored/generated volume (code-quality-metrics-3b6): a silent exclusion
   // is the same defect class as the silent inclusion code-quality-metrics-y8j fixes.
