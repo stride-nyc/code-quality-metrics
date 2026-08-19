@@ -109,10 +109,12 @@ mismatches are real:
 | `P90_FILES_CHANGED.healthy` | 8 | ~90% of changes touch fewer than **10 files**, over ~9M changes | Sadowski et al., "Modern Code Review: A Case Study at Google", ICSE-SEIP 2018, §5.2 |
 | | | gcc p90 ≈ **8 files** (derived from published frequency table) | Alali, Kagdi & Maletic, ICPC 2008, Table 2 |
 
-The 260/261 agreement is partly coincidental rather than a clean replication: Kolassa excludes
-blank lines and includes test files; this toolkit counts production lines only via
+The 260/261 agreement is consistency within unit uncertainty rather than a clean replication:
+Kolassa excludes blank lines and includes test files; this toolkit counts production lines only via
 `git numstat`, which includes blank lines. The two biases pull in opposite directions and
-happen to land close together. Neither source proposes these as healthy lines -- both are
+land close together. Alali et al.'s gcc data puts the same percentile nearer 160 lines, so on
+lines the anchor is one large corpus's position rather than a convergent constant; the file-count
+anchor is the better-corroborated of the two. Neither source proposes these as healthy lines -- both are
 descriptive percentiles of a population with no health claim attached. What they support is a
 restatement, not a stronger claim: "this repository sits above the 90th percentile of published
 open-source commit-size distributions" is citable; "this repository exceeds a review-effectiveness
@@ -136,16 +138,19 @@ Thirteen reservations are recorded alongside the observations in
 
 - **Granular history only.** The bands do not transfer to squash-merge repositories, which
   will look worse on every size metric for reasons unrelated to practice.
-- **Circular definition.** The references were chosen because they are considered
-  disciplined, and healthy was then defined as what they do. This supports "no worse than
-  these six" rather than "healthy", and reputation is not a measured outcome.
+- **Unvalidated reference choice.** The references were chosen because they are considered
+  disciplined, and healthy was then defined as what they do. Choosing references and reading
+  bands off their quantiles is how a reference benchmark works (it is Alves et al.'s own
+  procedure), but nothing validates the choice itself, and reputation is not a measured
+  outcome. This supports "no worse than these six" rather than "healthy".
 - **Cross-project non-transfer.** Kamei, Fukushima, McIntosh, Yamashita, Ubayashi and Hassan
   (EMSE 2016, DOI 10.1007/s10664-015-9400-x, Table 6) found within-project just-in-time defect
   models score 0.74-0.83 AUC on their own project but fall as low as 0.38 AUC -- worse than
-  random -- applied cross-project to the same eleven projects. An unfitted scalar band from six
-  repositories has less claim to transfer to an unseen project than a fitted, multi-feature
-  model does, so these bands describe these six repositories rather than generalizing beyond
-  them.
+  random -- applied cross-project to the same eleven projects. That result bounds fitted
+  prediction models; a benchmark quantile predicts nothing, so on an unseen project it fails
+  by going uninformative rather than by scoring worse than chance. It remains the clearest
+  published warning against carrying a project-derived number to a dissimilar project, so
+  these bands describe these six repositories rather than generalizing beyond them.
 - **Context-dependence** (medium severity). Zhang, Mockus, Zou, Khomh and Hassan (ICSM 2013,
   DOI 10.1109/ICSM.2013.46) measured 320 SourceForge systems across 39 metrics and found every
   one of six context factors they studied (domain, language, age, lifespan, number of changes,
@@ -502,9 +507,10 @@ carries a verdict; the percentiles below carry the load this band used to carry.
 **External anchor for `p90_lines_changed`**: Kolassa, Riehle and Salim (SOFSEM 2013, Table 1;
 arXiv:1408.4974), an Ohloh.net snapshot of 8,705,118 commits across 11,143 projects, report a p90
 of 261 LoC/commit -- one unit from the 260 derived here from an unrelated, six-repository dataset.
-The agreement is partly coincidental: Kolassa excludes blank lines and includes test files, this
-toolkit counts production lines only and includes blank lines, and the two biases pull in
-opposite directions. Neither source proposes 260 or 261 as a healthy line; both are descriptive
+The agreement is consistency within unit uncertainty: Kolassa excludes blank lines and includes
+test files, this toolkit counts production lines only and includes blank lines, and the two biases
+pull in opposite directions. Alali et al.'s gcc data puts the same percentile nearer 160 lines, so
+this is one large corpus's position, not a convergent constant. Neither source proposes 260 or 261 as a healthy line; both are descriptive
 percentiles. What is citable is a position, not a boundary: this repository sits above the 90th
 percentile of a large published open-source commit-size distribution, not that it has crossed a
 review-effectiveness threshold.

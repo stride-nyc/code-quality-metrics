@@ -143,9 +143,11 @@ of 261 LoC/commit over 8.7M commits (SOFSEM 2013), and p90 files changed (8) aga
 al.'s ~90% of Google changes touching fewer than 10 files (ICSE-SEIP 2018) and Alali et al.'s gcc
 p90 of ~8 files (ICPC 2008). Thirteen reservations qualify every band, three of them high
 severity, including that a fitted, multi-feature just-in-time defect model already fails to
-transfer across projects (down to 0.38 AUC, worse than random — Kamei et al., EMSE 2016), which
-bears directly on how far an unfitted scalar band like these can be carried to a project unlike
-the six references. See `calibration/README.md` and the Threshold Provenance section of
+transfer across projects (down to 0.38 AUC, worse than random; Kamei et al., EMSE 2016). That
+result bounds fitted prediction models rather than benchmark quantiles, which predict nothing and
+so fail on a dissimilar project by going uninformative rather than by scoring worse than chance,
+but it remains the clearest published warning against carrying any project-derived number to a
+project unlike the six references. See `calibration/README.md` and the Threshold Provenance section of
 `metrics-specification.md` for the full derivation rule, the external anchors, and all thirteen
 reservations. Do not cite these numbers as validated outcome thresholds.
 

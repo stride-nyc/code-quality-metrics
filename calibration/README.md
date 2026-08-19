@@ -80,16 +80,21 @@ ones on every run.
 
 The two that most limit how far these bands can be carried:
 
-- **Circular definition.** The references were chosen because they are considered
-  disciplined, and healthy is then defined as what they do. The bands support
+- **Unvalidated reference choice.** The references were chosen because they are
+  considered disciplined, and healthy is then defined as what they do. Choosing
+  references and reading bands off their quantiles is how a reference benchmark
+  works (it is Alves et al.'s own procedure), but nothing validates the choice
+  itself, and reputation is not a measured outcome. The bands support
   "no worse than these six", which is weaker than "healthy".
 - **Cross-project non-transfer.** Kamei et al. (EMSE 2016, Table 6) found a
   fitted, multi-feature just-in-time defect model loses accuracy down to 0.38
   AUC -- worse than random -- when applied to a project outside its training
-  set. An unfitted scalar band from six reference repositories has less claim
-  to transfer to an unseen project than a fitted model does, so these bands
-  should be read as describing these six repositories rather than generalizing
-  to one unlike them.
+  set. That result bounds fitted prediction models; a benchmark quantile
+  predicts nothing, so on an unseen project it fails by going uninformative
+  rather than by scoring worse than chance. It is still the clearest published
+  warning against carrying a project-derived number to a dissimilar project,
+  so these bands should be read as describing these six repositories rather
+  than generalizing to one unlike them.
 
 Two more, now medium severity, are worth calling out separately because each drove
 its own follow-up measurement pass:

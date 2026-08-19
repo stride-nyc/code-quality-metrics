@@ -4279,8 +4279,8 @@
     {
       "id": "circular-definition",
       "severity": "high",
-      "concern": "The repositories were chosen because they are considered disciplined, and healthy is then defined as what they do. There is no external anchor. If the field as a whole has drifted, the bands calibrate to that drift.",
-      "implication": "The bands say a project is no worse than these six, which is a weaker claim than a project is healthy. Nothing here validates the reference choice itself, and reputation is not a measured outcome."
+      "concern": "The repositories were chosen because they are considered disciplined, and healthy is then defined as what they do. Choosing references and reading bands off their quantiles is how a reference benchmark works (it is Alves et al.'s own published procedure), so this is not a circular derivation; but nothing validates the reference choice itself, and if the field as a whole has drifted, the bands calibrate to that drift.",
+      "implication": "The bands say a project is no worse than these six, which is a weaker claim than a project is healthy. Reputation is not a measured outcome, so the exposure is an unvalidated reference choice and a small n. (The id 'circular-definition' predates this rewording and is kept for continuity.)"
     },
     {
       "id": "practice-not-outcome",
@@ -4339,8 +4339,8 @@
     {
       "id": "cross-project-non-transfer",
       "severity": "high",
-      "concern": "Kamei, Fukushima, McIntosh, Yamashita, Ubayashi and Hassan ('Studying just-in-time defect prediction using cross-project models', EMSE 21(5):2072-2106, 2016, DOI 10.1007/s10664-015-9400-x, Table 6) found within-project JIT defect models score 0.74-0.83 AUC on their own project, but the same models applied cross-project on the same eleven projects fall as low as 0.38 AUC -- worse than random. That is a fitted, multi-feature statistical model failing to transfer. A single scalar band derived from six reference repositories, with no fitting and no outcome validation at all, has strictly less claim to transfer to a project outside that six than a fitted model has to a project outside its training set.",
-      "implication": "Applying these bands to a project unlike the six references is not a modest extrapolation; the nearest published analogue to that extrapolation performs at or below chance. The bands should be read as describing these six projects, not as generalizing to an unseen one, until an outcome-validated transfer test exists."
+      "concern": "Kamei, Fukushima, McIntosh, Yamashita, Ubayashi and Hassan ('Studying just-in-time defect prediction using cross-project models', EMSE 21(5):2072-2106, 2016, DOI 10.1007/s10664-015-9400-x, Table 6) found within-project JIT defect models score 0.74-0.83 AUC on their own project, but the same models applied cross-project on the same eleven projects fall as low as 0.38 AUC -- worse than random. That is a fitted, multi-feature statistical model failing to transfer, and the result bounds fitted prediction models: a benchmark quantile predicts nothing, so it cannot fail by scoring worse than chance, and on a project unlike the references it fails instead by the comparison going uninformative. It remains the clearest published warning against carrying any project-derived number to a dissimilar project.",
+      "implication": "Applying these bands to a project unlike the six references is an extrapolation the field's nearest analogue warns against, though the failure mode is an uninformative comparison rather than worse-than-chance prediction. The bands should be read as describing these six projects, not as generalizing to an unseen one, until an outcome-validated transfer test exists."
     },
     {
       "id": "within-project-drift-of-model-properties",
