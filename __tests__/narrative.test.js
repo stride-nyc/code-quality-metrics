@@ -734,4 +734,20 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/test isolation/i);
   });
+
+  // CALLED SHOT (code-quality-metrics-top7, RED 1): measured on a real five-repo
+  // regeneration on 2026-08-19, 73V's narrative was rejected with 'cites "500", which does
+  // not appear in the metric catalog or top-commit payload'. '500 errors' names an HTTP
+  // status code, not a metric measurement -- nothing was fabricated, and 500 has no reason
+  // to appear anywhere in an (here, deliberately empty) payload. Predicted failure before
+  // implementing: expect(result.valid).toBe(true) fails with Received: false, since the
+  // presence check currently treats every numeral as a claimed citation and 500 is absent
+  // from the empty payload/topCommits.
+  test('accepts a Concern bullet whose only number is an HTTP status code, not a metric citation (73V false positive)', () => {
+    const bullets = ['Concern: The largest commit, 8722054b, touches the authentication and user-management code where a missing IAM policy was causing 500 errors, elevating review risk for that change.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
 });
