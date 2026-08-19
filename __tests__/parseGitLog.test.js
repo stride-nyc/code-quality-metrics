@@ -3,8 +3,11 @@
 const { parseGitLog } = require('../local-code-metrics');
 
 // %x1e, the record separator emitted between commits by the git log format this parser
-// consumes (%H|%ai|%an|%B%x1e). %B is multi-line, so newline can no longer serve as the
-// record boundary the way it did when the format captured only %s (the subject line).
+// consumes (%H|%ci|%an|%B%x1e -- committer date, not author date; code-quality-metrics-75 /
+// mbiw). %B is multi-line, so newline can no longer serve as the record boundary the way it
+// did when the format captured only %s (the subject line). parseGitLog itself only splits on
+// '|', so these tests below use plain date strings and are unaffected by which git format
+// token actually produced the second field in production.
 const RS = '\x1e';
 
 describe('parseGitLog', () => {

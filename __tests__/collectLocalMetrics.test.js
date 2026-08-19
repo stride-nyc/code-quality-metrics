@@ -434,7 +434,7 @@ describe('collectLocalMetrics — early exits', () => {
       if (cmd.includes('%cn')) return '';
       if (cmd.includes('%P')) return 'p'.repeat(40); // single parent: not a merge commit
       if (cmd.includes('--max-parents=0')) return '';
-      if (cmd.includes('%H|%ai')) return `${SHA}|2026-08-10T10:00:00Z|Dev|feat: add thing`;
+      if (cmd.includes('%H|%ci')) return `${SHA}|2026-08-10T10:00:00Z|Dev|feat: add thing`;
       if (cmd.includes('--numstat')) {
         throw new Error(`fatal: bad object ${SHA}`);
       }
@@ -1554,6 +1554,29 @@ describe('collectLocalMetrics — HEAD-anchored window (code-quality-metrics-g10
     expect(summary.window_requested_since).toBe('2020-01-01');
     expect(summary.analyzed_span_start).toBe('2026-07-30');
     expect(summary.analyzed_span_end).toBe('2026-08-05');
+  });
+});
+
+describe('collectLocalMetrics — committer-date selection (code-quality-metrics-mbiw)', () => {
+  test('requests committer date (%ci) from git log rather than author date (%ai), so commit selection sorts on the same clock --since filters by', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2026-08-10T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).toContain('%ci');
+    expect(branchLogCommand).not.toContain('%ai');
   });
 });
 
