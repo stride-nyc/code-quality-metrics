@@ -750,4 +750,31 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // CALLED SHOT (code-quality-metrics-top7, RED 2): measured on the same regeneration,
+  // dotnetdependencytracer was rejected with 'cites "300", which does not appear in the
+  // metric catalog or top-commit payload'. 300 is a ceiling the recommendation itself
+  // proposes ("exceeds roughly 300 lines"), not a report of an existing catalog figure --
+  // the two numbers the same bullet DOES cite as measurements, p90 580 and healthy boundary
+  // 260, are both real and must still be checked (this fixture would also fail today if
+  // either were wrong, since only the exemption for 300 is new). Predicted failure before
+  // implementing: expect(result.valid).toBe(true) fails with Received: false, reason
+  // matching cites "300", which does not appear in the metric catalog or top-commit
+  // payload.
+  test('accepts a Recommended action bullet proposing a new ceiling alongside two correctly-cited catalog numbers (dotnetdependencytracer false positive)', () => {
+    const payload = [{
+      key: 'p90_lines_changed',
+      label: 'Commit size, p90',
+      value: '580',
+      direction: 'higher-is-worse',
+      status: 'critical',
+      healthyBoundary: '260',
+      criticalBoundary: null
+    }];
+    const bullets = ['Recommended action: Pausing when a branch exceeds roughly 300 lines of net change would bring the p90 of 580 closer to the healthy boundary of 260.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
