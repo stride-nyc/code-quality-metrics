@@ -201,6 +201,21 @@ describe('buildNarrativePayload', () => {
     expect(messageQuality.verdict).toBe('none');
     expect(sprawling.verdict).toBeUndefined();
   });
+
+  // code-quality-metrics-ll1 follow-up item 4: test_isolation_rate (lib/report.js) carries
+  // direction: 'special' and status: 'good'/'neutral' -- it can never legitimately be a
+  // "Concern" (lib/report.js never assigns it 'warning' or 'critical'), but the marking
+  // condition above only checked direction === 'informational', so it fell through unmarked
+  // and could still be quoted as a Concern without validateNarrative's informational-label
+  // check ever seeing it.
+  test("marks a special-direction entry (test_isolation_rate) as carrying no verdict, matching informational", () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const payload = buildNarrativePayload(catalog);
+    const testIsolation = payload.find(entry => entry.key === 'test_isolation_rate');
+
+    expect(testIsolation.direction).toBe('special');
+    expect(testIsolation.verdict).toBe('none');
+  });
 });
 
 describe('validateNarrative', () => {
