@@ -470,6 +470,37 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.project_lifecycle).toBe('initial-build');
   });
 
+  // [guard] proven by mutation: reverting analyzeCommit's empty-commit fix in lib/git.js
+  // (code-quality-metrics-p4c) so the numstat command's empty stdout is again treated as
+  // a dropped commit fails this test -- not with 'established' as might be guessed, but
+  // with `RangeError: Invalid time value` from local-code-metrics.js's
+  // `new Date(Math.min(...timestamps)).toISOString()`, since the sole analyzed commit is
+  // now dropped, `metrics` is empty, and `Math.min()` over an empty array is `Infinity`.
+  // Reverted after confirming. django's actual root commit is an empty SVN-import
+  // artifact with a zero-byte numstat, which is why this case matters beyond a synthetic
+  // --allow-empty commit: without the fix, the root commit vanishes from `metrics`
+  // entirely, windowIncludesRepositoryRoot never sees its sha, and (on a repository with
+  // more than one analyzed commit, so this particular crash does not mask it) a
+  // genuinely greenfield window reads as established.
+  test('[guard] detects initial-build when the repository\'s root commit is itself empty, not only when it carries changes (code-quality-metrics-p4c)', async () => {
+    mockExecSequenceWithRootCommits(
+      SHA,
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      ''   // empty numstat: a genuinely empty commit (e.g. an SVN-import root), not a
+           // failed git command
+    );
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(1);
+    expect(summary.project_lifecycle).toBe('initial-build');
+  });
+
   // [guard] proven by mutation: hardcoding includesRepositoryRoot to true in
   // local-code-metrics.js fails this test, expecting 'established' but receiving
   // 'initial-build' -- reverted after confirming.
