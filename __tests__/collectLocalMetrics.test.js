@@ -1134,3 +1134,95 @@ describe('collectLocalMetrics — analysis exclusions and vendored-default share
     expect(summary.vendored_generated_share.lines_pct).toBe('96.77');
   });
 });
+
+describe('collectLocalMetrics — HEAD-anchored window (code-quality-metrics-g10)', () => {
+  test('uses --max-count instead of --since when no CLI window flag is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).not.toMatch(/--since=/);
+    expect(branchLogCommand).toMatch(new RegExp(`--max-count=${CONFIG.MAX_COMMITS}`));
+  });
+
+  test('selects the globally newest MAX_COMMITS commits across branches, not the first ones encountered in branch order', async () => {
+    const originalMaxCommits = CONFIG.MAX_COMMITS;
+    CONFIG.MAX_COMMITS = 2;
+    try {
+      const SHA_OLDEST = 'a'.repeat(40);
+      const SHA_MIDDLE = 'b'.repeat(40);
+      const SHA_NEWEST = 'c'.repeat(40);
+      // Branch order (a, b, c) matches commit-age order (oldest, middle, newest): if the
+      // implementation slices the first MAX_COMMITS commits in encounter order instead of
+      // sorting by date first, it keeps the oldest two (a, b) and drops the actual newest (c).
+      // All three branch `git log` calls happen first, in the branch loop; `git show
+      // --numstat` calls happen afterward, once per commit that survives selection into
+      // commitsToAnalyze, in that array's (post-sort) order. SHA_OLDEST is dropped by
+      // selection, so it never reaches a numstat call.
+      mockExecSequence(
+        FAKE_ROOT,
+        FAKE_REMOTE,
+        '  feature/a\n  feature/b\n  feature/c',
+        `${SHA_OLDEST}|2020-01-01T10:00:00Z|Dev|feat: oldest`,  // git log feature/a
+        `${SHA_MIDDLE}|2026-08-01T10:00:00Z|Dev|feat: middle`,  // git log feature/b
+        `${SHA_NEWEST}|2026-08-10T10:00:00Z|Dev|feat: newest`,  // git log feature/c
+        `1\t0\tsrc/b.js`,  // numstat for SHA_MIDDLE (analyzed first: oldest of the selected two)
+        `1\t0\tsrc/c.js`   // numstat for SHA_NEWEST (analyzed second)
+      );
+      fs.writeFileSync.mockImplementation(() => {});
+
+      await collectLocalMetrics();
+
+      const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
+      const commitMetrics = JSON.parse(metricsCall[1]);
+      const shas = commitMetrics.map(m => m.full_sha);
+
+      expect(shas).toContain(SHA_NEWEST);
+      expect(shas).toContain(SHA_MIDDLE);
+      expect(shas).not.toContain(SHA_OLDEST);
+    } finally {
+      CONFIG.MAX_COMMITS = originalMaxCommits;
+    }
+  });
+
+  test('reports analyzed_span_start/analyzed_span_end matching the real oldest and newest analyzed commit dates, not the requested window', async () => {
+    const SHA1 = 'a'.repeat(40);
+    const SHA2 = 'b'.repeat(40);
+    // Both commits are ~300 days before "now" (well outside the old default 30-day window),
+    // matching the measured daloopa shape cited in code-quality-metrics-g10.
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      [
+        `${SHA1}|2025-10-12T10:00:00Z|Dev|feat: old work one\x1e`,
+        `${SHA2}|2025-10-20T10:00:00Z|Dev|feat: old work two\x1e`
+      ].join('\n'),
+      `1\t0\tsrc/one.js`,
+      `1\t0\tsrc/two.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(2);
+    expect(summary.analyzed_span_start).toBe('2025-10-12');
+    expect(summary.analyzed_span_end).toBe('2025-10-20');
+    expect(summary.window_widened).toBe(false);
+  });
+});
