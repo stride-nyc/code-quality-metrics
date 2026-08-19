@@ -597,6 +597,18 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('what healthy work usually looks like');
   });
 
+  // code-quality-metrics-4er: uncovered_prod_rate's description called itself "the strongest
+  // drift signal in the report", a ranking claim with nothing behind it -- no study cited
+  // anywhere in this project ranks these signals against each other. The description should
+  // say what the metric counts, and that it inherits the large-commit and test-coverage
+  // checks' own open questions, instead of ranking it above the other tiles.
+  it('describes uncovered-prod plainly, without ranking it above the other tiles', () => {
+    const html = renderReportHtml(fixtureArgs());
+
+    expect(html).toContain('It is built from the large-commit check and the test/prod co-change check above');
+    expect(html).not.toContain('the strongest drift signal in the report');
+  });
+
   it('renders a Duplicate Code section with static findings, semantic findings, and a layer indicator', () => {
     const duplicates = {
       files_scanned: 3,
