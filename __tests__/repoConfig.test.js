@@ -243,4 +243,21 @@ describe('resolveConfigOverrides — explicit config path (code-quality-metrics-
     );
     expect(result.sources).toHaveLength(2);
   });
+
+  // GUARD: proven by swapping applyOverrideFile's application order in
+  // resolveConfigOverrides (explicit file first, target file second) -- with
+  // that mutation the target file's DUPLICATE_MIN_LINES applies last and wins,
+  // and this test starts failing (asserts 5, receives 7).
+  test('a class B value from an explicit --config file wins over the same key set in the target-local file, since --config is the higher tier', () => {
+    const targetDir = makeTempDir('cqm-classb-precedence-target-');
+    writeConfigFile(targetDir, { DUPLICATE_MIN_LINES: 7 });
+    const configDir = makeTempDir('cqm-classb-precedence-configdir-');
+    const explicitConfigPath = path.join(configDir, 'shared.json');
+    fs.writeFileSync(explicitConfigPath, JSON.stringify({ DUPLICATE_MIN_LINES: 5 }));
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir, explicitConfigPath);
+
+    expect(result.effective.DUPLICATE_MIN_LINES).toBe(5);
+    expect(result.classBOverridden).toBe(true);
+  });
 });
