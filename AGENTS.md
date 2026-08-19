@@ -119,6 +119,24 @@ committed implementation code concurrently in the same worktree. Nothing prevent
 detected it; the work was only salvaged because the parent audited every commit the fork produced.
 A brief that is silent on this is not a brief that forbids it.
 
+**Give the prohibition its reason, not just the rule.** A second agent dispatched a fork despite
+the instruction appearing in the third line of its brief. That fork was harmless: it only
+replayed its parent's red/green cycles and cleaned up after itself, and the work proved sound
+when the parent replayed the same cycles independently. But a bare "do not dispatch further
+agents" invites an agent to conclude that a read-only verification fork is outside the spirit of
+the rule, which is a reasonable reading of a rule stated without its purpose.
+
+The reason is worth stating because it is not obvious:
+
+> Verification you dispatch yourself is not independent. A fork shares your context and your
+> assumptions, so it will tend to confirm what you already believe. The parent replays every RED
+> against its parent commit regardless, so a verification fork adds nothing a reader can rely on
+> while looking like a control that was applied.
+
+That last part is the real cost. A report saying "replayed by an independent fork" reads as
+stronger evidence than "I checked my own work", and it is not. Self-reported TDD is not evidence,
+and neither is TDD reported by something the same agent spawned.
+
 ## Running the Report Against an External Repository
 
 `local-code-metrics.js` writes its JSON and HTML output to `process.cwd()` under fixed names, so
