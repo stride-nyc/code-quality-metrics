@@ -254,7 +254,11 @@ function findUnexplainedShortCounts(observations) {
     .filter(o => o.include_in_derivation)
     .filter(o => typeof o.commits_analyzed === 'number'
       && o.commits_analyzed < (o.config?.MAX_COMMITS ?? CONFIG.MAX_COMMITS))
-    .filter(o => !(typeof o.short_count_explanation === 'string' && o.short_count_explanation.trim() !== ''))
+    .filter(o => {
+      const hasField = typeof o.short_count_explanation === 'string' && o.short_count_explanation.trim() !== '';
+      const notesStateTheCount = typeof o.notes === 'string' && new RegExp(`\\b${o.commits_analyzed}\\b`).test(o.notes);
+      return !hasField && !notesStateTheCount;
+    })
     .map(o => `${o.repo} ${o.window?.since ?? o.window}: commits_analyzed ${o.commits_analyzed} short of ${o.config?.MAX_COMMITS ?? CONFIG.MAX_COMMITS} with no explanation`);
 }
 
@@ -278,6 +282,24 @@ describe('short count provenance', () => {
     expect(findUnexplainedShortCounts(fixture)).toEqual([
       'fixture/short-no-explanation 2026-01-01: commits_analyzed 40 short of 50 with no explanation'
     ]);
+  });
+
+  // [guard] microsoft/playwright and stride-nyc/remote_retro were already explained before this
+  // gate existed, by prose in notes stating the exact shortfall count -- and this task must not
+  // edit either record. Without this exemption the gate would newly fail on two records nobody
+  // asked to have touched, the same shape of false alarm the tool_commit gate's own comments warn
+  // against ("exactly the shape of gate people learn to ignore rather than act on").
+  test('[guard] does not flag a short-count observation whose notes already state the exact shortfall count', () => {
+    const fixture = [{
+      repo: 'fixture/notes-state-the-count',
+      include_in_derivation: true,
+      commits_analyzed: 18,
+      config: { MAX_COMMITS: 50 },
+      window: { since: '2015-07-17' },
+      notes: 'Only 18 commits total in this repository\'s whole first six months.'
+    }];
+
+    expect(findUnexplainedShortCounts(fixture)).toEqual([]);
   });
 });
 
