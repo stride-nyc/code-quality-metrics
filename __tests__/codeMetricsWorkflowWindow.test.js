@@ -203,9 +203,7 @@ describe('code-metrics.yml workflow script -- issue body reports the actual span
     script = loadStepScript('code-metrics.yml', 'Create Issue with Results');
   });
 
-  // Skipped pending the next cycle's periodLine implementation in "Create Issue with
-  // Results" -- unskipped in the code-quality-metrics-3s0 cycle 2 commit.
-  test.skip('states the actual analyzed span instead of a hardcoded "Last 30 days" for a normal run', async () => {
+  test('states the actual analyzed span instead of a hardcoded "Last 30 days" for a normal run', async () => {
     const summary = {
       total_commits: 1,
       branches_analyzed: ['feature-x'],
@@ -235,9 +233,7 @@ describe('code-metrics.yml workflow script -- issue body reports the actual span
     expect(created.body).toContain('2026-08-01T00:00:00.000Z');
   });
 
-  // Skipped pending the next cycle's periodLine implementation -- unskipped alongside the
-  // test above.
-  test.skip('notes that the window was widened past the requested boundary when window_widened is true', async () => {
+  test('notes that the window was widened past the requested boundary when window_widened is true', async () => {
     const summary = {
       total_commits: 1,
       branches_analyzed: ['feature-x'],

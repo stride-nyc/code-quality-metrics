@@ -397,10 +397,20 @@ jobs:
             const archetype = summary.dora_archetype || 'mixed-signals';
             const archetypeDesc = archetypeDescriptions[archetype] || '';
 
+            // States the span actually covered, never the requested "last N days" boundary
+            // (code-quality-metrics-3s0): a weekly issue claiming a fixed lookback while
+            // reporting commits from months outside it would be worse than the recurring
+            // no-activity issue this widening replaces.
+            const periodLine = summary.analyzed_span_start
+              ? (summary.window_widened
+                  ? `**Period:** ${summary.analyzed_span_start} to ${summary.analyzed_span_end} (requested since ${summary.window_requested_since} returned no commits; widened to the newest commits available instead)`
+                  : `**Period:** ${summary.analyzed_span_start} to ${summary.analyzed_span_end} (requested since ${summary.window_requested_since})`)
+              : `**Period:** No commits found since ${summary.window_requested_since}, even after widening to the newest commits available`;
+
             const bodyLines = [
               '## Weekly Code Metrics Report',
               '',
-              `**Period:** Last 30 days`,
+              periodLine,
               `**Commits Analyzed:** ${summary.total_commits}`,
               `**Branches Analyzed:** ${summary.branches_analyzed?.join(', ') || 'N/A'}`,
               '',
