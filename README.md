@@ -337,7 +337,7 @@ workflow required `lib/thresholds.js` at all and printed separate hardcoded perc
 | Metric | Value | Target | Status |
 |--------|-------|--------|--------|
 | Large Commits (>100 prod lines) | 28% | <19%, critical >30% | Warning |
-| Sprawling Commits (>5 files) | 22% | <18%, critical >20% | Warning |
+| Sprawling Commits (>5 files) | 22% | <18%, critical >20% | Critical |
 | Test Coverage (test+prod commits) | 64% | >23% (no critical band established) | OK |
 | Test Isolation (test-only commits) | 12% | >10% (no critical band established) | OK |
 | Uncovered Prod (large, no tests) | 8% | <13% (no critical band established) | OK |
