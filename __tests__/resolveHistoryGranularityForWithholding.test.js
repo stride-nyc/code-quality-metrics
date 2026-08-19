@@ -45,4 +45,18 @@ describe('resolveHistoryGranularityForWithholding', () => {
 
     expect(resolved).toBe('squashed');
   });
+
+  test('[guard] zero commits under trunk workflow still resolves to squashed for gating, preserving the code-quality-metrics-bnq default', () => {
+    // code-quality-metrics-bnq: an undetermined verdict defaults to squashed, not
+    // unknown -- asserting a verdict against bands that don't apply is a worse
+    // error than withholding one that would have been valid. Verified non-vacuous
+    // by mutation: changing the fallback to return detectedGranularity.value
+    // unchanged (i.e. 'unknown') turns this test red.
+    const detected = detectHistoryGranularity({ commits: [], committerNames: [], mergeCommitCount: 0 });
+    expect(detected.value).toBe('unknown');
+
+    const resolved = resolveHistoryGranularityForWithholding(detected, 'trunk');
+
+    expect(resolved).toBe('squashed');
+  });
 });
