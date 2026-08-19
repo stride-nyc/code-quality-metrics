@@ -536,6 +536,18 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('>Uncovered prod</p>');
   });
 
+  // code-quality-metrics-4er: "Commit size, p90" puts the jargon "p90" in the label while its
+  // own description already explains it in plain words ("nine out of ten commits are smaller
+  // than this"). The label should say the same thing the description does.
+  it('labels the commit-size percentile tile without the "p90" jargon', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+    const sizeCard = cards.find(card => card.includes('>Commit size, high end</p>'));
+
+    expect(sizeCard).toBeDefined();
+    expect(html).not.toContain('>Commit size, p90</p>');
+  });
+
   it('omits a threshold description for informational entries with no numeric boundary', () => {
     const html = renderReportHtml(fixtureArgs());
     const cards = html.split('<article class="metric-card"');
