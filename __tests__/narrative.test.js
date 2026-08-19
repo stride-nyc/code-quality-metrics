@@ -408,4 +408,51 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(true);
   });
+
+  // code-quality-metrics-ll1 follow-up item 2: the original report's second claim was a real
+  // value (18) mislabeled as a "healthy boundary" when 18 was p90_files_changed's own value and
+  // 8 was its actual healthy boundary. A presence-only check passes this, because 18 genuinely
+  // appears in the payload -- just not in the role the model claimed. This checks the role a
+  // number is given: when a bullet names a specific metric (by label) and attributes a number to
+  // that metric's "healthy boundary", the number must match THAT metric's own healthyBoundary
+  // field, not merely appear anywhere in the payload (e.g. as the same metric's value, or
+  // another metric's boundary).
+  test("rejects a bullet that cites a metric's own value as though it were its healthy boundary", () => {
+    const payload = [{
+      key: 'p90_files_changed',
+      label: 'Files changed, p90',
+      value: '18',
+      direction: 'higher-is-worse',
+      status: 'warning',
+      healthyBoundary: '8',
+      criticalBoundary: null
+    }];
+    const bullets = ['Concern: Files changed, p90 sits at 18, above the healthy boundary of 18.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/18/);
+  });
+
+  // GUARD, not a called-shot RED: proves the check does not fire when the cited boundary
+  // matches the correct field for the named metric -- a bullet correctly quoting its own
+  // healthyBoundary must still pass, even though the metric's value (18) is a different number
+  // present elsewhere in the same payload.
+  test('does not reject a bullet that correctly cites its own healthy boundary', () => {
+    const payload = [{
+      key: 'p90_files_changed',
+      label: 'Files changed, p90',
+      value: '18',
+      direction: 'higher-is-worse',
+      status: 'warning',
+      healthyBoundary: '8',
+      criticalBoundary: null
+    }];
+    const bullets = ['Concern: Files changed, p90 sits at 18, above the healthy boundary of 8.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
 });
