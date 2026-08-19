@@ -167,6 +167,34 @@ describe('generateInsights', () => {
   });
 
   // --- AI pattern detection ---
+  // --- window reproducibility guard (code-quality-metrics-tde9) ---
+  test('emits a commit-count mismatch warning when the tool selected far fewer commits than git rev-list reports for the resolved window', () => {
+    const { warnings } = generateInsights(makeSummary({
+      filtered_from: 1,
+      window_expected_commit_count: 178,
+      window_requested_since: '2026-08-01',
+      window_widened: false
+    }), []);
+    expect(warnings.some(w => w.includes('mismatch'))).toBe(true);
+  });
+
+  test('does not emit a commit-count mismatch warning when the selected count is close to the expected rev-list count', () => {
+    const { warnings } = generateInsights(makeSummary({
+      filtered_from: 48,
+      window_expected_commit_count: 50,
+      window_requested_since: '2026-08-01',
+      window_widened: false
+    }), []);
+    expect(warnings.some(w => w.includes('mismatch'))).toBe(false);
+  });
+
+  test('does not emit a commit-count mismatch warning when window_expected_commit_count is absent (HEAD-anchored run)', () => {
+    const { warnings } = generateInsights(makeSummary({
+      filtered_from: 1
+    }), []);
+    expect(warnings.some(w => w.includes('mismatch'))).toBe(false);
+  });
+
   test('does not emit AI pattern warning when fewer than 30% of commits are addition-heavy large commits', () => {
     const metrics = [
       makeMetric({ large_commit: true, total_additions: 300, total_deletions: 10 }),
