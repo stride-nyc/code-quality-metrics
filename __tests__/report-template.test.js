@@ -2,7 +2,7 @@
 
 const { renderReportHtml } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
-const { buildMetricCatalog } = require('../lib/report');
+const { buildMetricCatalog, METRIC_GROUP_ORDER } = require('../lib/report');
 const { THRESHOLDS } = require('../lib/thresholds');
 
 function fixtureSummary(overrides) {
@@ -243,7 +243,12 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
-  it('renders every entry in the catalog, in the given order, not a filtered subset', () => {
+  it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {
+    // code-quality-metrics-yte: the page groups tiles under fixed headings, so the catalog's
+    // own concern-descending order no longer holds across the whole page -- only within a
+    // group. Expected order is therefore METRIC_GROUP_ORDER's groups in sequence, each
+    // group's own members left in the order they already arrive in (buildMetricCatalog's
+    // concern sort, unchanged by grouping -- see report.test.js's own coverage of that).
     const args = fixtureArgs();
     const html = renderReportHtml(args);
 
@@ -252,7 +257,9 @@ describe('renderReportHtml', () => {
       expect(html).toContain(entry.label);
     }
 
-    const indices = args.catalog.map(entry => html.indexOf(entry.label));
+    const expectedOrder = METRIC_GROUP_ORDER.flatMap(group => args.catalog.filter(entry => entry.group === group));
+    expect(expectedOrder).toHaveLength(args.catalog.length);
+    const indices = expectedOrder.map(entry => html.indexOf(entry.label));
     const sortedIndices = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sortedIndices);
   });
@@ -714,4 +721,107 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/truncat|fail/i);
   });
 
+});
+
+// code-quality-metrics-yte: the flat, single concern-sorted grid becomes five headed groups.
+// fullDuplicates supplies real data for every duplication tile so the "Duplication" heading
+// (otherwise absent when no duplicate analysis was supplied at all) is present in every test
+// below, letting these tests assert all five headings render together.
+function fullDuplicatesForGrouping() {
+  return {
+    files_scanned: 11,
+    static_duplicates: [],
+    semantic_findings: [],
+    statistics: { clones: 2, duplicatedLines: 12, duplicatedTokens: 90, lines: 1595, tokens: 6196, sources: 11, percentage: 0.75, percentageTokens: 2.07, newClones: 0, newDuplicatedLines: 0 },
+    layers_run: { static: true, semantic: true }
+  };
+}
+
+describe('renderReportHtml metric group headings (code-quality-metrics-yte)', () => {
+  // [guard] not a called-shot RED: renderMetricGrid already groups by entry.group alone, so
+  // a withheld (concern -Infinity, informational) entry keeps its heading with no extra
+  // code. Proven by mutation: filtering `entry.concern !== -Infinity` into the group filter
+  // (the exact mistake this guard exists to catch -- conflating "withheld/informational"
+  // with "should be hidden") made the entire "Change size and scope" heading vanish under
+  // squashed history, since every one of its members is informational in that state; the
+  // test failed on the missing heading itself before the fix was reverted.
+  it('[guard] keeps a withheld tile (squashed history) under its documented heading, in the "Change size and scope" section, rather than moving or dropping it', () => {
+    const summary = fixtureSummary({ history_granularity: 'squashed', dora_archetype: undefined });
+    const catalog = buildMetricCatalog(summary);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData() });
+
+    const sizeHeadingStart = html.indexOf('<h2 class="metric-category-heading">Change size and scope</h2>');
+    expect(sizeHeadingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingStart = html.indexOf('<h2 class="metric-category-heading">', sizeHeadingStart + 1);
+    const sizeSection = html.slice(sizeHeadingStart, nextHeadingStart === -1 ? html.length : nextHeadingStart);
+
+    // large_commits_pct is withheld under squashed history (no verdict, informational), but
+    // it still measures commit size and must stay under this heading, not move to an
+    // "other"/withheld section or vanish.
+    expect(sizeSection).toContain('>Large commits</p>');
+    expect(sizeSection.toLowerCase()).toContain('no verdict');
+  });
+
+  // [guard] not a called-shot RED, same mechanism as the squashed-history guard above (group
+  // is keyed on entry.key alone, independent of any withheld/informational state a tile is
+  // in): a duplication tile marked "Not measurable" (jscpd cannot parse the scanned
+  // language, code-quality-metrics-tjn) still measures duplication and must stay under that
+  // heading rather than being omitted or filed elsewhere.
+  it('[guard] keeps the "Not measurable" duplication tile under the "Duplication" heading', () => {
+    const summary = fixtureSummary();
+    const duplicates = { files_scanned: 3, static_duplicates: [], semantic_findings: [], statistics: null, unsupported_extensions: ['.ex', '.exs'], layers_run: { static: 'unmeasured', semantic: false } };
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    const dupHeadingStart = html.indexOf('<h2 class="metric-category-heading">Duplication</h2>');
+    expect(dupHeadingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingStart = html.indexOf('<h2 class="metric-category-heading">', dupHeadingStart + 1);
+    const dupSection = html.slice(dupHeadingStart, nextHeadingStart === -1 ? html.length : nextHeadingStart);
+
+    expect(dupSection).toContain('>Duplication density</p>');
+    expect(dupSection).toContain('Not measurable');
+  });
+
+  // [guard] not a called-shot RED: closes the loop between report.test.js's catalog-level
+  // membership assertion and the actual markup, so a mismatch introduced only in
+  // rendering (not in the group-assignment table) would still be caught here. Proven by
+  // mutation: reassigning avg_lines_changed to 'Pace and direction' in
+  // lib/report.js's METRIC_GROUP_BY_KEY changed the distribution to [6, 3, 3, 4, 1] and
+  // failed this test (also would have failed report.test.js's own membership test, since
+  // the mutation was upstream of both).
+  it('renders exactly seventeen metric cards distributed 6/4/3/3/1 across the five headings, with no extra heading anywhere in the page', () => {
+    const summary = fixtureSummary();
+    const duplicates = fullDuplicatesForGrouping();
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    expect(catalog).toHaveLength(17);
+
+    const headingRegex = /<h2 class="metric-category-heading">([^<]+)<\/h2>/g;
+    const renderedHeadings = [...html.matchAll(headingRegex)].map(m => m[1]);
+    expect(renderedHeadings).toEqual(METRIC_GROUP_ORDER);
+
+    const sections = html.split('<section class="metric-category">').slice(1);
+    expect(sections).toHaveLength(5);
+    const cardCounts = sections.map(section => (section.match(/<article class="metric-card"/g) || []).length);
+    expect(cardCounts).toEqual([6, 4, 3, 3, 1]);
+    expect(cardCounts.reduce((a, b) => a + b, 0)).toBe(17);
+  });
+
+  it('renders all five documented group headings, in the fixed order, even when a later group carries the highest concern this run', () => {
+    // test_coverage_rate (Test practice) is driven to its critical-ish low end so a
+    // concern-only sort would put the "Test practice" group first; the fixed group order
+    // must win over that anyway.
+    const summary = fixtureSummary({ test_coverage_rate: '1.00', large_commits_pct: '5.00', sprawling_commits_pct: '5.00' });
+    const duplicates = fullDuplicatesForGrouping();
+    const catalog = buildMetricCatalog(summary, duplicates);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates });
+
+    const positions = METRIC_GROUP_ORDER.map(group => html.indexOf(`<h2 class="metric-category-heading">${group}</h2>`));
+    for (const position of positions) {
+      expect(position).toBeGreaterThanOrEqual(0);
+    }
+    const sortedPositions = [...positions].sort((a, b) => a - b);
+    expect(positions).toEqual(sortedPositions);
+  });
 });
