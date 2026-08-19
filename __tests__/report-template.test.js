@@ -585,6 +585,22 @@ describe('renderReportHtml', () => {
     expect(scope).not.toContain('Branches analyzed:');
   });
 
+  // code-quality-metrics-rpw: the two counts (branches considered vs. branches that actually
+  // contributed a commit) sat on the same page with no way to see them together -- a reader had
+  // to count the branch list by hand and separately recall the masthead's "across N branches" to
+  // notice a thin slice (code-quality-metrics-8sq). Putting "N of M" in the bullet itself makes
+  // the gap visible without that arithmetic.
+  it('shows how many of the considered branches contributed a commit to the analyzed sample, next to the branch list', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('2 of 4');
+  });
+
   // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
   // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
   // Analysis Scope as provenance, so the audit trail survives even though the masthead no
