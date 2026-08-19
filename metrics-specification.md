@@ -1314,36 +1314,69 @@ the system prompt instructs the model to echo every number it references
 exactly as given, to the same precision, and never to compute, estimate, or
 restate a number differently.
 
-The instruction alone did not hold. Measured against a real run
-(code-quality-metrics-ll1): the model cited a duplication healthy boundary
-of 6 when the catalog held 2, quoted `concern` (an internal sort sentinel,
-`lib/report.js`'s `computeConcern`) as if it were a reader-facing score, and
-presented `message_quality_pct` -- an entry the catalog deliberately marks
-informational, with no healthy/critical band -- under "Concern" anyway. A
-better-worded prompt cannot make an LLM's output verifiable; only a
-generated-output check can, so one now runs on every call:
+A first pass at verifying this (code-quality-metrics-ll1) misread its own
+evidence: it compared a report rendered at one point in a session against
+catalog data from several hours later, after an unrelated threshold
+re-derivation and field rename had already landed in between, and concluded
+from the mismatch that the model had fabricated a duplication boundary, a
+concern score, and a field name. It had not -- every value it echoed was
+correct for the catalog state that actually produced that report; the two
+snapshots were simply never comparable. Re-measured against a single
+consistent run, three things were real: raw unrounded floats reaching the
+reader's prose (`0.4108463434675432%`), the internal `concern` sort
+sentinel (`lib/report.js`'s `computeConcern`) quoted as if it were a
+reader-facing score, and `message_quality_pct` -- an entry the catalog
+deliberately marks informational, with no healthy/critical band --
+presented under "Concern" anyway. A better-worded prompt cannot make an
+LLM's output verifiable regardless of which defect turns out to be real;
+only a generated-output check can, so one now runs on every call:
 
 - `buildNarrativePayload(catalog)` is what is actually sent to the model, not
   the raw catalog. It strips `concern`, `hasGauge` and `tier` (rendering/sort
   internals a reader should never see quoted), rounds `value`,
   `healthyBoundary` and `criticalBoundary` through the same `formatValue`
   the report's own cards use (`lib/report-template.js`), attaches each
-  entry's `lib/metric-descriptions.js` prose, and marks every
-  informational-direction entry `verdict: 'none'`. The user message also
-  states once, up front, that healthy/critical are benchmark quantiles, not
-  validated outcome thresholds (see "What a band means" above).
+  entry's `lib/metric-descriptions.js` prose, and marks every entry whose
+  `direction` is `'informational'` or `'special'` (`test_isolation_rate` is
+  the only current example: it is scored `'good'`/`'neutral'`, never
+  `'warning'`/`'critical'`, so it can never legitimately be a Concern
+  either) `verdict: 'none'`. The user message also states once, up front,
+  that healthy/critical are benchmark quantiles, not validated outcome
+  thresholds (see "What a band means" above).
 - `validateNarrative(bullets, payload, topCommits)` checks the model's
   flattened response against that same payload before it is ever returned.
-  It rejects (fails the render's narrative step, not merely warns) if either
-  is true: a bullet cites a number, at whatever precision it wrote, that
-  does not appear anywhere in the catalog payload or the top-commits
-  payload; or a bullet labeled "Concern" names a metric the payload marked
-  `verdict: 'none'`.
+  It rejects (fails the render's narrative step, not merely warns) if any of
+  the following is true:
+  - a bullet cites a number, at whatever precision it wrote, that does not
+    appear anywhere in the catalog payload or the top-commits payload;
+  - a bullet names exactly one payload entry by label and attributes a
+    number to that metric's "healthy boundary" or "critical boundary" which
+    does not match that metric's own `healthyBoundary`/`criticalBoundary`
+    field -- catching a real value (e.g. a metric's own `value`) mislabeled
+    as its boundary, which a presence-only check cannot, since the digit is
+    genuinely present just not in that role. Deliberately narrow: it only
+    fires on that literal phrasing, tied to an unambiguous single-metric
+    label match, rather than attempting to parse what every number in open
+    prose means (code-quality-metrics-ll1 follow-up item 2);
+  - a bullet quotes one of the payload's internal `key` values verbatim
+    (e.g. `test_prod_cochange_commit`) instead of its human-readable
+    `label` -- a snake_case identifier has no legitimate reason to appear in
+    reader-facing prose (follow-up item 3);
+  - a bullet labeled "Concern" names a metric the payload marked
+    `verdict: 'none'`.
 - On rejection, `generateFindingsNarrative` logs the reason and returns the
   same deterministic fallback described below, prefixed with a
   `"Narrative rejected: <reason>"` bullet -- visible in the rendered report,
   not a silently swallowed failure. A silent fallback is how the measured
   defect went unnoticed in the first place.
+- The API call's `max_tokens` is `CONFIG.NARRATIVE_MAX_OUTPUT_TOKENS` (8192),
+  not a literal in `lib/narrative.js`. The original 1024 cap was measured,
+  not assumed, to be too tight once `lib/metric-descriptions.js` prose was
+  added to the payload: 23 live calls against two real catalogs produced 0
+  outright truncations, but output usage reached 855 of the 1024-token
+  budget (83%) on the payload carrying the full pipeline's 10 top commits --
+  thin enough that an occasional truncated, unparseable response is expected
+  under ordinary response-length variance (follow-up item 1).
 
 The narrative layer still never computes or alters a number itself; it only
 writes sentences over metric values and top commits that `lib/report.js`
