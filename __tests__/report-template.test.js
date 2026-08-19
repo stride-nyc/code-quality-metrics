@@ -96,6 +96,21 @@ describe('renderReportHtml', () => {
     expect(html).toContain('30');
   });
 
+  // code-quality-metrics-g10 hard requirement: a HEAD-anchored run never applied a day-based
+  // boundary at all, so the primary masthead line claiming "a 30-day window" would itself be
+  // false, not merely incomplete -- the adjacent span line (tested below) does not fix a false
+  // statement sitting right next to it.
+  it('does not claim a day-count window in the masthead when the analysis was HEAD-anchored', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2025-10-12',
+      analyzed_span_end: '2025-10-20',
+      window_requested_since: null,
+      window_widened: false
+    }));
+
+    expect(html).not.toContain('30-day window');
+  });
+
   // code-quality-metrics-g10 hard requirement: the actual analyzed span must appear in the
   // HTML, not only in the summary JSON, so a report is never presentable as covering recent
   // activity when the analyzed commits are actually old (e.g. a HEAD-anchored window on a
