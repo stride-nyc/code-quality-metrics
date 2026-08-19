@@ -24,4 +24,25 @@ describe('resolveHistoryGranularityForWithholding', () => {
 
     expect(resolved).toBe('granular');
   });
+
+  test('[guard] trunk analysis of a squash-merging repository (majority of subjects carry a PR reference) is still withheld', () => {
+    // This is the case code-quality-metrics-drv's design explicitly says must not
+    // regress: commits on main after a squash merge genuinely are whole pull
+    // requests, so the workflow_type: feature_branch gate above must not apply
+    // here. Verified non-vacuous by mutation: deleting the workflowType check
+    // from resolveHistoryGranularityForWithholding turns this test red.
+    const commits = [
+      { message: 'feat: add widget (#101)' },
+      { message: 'fix: correct bug (#102)' },
+      { message: 'chore: bump deps (#103)' },
+      { message: 'docs: update readme' }
+    ];
+    const detected = detectHistoryGranularity({ commits, committerNames: [], mergeCommitCount: 0 });
+    expect(detected.value).toBe('squashed');
+    expect(detected.confidence).toBe('high');
+
+    const resolved = resolveHistoryGranularityForWithholding(detected, 'trunk');
+
+    expect(resolved).toBe('squashed');
+  });
 });
