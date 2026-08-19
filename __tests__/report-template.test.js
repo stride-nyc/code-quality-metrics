@@ -96,6 +96,36 @@ describe('renderReportHtml', () => {
     expect(html).toContain('30');
   });
 
+  // code-quality-metrics-g10 hard requirement: the actual analyzed span must appear in the
+  // HTML, not only in the summary JSON, so a report is never presentable as covering recent
+  // activity when the analyzed commits are actually old (e.g. a HEAD-anchored window on a
+  // repository whose newest commit is 300 days old).
+  it('renders the actual analyzed span in the masthead, not just the requested day count', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2025-10-12',
+      analyzed_span_end: '2025-10-20',
+      window_requested_since: null,
+      window_widened: false
+    }));
+
+    expect(html).toContain('2025-10-12');
+    expect(html).toContain('2025-10-20');
+  });
+
+  it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2026-07-30',
+      analyzed_span_end: '2026-08-05',
+      window_requested_since: '2020-01-01',
+      window_widened: true
+    }));
+
+    expect(html).toContain('2026-07-30');
+    expect(html).toContain('2026-08-05');
+    expect(html).toContain('2020-01-01');
+    expect(html).toMatch(/widened/i);
+  });
+
   it('renders the detected history granularity and confidence in the masthead', () => {
     const html = renderReportHtml(fixtureArgs({
       history_granularity: 'granular',
