@@ -341,6 +341,22 @@ describe('renderReportHtml', () => {
     expect(bottleneck).toContain('legacy-bottleneck');
   });
 
+  // code-quality-metrics-rpw: the verdict line named its own archetype twice -- once as a
+  // "label: " prefix and again inside describeArchetypeBody's explanatory sentence ('...this
+  // toolkit's rule labels that combination "legacy-bottleneck" because...'). Redundant, not
+  // incorrect, but a single occurrence reads as clean prose. Scoped to the verdict paragraph
+  // alone (not the whole page) so a second, unrelated mention elsewhere in the report can never
+  // make this assertion pass for the wrong reason.
+  it('[guard] names the archetype label only once in the verdict line, not as a repeated prefix', () => {
+    const html = renderReportHtml(fixtureArgs({ dora_archetype: 'legacy-bottleneck' }));
+    const verdictStart = html.indexOf('class="verdict"');
+    const verdictEnd = html.indexOf('</p>', verdictStart);
+    const verdict = html.slice(verdictStart, verdictEnd);
+
+    const occurrences = verdict.split('legacy-bottleneck').length - 1;
+    expect(occurrences).toBe(1);
+  });
+
   // The four dora_archetype values are boundaries this toolkit invented from
   // commit shape, not a DORA-validated classification (DORA derives its own
   // archetypes from survey data). foundational-challenges is the archetype a
@@ -567,6 +583,38 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('main');
     expect(scope).toContain('feature/foo');
     expect(scope).toContain('release/9');
+  });
+
+  // code-quality-metrics-rpw: "Branches analyzed" here and "across N branches" in the masthead
+  // used the same word for two different sets -- this bullet lists branches_analyzed (every
+  // branch considered, measured 51 on 73V), the masthead counts
+  // branches_with_analyzed_commits (only those that contributed a commit, measured 4). Asserts
+  // both halves: the new label naming the actual set is present, and the old label implying
+  // the masthead's set is gone -- the first alone would pass even if the old, misleading label
+  // were left standing alongside it.
+  it('labels the Analysis Scope branch bullet with the set it lists, not the masthead\'s contributing-branch wording', () => {
+    const html = renderReportHtml(fixtureArgs({ branches_analyzed: ['main', 'feature/foo', 'release/9'] }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('Branches considered');
+    expect(scope).not.toContain('Branches analyzed:');
+  });
+
+  // code-quality-metrics-rpw: the two counts (branches considered vs. branches that actually
+  // contributed a commit) sat on the same page with no way to see them together -- a reader had
+  // to count the branch list by hand and separately recall the masthead's "across N branches" to
+  // notice a thin slice (code-quality-metrics-8sq). Putting "N of M" in the bullet itself makes
+  // the gap visible without that arithmetic.
+  it('shows how many of the considered branches contributed a commit to the analyzed sample, next to the branch list', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('2 of 4');
   });
 
   // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
