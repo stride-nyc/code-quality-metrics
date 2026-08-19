@@ -25,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -973,7 +973,7 @@ module.exports = {
   resolveHistoryGranularityForWithholding,
   CONFIG,
   // git
-  runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff,
+  runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, getExpectedCommitCount,
   // statistics
   computeStatistics, computeVelocity,
   // metrics
