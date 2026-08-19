@@ -802,6 +802,40 @@ The count varies between runs on identical input, so it is reported as a finding
 confident zero: `layers_run.semantic` distinguishes "ran and found none" from "never ran" so a
 failed or skipped call cannot be read as a clean result.
 
+**Withholding when Layer 1's language is one jscpd cannot parse (code-quality-metrics-tjn)**:
+jscpd does not recognize every language. Verified live against `remote_retro` (an Elixir
+repository): two 30-line, obviously-duplicated `.ex` files still report
+`statistics.total.sources: 0` at the configured `DUPLICATE_MIN_LINES`/`DUPLICATE_MIN_TOKENS`, and
+still do at 1/1 -- jscpd exits 0 and writes a report shaped exactly like a genuine "0%
+duplication, nothing to flag" measurement, because it recognized none of the scanned files at
+all. Passing that through unchanged would report a language jscpd cannot parse as a confidently
+healthy 0%, the same silent-zero shape this project has already fixed once for a truncated
+semantic response (`code-quality-metrics-all`) and for squashed history's commit-unit verdicts.
+
+`statistics.total.sources === 0` alone does not distinguish "unsupported language" from "every
+scanned file happens to fall under the configured min-lines/min-tokens floor" -- both produce the
+identical zeroed report. `runDuplicateAnalysis` (`lib/duplicate.js`) tells them apart with a
+second, cheap jscpd pass with min-lines/min-tokens relaxed to 1, run only when the real scan
+already came back at zero sources: a genuinely supported language registers at least one source
+at that floor; an unsupported one still won't. This avoids the alternative of this project
+maintaining its own copy of jscpd's roughly 223-language support list, which would drift from
+jscpd's own list as it changes.
+
+When the probe also finds zero sources, `runDuplicateAnalysis` returns `statistics: null` and
+`unsupportedExtensions` (the distinct file extensions among the scanned files) instead of the
+zeroed statistics object. `local-code-metrics.js` carries this into
+`local_duplicate_analysis.json` as `unsupported_extensions`, and sets `layers_run.static` to
+`'unmeasured'` rather than a confident `true` -- the same tri-state convention `layers_run.semantic`
+already uses for its own failed/truncated case. `lib/report.js`'s `buildMetricCatalog` renders
+`duplication_density_pct` as informational (`value: 'Not measurable'`, `status: 'neutral'`, no
+gauge) naming the extensions found, instead of a silently omitted metric or a fabricated
+0%/healthy verdict. **This bears on the band, not only the measurement**: `DUPLICATION_PCT` was
+derived from C, JavaScript, Python and Go repositories, so for a language jscpd cannot parse, the
+band is not merely inapplicable -- the measurement itself does not exist. A genuine zero-source
+result (every scanned file *is* a supported language, just below the size floor at both the
+configured and the relaxed settings) is not affected: it has no `unsupportedExtensions` field and
+keeps its real, if trivial, `duplication_density_pct` verdict.
+
 ---
 
 ## Derived Metrics

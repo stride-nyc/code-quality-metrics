@@ -539,7 +539,7 @@ async function collectLocalMetrics(options = {}) {
   const prodFilePaths = [...new Set(metrics.flatMap(m => m.prod_file_paths || []))];
   // One combined call: jscpd is the expensive part of a run, so findings and
   // statistics come from the same scan rather than two passes over the same files.
-  const { findings: staticDuplicates, statistics: duplicateStatistics } = runDuplicateAnalysis(prodFilePaths);
+  const { findings: staticDuplicates, statistics: duplicateStatistics, unsupportedExtensions } = runDuplicateAnalysis(prodFilePaths);
   /** @type {any[]} */
   let semanticFindings = [];
   // false: layer did not run (no client). true: ran and produced a usable result
@@ -703,7 +703,15 @@ async function collectLocalMetrics(options = {}) {
       static_duplicates: staticDuplicates,
       semantic_findings: semanticFindings,
       statistics: duplicateStatistics,
-      layers_run: { static: true, semantic: semanticLayerStatus }
+      // code-quality-metrics-tjn: unsupportedExtensions is only present when
+      // runDuplicateAnalysis has determined jscpd recognizes none of the scanned files'
+      // languages (verified live against remote_retro, Elixir) -- distinct from a genuine
+      // zero, which carries a real statistics object instead. Layer 1 attempted to run but
+      // produced no usable measurement in that case, so layers_run.static reports
+      // 'unmeasured' rather than a confident true, the same tri-state convention
+      // layers_run.semantic already uses for its own failed/truncated case.
+      ...(unsupportedExtensions ? { unsupported_extensions: unsupportedExtensions } : {}),
+      layers_run: { static: unsupportedExtensions ? 'unmeasured' : true, semantic: semanticLayerStatus }
     };
     fs.writeFileSync(
       path.join(outputDir, 'local_duplicate_analysis.json'),

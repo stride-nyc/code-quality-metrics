@@ -950,6 +950,37 @@ describe('collectLocalMetrics — duplicate detection', () => {
     expect(output.layers_run).toEqual({ static: true, semantic: 'unmeasured' });
   });
 
+  // code-quality-metrics-tjn: lib/duplicate.js reports unsupportedExtensions rather than a
+  // statistics object when jscpd recognizes none of the scanned files' languages (verified
+  // live against remote_retro, Elixir). local-code-metrics.js must carry that through to
+  // local_duplicate_analysis.json rather than silently dropping it, and must not claim Layer 1
+  // produced a real measurement when it did not.
+  test('writes unsupported_extensions and marks layers_run.static "unmeasured" when the duplicate scan reports an unsupported language', async () => {
+    duplicate.runDuplicateAnalysis.mockReturnValue({
+      findings: [],
+      statistics: null,
+      unsupportedExtensions: ['.ex', '.exs']
+    });
+
+    await collectLocalMetrics();
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.unsupported_extensions).toEqual(['.ex', '.exs']);
+    expect(output.layers_run).toEqual({ static: 'unmeasured', semantic: false });
+  });
+
+  test('GUARD: omits unsupported_extensions and keeps layers_run.static true when the duplicate scan found no unsupported language', async () => {
+    duplicate.runDuplicateAnalysis.mockReturnValue({ findings: [], statistics: null });
+
+    await collectLocalMetrics();
+
+    const dupCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_duplicate_analysis'));
+    const output = JSON.parse(dupCall[1]);
+    expect(output.unsupported_extensions).toBeUndefined();
+    expect(output.layers_run).toEqual({ static: true, semantic: false });
+  });
+
   // Locks in the guard in local-code-metrics.js (`if (prodFilePaths.length > 0)`):
   // when every analyzed commit is test-only, there is nothing for jscpd to scan,
   // so local_duplicate_analysis.json is omitted entirely rather than written
