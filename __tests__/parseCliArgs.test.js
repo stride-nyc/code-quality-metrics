@@ -45,4 +45,8 @@ describe('parseCliArgs', () => {
   test('rejects --history given without a value', () => {
     expect(() => parseCliArgs(['--history'])).toThrow(/--history/);
   });
+
+  test('accepts a valid --config value', () => {
+    expect(parseCliArgs(['--config', '/tmp/shared/.codemetrics.json'])).toEqual({ config: '/tmp/shared/.codemetrics.json' });
+  });
 });

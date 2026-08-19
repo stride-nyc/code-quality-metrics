@@ -117,10 +117,10 @@ function fetchBranchCommits(ref, sinceStr) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed' }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -148,6 +148,10 @@ function parseCliArgs(argv) {
         throw new Error(`--history must be 'granular' or 'squashed', got '${history}'`);
       }
       options.history = history;
+      i++;
+    } else if (argv[i] === '--config') {
+      if (!argv[i + 1]) throw new Error('--config requires a path');
+      options.config = argv[i + 1];
       i++;
     }
   }
@@ -183,7 +187,7 @@ function resolveHistoryGranularityForWithholding(detectedGranularity, workflowTy
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed' }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -818,7 +822,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', config?: string }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
