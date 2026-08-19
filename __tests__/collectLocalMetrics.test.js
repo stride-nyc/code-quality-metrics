@@ -1122,6 +1122,38 @@ describe('collectLocalMetrics — explicit --config path override (code-quality-
     expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
     expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
   });
+
+  // GUARD: proven by making applyOverrideFile never set classBOverridden for the
+  // explicit-path branch specifically (hardcode the explicit-file contribution to
+  // bypass the CLASS_B_KEYS check) -- with that mutation config_sources.class_b_overridden
+  // comes back false even though DUPLICATE_MIN_LINES was overridden, and this test starts
+  // failing. This is the direct proof that a class B override supplied by --config
+  // withholds the duplication verdict identically to one supplied by the target file's own
+  // .codemetrics.json (AGENTS.md's "Per-Repo Configuration Overrides", lib/report.js's
+  // buildMetricCatalog reads only this boolean, never which route produced it).
+  test('a class B override supplied via --config alone sets config_sources.class_b_overridden true, the same as the file route', async () => {
+    const SHA = 'd'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    const explicitConfigPath = '/shared/outside-repo/.codemetrics.json';
+    fs.existsSync.mockImplementation(p => p === explicitConfigPath);
+    fs.statSync.mockReturnValue({ isDirectory: () => false });
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_MIN_LINES: 5 }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ config: explicitConfigPath });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.class_b_overridden).toBe(true);
+    expect(CONFIG.DUPLICATE_MIN_LINES).toBe(5);
+  });
 });
 
 describe('collectLocalMetrics — analysis exclusions and vendored-default share (code-quality-metrics-3b6)', () => {
