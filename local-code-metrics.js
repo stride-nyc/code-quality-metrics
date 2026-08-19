@@ -200,15 +200,20 @@ async function collectLocalMetrics(options = {}) {
   const explicitWindow = options.since !== undefined || options.days !== undefined;
 
   // PRECEDENCE (highest to lowest): CLI flags (--since/--days, applied via
-  // `options` above and parseCliArgs' own flags) > a .codemetrics.json in the
-  // analysis target, resolved from process.cwd() > lib/config.js's own
-  // defaults. See lib/repoConfig.js's own doc comment for the full rationale
-  // (JSON not JS, array union not replace, why this is three tiers and not
-  // loadEnv's four) and AGENTS.md's "Per-Repo Configuration Overrides" section
-  // for an example file. Reset-then-apply every run: see
-  // CONFIG_OVERRIDABLE_DEFAULTS' own comment for why.
+  // `options` above and parseCliArgs' own flags) > an explicit --config <path>
+  // (options.config, code-quality-metrics-ap7 -- for a scripted run against a
+  // repository the operator does not control, where committing a
+  // .codemetrics.json into that repo is not an option) > a .codemetrics.json in
+  // the analysis target, resolved from process.cwd() > lib/config.js's own
+  // defaults. --config COMPOSES with the target's own .codemetrics.json rather
+  // than replacing it -- see lib/repoConfig.js's own doc comment for the full
+  // rationale (JSON not JS, array union not replace, why this is four tiers
+  // with --config and three without, not loadEnv's four) and AGENTS.md's
+  // "Per-Repo Configuration Overrides" section for an example file.
+  // Reset-then-apply every run: see CONFIG_OVERRIDABLE_DEFAULTS' own comment
+  // for why.
   const { effective: effectiveConfig, sources: configSources, classBOverridden } =
-    resolveConfigOverrides(CONFIG_OVERRIDABLE_DEFAULTS, process.cwd());
+    resolveConfigOverrides(CONFIG_OVERRIDABLE_DEFAULTS, process.cwd(), options.config);
   Object.assign(CONFIG, effectiveConfig);
   const config_sources = {
     files: configSources.map(source => source.file),
@@ -830,7 +835,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--config <path>]');
     process.exit(1);
   }
 

@@ -1093,6 +1093,37 @@ describe('collectLocalMetrics — repo-local .codemetrics.json override (code-qu
   });
 });
 
+// code-quality-metrics-ap7: --config <path> lets a scripted run against a repository the
+// operator does not control supply an override from outside the analysis target, since it
+// cannot commit a .codemetrics.json into that repo.
+describe('collectLocalMetrics — explicit --config path override (code-quality-metrics-ap7)', () => {
+  test('applies an override from an explicit --config path and records it in config_sources.files', async () => {
+    const SHA = 'c'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t5\tsrc/app.js`
+    );
+    const explicitConfigPath = '/shared/outside-repo/.codemetrics.json';
+    // No .codemetrics.json in the analysis target itself -- only the explicit path exists.
+    fs.existsSync.mockImplementation(p => p === explicitConfigPath);
+    fs.statSync.mockReturnValue({ isDirectory: () => false });
+    fs.readFileSync.mockReturnValue(JSON.stringify({ DUPLICATE_IGNORE_PATTERNS: ['**/flight-info-spike-example/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ config: explicitConfigPath });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.config_sources.files).toContain(explicitConfigPath);
+    expect(summary.config_sources.overrides.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/flight-info-spike-example/**');
+  });
+});
+
 describe('collectLocalMetrics — analysis exclusions and vendored-default share (code-quality-metrics-3b6)', () => {
   test('writes local_metrics_summary.json with an analysis_exclusions block reporting excluded file/line counts and share', async () => {
     const SHA = 'a'.repeat(40);
