@@ -4,6 +4,7 @@ const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
 const { generateFindingsNarrative, buildNarrativePayload, validateNarrative } = require('../lib/narrative');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
+const { CONFIG } = require('../lib/config');
 
 function fixtureSummary(overrides) {
   return Object.assign({
@@ -150,6 +151,48 @@ describe('generateFindingsNarrative: client provided', () => {
 
     expect(result).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
+
+    logSpy.mockRestore();
+  });
+});
+
+describe('narrative output budget', () => {
+  // code-quality-metrics-ll1 follow-up item 1: measured against a real fresh run (a scratch
+  // clone of this repo, current schema, METRIC_DESCRIPTIONS included) with 10 live API calls
+  // sending the full catalog-with-descriptions payload plus 10 real top commits: 0/10 responses
+  // were truncated at the old 1024 cap, but output usage ranged from 609 to 855 tokens -- up to
+  // 83% of that budget already, with no headroom for a more verbose response. A second batch of
+  // 8 calls against an older, smaller catalog (no top commits) used 630-766 tokens against the
+  // same cap. Neither batch reproduced an actual truncation, but the margin was thin enough that
+  // one is plausible under normal response-length variance, consistent with the ticket's report
+  // of frequent parse failures. Mirrors the assertion style already used for the comparable
+  // AI_DUPLICATE_MAX_OUTPUT_TOKENS budget in __tests__/claudeAnalysis.test.js: the cap only
+  // manifests API-side, so there is no local observable for "the response was not cut off" --
+  // asserting the request parameter is what is testable.
+  test('requests enough output tokens to hold a complete three-group findings response', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, []);
+
+    expect(create.mock.calls[0][0].max_tokens).toBeGreaterThanOrEqual(4096);
+
+    logSpy.mockRestore();
+  });
+
+  test('reads the output token cap from CONFIG.NARRATIVE_MAX_OUTPUT_TOKENS rather than a second hardcoded literal', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, []);
+
+    expect(create.mock.calls[0][0].max_tokens).toBe(CONFIG.NARRATIVE_MAX_OUTPUT_TOKENS);
 
     logSpy.mockRestore();
   });
