@@ -1152,32 +1152,46 @@ At the default `AI_ANALYSIS_MAX_COMMITS: 5` with 4000-char diffs, a typical run 
 
 ## Persistent Measurement Gaps
 
-These signals are not addressable by this toolkit. Each gap is noted with the best alternative approach:
+Two kinds of gap, and the difference matters: some signals need data this toolkit never sees,
+others need only analysis nobody has built yet on data already in reach. A gap of the second
+kind is a statement about this toolkit's backlog, not about the data sources.
 
-1. **Copy-paste and code cloning detection**: Requires AST-level diff analysis to detect when code is duplicated with minor modifications. GitClear is the specialized commercial solution. This toolkit's additions-ratio metric is a proxy for the outcome (more code added than removed) but cannot detect the structural pattern directly.
+### Gaps in the data (the toolkit never sees it)
 
-2. **DORA delivery metrics** (deployment frequency, lead time, change failure rate, MTTR): Require integration with CI/CD pipelines and incident tracking systems. DX and LinearB provide these for organizations that want full lifecycle visibility alongside git-level analysis.
+1. **DORA delivery metrics** (deployment frequency, lead time, change failure rate, MTTR): Require integration with CI/CD pipelines and incident tracking systems. DX and LinearB provide these for organizations that want full lifecycle visibility alongside git-level analysis.
 
-3. **Code review quality**: Reviewer count, comment depth, and review turnaround time are available via GitHub API. The GitHub workflow variant of this toolkit (`pr-metrics.yml`) surfaces PR-level signals, but the local script has no access to review data.
+2. **AI tool usage specifics**: Which AI tools are being used, how frequently suggestions are accepted, and which patterns come from which models require IDE telemetry. This is not available in git history.
 
-4. **Architectural boundary violations without Claude**: Detecting whether code crosses architectural boundaries (service layers, domain boundaries, module dependencies) without semantic analysis requires a dependency graph of the codebase. Without Claude API enabled, this toolkit can detect structural patterns (sprawl, large commits) but not semantic architectural violations.
+3. **DORA capabilities 1, 2, 3, 6, 7**: Organizational AI stance, data ecosystem quality, internal knowledge accessibility, user-centric focus, and platform quality all require organizational survey data or infrastructure telemetry. DORA measures these through their survey instrument.
 
-5. **AI tool usage specifics**: Which AI tools are being used, how frequently suggestions are accepted, and which patterns come from which models require IDE telemetry. This is not available in git history.
+4. **Developer well-being and burnout**: DORA research shows that AI adoption affects developer well-being, which in turn affects all other metrics. This requires survey data.
 
-6. **DORA capabilities 1, 2, 3, 6, 7**: Organizational AI stance, data ecosystem quality, internal knowledge accessibility, user-centric focus, and platform quality all require organizational survey data or infrastructure telemetry. DORA measures these through their survey instrument.
+### Gaps in the analysis (the data is in reach; the analysis is unbuilt or partial)
 
-7. **Developer well-being and burnout**: DORA research shows that AI adoption affects developer well-being, which in turn affects all other metrics. This requires survey data.
+1. **Structural clone detection**: Token-level duplication is measured (jscpd at SonarQube's minimum clone size, over the production files the analyzed commits touched; see Duplication Density above), and the optional Claude pass catches some duplicates rebuilt with different names or structure. What remains unbuilt is AST-level detection of restructured clones; GitClear is the specialized commercial solution.
+
+2. **Code review quality**: Reviewer count, comment depth, and review turnaround time are available via the GitHub API, and `pr-metrics.yml` already runs with API access in the same context that posts the PR comment. Unmeasured rather than unreachable (`code-quality-metrics-5w1`). The local script has no access to review data.
+
+3. **Architectural boundary violations**: Detecting whether code crosses architectural boundaries (service layers, domain boundaries, module dependencies) requires a dependency graph over source that is already checked out. With the Claude API enabled the toolkit gets a semantic approximation; without it, only the structural proxies (sprawl, large commits).
 
 ---
 
 ## Configuration Reference
 
-All thresholds are set in the `CONFIG` object at the top of `local-code-metrics.js`. The GitHub workflows have equivalent values hard-coded in their shell/jq logic. Update both locations when adjusting thresholds.
+Detector and analysis settings live in the `CONFIG` object in `lib/config.js`; the calibrated
+verdict bands live in `THRESHOLDS` in `lib/thresholds.js`. Each file is the single source of
+truth for its kind of value: the local script and both GitHub workflows `require()` them
+directly, so a change propagates everywhere with no second location to update. Per-repo
+overrides go in the target repository's `.codemetrics.json` (see AGENTS.md, "Per-Repo
+Configuration Overrides"); overriding a class B key withholds the affected verdict. Key
+`CONFIG` defaults:
 
 ```javascript
 const CONFIG = {
-  // Analysis window
-  ANALYSIS_DAYS: 30,                  // days of history to analyze
+  // Analysis window. The default is HEAD-anchored: the newest MAX_COMMITS commits
+  // regardless of calendar date (code-quality-metrics-g10). ANALYSIS_DAYS applies
+  // only when --days sets an explicit calendar window.
+  ANALYSIS_DAYS: 30,                  // calendar window when --days is passed explicitly
   MAX_COMMITS: 50,                    // maximum commits to analyze (most recent first)
 
   // Commit size thresholds

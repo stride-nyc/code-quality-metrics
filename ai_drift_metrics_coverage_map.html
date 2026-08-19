@@ -7,6 +7,7 @@
   .dot-full { background: #1D9E75; }
   .dot-partial { background: #BA7517; }
   .dot-gap { background: #D85A30; }
+  .dot-unbuilt { background: #4E7FD0; }
   .dot-oos { background: #888780; }
 
   .section-label { font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-tertiary); margin: 1.25rem 0 .5rem; }
@@ -22,12 +23,14 @@
   .card-full   { background: #E1F5EE; border-color: #5DCAA5; }
   .card-partial { background: #FAEEDA; border-color: #EF9F27; }
   .card-gap    { background: #FAECE7; border-color: #D85A30; }
+  .card-unbuilt { background: #E9F0FB; border-color: #94B4E4; }
   .card-oos    { background: #F1EFE8; border-color: #B4B2A9; }
 
   @media (prefers-color-scheme: dark) {
     .card-full   { background: #085041; border-color: #1D9E75; }
     .card-partial { background: #633806; border-color: #BA7517; }
     .card-gap    { background: #4A1B0C; border-color: #993C1D; }
+    .card-unbuilt { background: #1E3355; border-color: #4E7FD0; }
     .card-oos    { background: #2C2C2A; border-color: #5F5E5A; }
   }
 
@@ -35,12 +38,14 @@
   .card-full .card-title   { color: #085041; }
   .card-partial .card-title { color: #633806; }
   .card-gap .card-title    { color: #4A1B0C; }
+  .card-unbuilt .card-title { color: #1D3A66; }
   .card-oos .card-title    { color: #444441; }
 
   @media (prefers-color-scheme: dark) {
     .card-full .card-title   { color: #9FE1CB; }
     .card-partial .card-title { color: #FAC775; }
     .card-gap .card-title    { color: #F5C4B3; }
+    .card-unbuilt .card-title { color: #BCD3F2; }
     .card-oos .card-title    { color: #D3D1C7; }
   }
 
@@ -48,12 +53,14 @@
   .card-full .card-sub   { color: #0F6E56; }
   .card-partial .card-sub { color: #854F0B; }
   .card-gap .card-sub    { color: #993C1D; }
+  .card-unbuilt .card-sub { color: #3A62A5; }
   .card-oos .card-sub    { color: #5F5E5A; }
 
   @media (prefers-color-scheme: dark) {
     .card-full .card-sub   { color: #5DCAA5; }
     .card-partial .card-sub { color: #EF9F27; }
     .card-gap .card-sub    { color: #F0997B; }
+    .card-unbuilt .card-sub { color: #7FA4DD; }
     .card-oos .card-sub    { color: #888780; }
   }
 
@@ -129,7 +136,8 @@
   <div class="legend">
     <div class="legend-item"><div class="dot dot-full"></div>Fully covered by this toolkit</div>
     <div class="legend-item"><div class="dot dot-partial"></div>Partial / proxy only</div>
-    <div class="legend-item"><div class="dot dot-gap"></div>Gap — needs external tool</div>
+    <div class="legend-item"><div class="dot dot-gap"></div>Gap — needs data this toolkit never sees</div>
+    <div class="legend-item"><div class="dot dot-unbuilt"></div>Backlog — data in reach, analysis not built</div>
     <div class="legend-item"><div class="dot dot-oos"></div>Out of scope (organizational)</div>
   </div>
 
@@ -305,14 +313,14 @@ const GIT_METRICS = [
     v:'sourced'
   },
   {
-    title:'Copy-paste at AST level', sub:'Structural clone detection', type:'gap',
+    title:'Copy-paste at AST level', sub:'Structural clone detection', type:'unbuilt',
     source:'GitClear\'s core commercial capability.', cite:'GitClear 2025',
     measured:'Not measured. jscpd matches tokens, not structure.',
     connect:'The semantic layer above is a partial substitute using a language model rather than AST analysis.',
     basis:'Not applicable.', v:'pending'
   },
   {
-    title:'Code review quality', sub:'Reviewer depth and count', type:'gap',
+    title:'Code review quality', sub:'Reviewer depth and count', type:'unbuilt',
     source:'DORA measures review speed, a 3.1% increase per 25% increase in AI adoption, but not review depth.',
     cite:'DORA 2024, p. 37',
     measured:'Not measured yet. The data is not in commit history, but pr-metrics.yml already runs with GitHub API access, so reviewer count and comment depth are reachable from the workflow that posts the PR comment (<code>code-quality-metrics-5w1</code>).',
@@ -336,7 +344,7 @@ const TOOLS = [
 const VLABEL = { sourced:'sourced', principle:'self-derived', measured:'measured n=12', unstated:'no basis', pending:'n/a' };
 
 function typeClass(t) {
-  return { full:'card-full', partial:'card-partial', gap:'card-gap', oos:'card-oos' }[t];
+  return { full:'card-full', partial:'card-partial', gap:'card-gap', unbuilt:'card-unbuilt', oos:'card-oos' }[t];
 }
 
 function renderGrid(id, items, detailId, hasThresholds) {
