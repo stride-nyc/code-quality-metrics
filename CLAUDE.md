@@ -48,6 +48,50 @@ This window applies to `local-code-metrics.js` only. `.github/workflows/code-met
 `pr-metrics.yml` build their own windows against the GitHub REST API and are out of scope for
 this change; see code-quality-metrics-g10's own notes on whether they need the same treatment.
 
+**Operator override: `--max-commits <n>|unbounded`.** A per-run override of
+`CONFIG.MAX_COMMITS` (default 50), for a reference measurement that needs every commit in a
+window rather than the newest 50 -- e.g. a repository's first twelve months, where several
+`calibration/observations.json` reservations were excluded outright because a 50-commit sample
+was dominated by one vendored dependency sync or bulk import, and where p90 on a 50-commit
+sample is only the 45th order statistic of a heavy-tailed distribution (large sampling
+variance). `--max-commits <n>` raises the cap to a specific number; `--max-commits unbounded`
+removes it entirely, taking however many commits actually fall in the window. Both forms are
+supported because they answer different requests: "up to N" versus "every commit in range."
+
+CLI-only, deliberately: no `.codemetrics.json` key exists for this override, unlike
+`--lifecycle`. The run-scoping decisions the other six overridable keys make (which paths count
+as vendored, which detector sensitivity applies) are facts about the repository being measured
+and are appropriate to commit into that repository's own config. How many commits *this run*
+analyzes is a property of the run, not of the repository, and a repository able to widen its own
+sample size via a committed config file is exactly the kind of self-selection this project
+otherwise avoids.
+
+Interaction with `--since`/the widening fallback above: `fetchBranchCommits` applies no
+per-branch count bound at all once `--since` is set (it never has), so the override changes the
+per-branch `--max-count` only in HEAD-anchored mode (no `--since`/`--days`); with `--since`, it
+governs the final global slice instead, which otherwise silently re-imposed the default 50 on
+an explicit-window run. The empty-window widening fallback keeps using the true default
+`CONFIG.MAX_COMMITS`, never the override: a widen produces a substitute default-shaped
+HEAD-anchored sample, not "the requested window," and letting an unbounded or oversized
+override reach that fetch would defeat the size guard the ordinary default provides. The
+override still governs how many of the widened commits are ultimately analyzed.
+
+An unbounded run over a very large repository can hang or exhaust memory -- GitHub #89
+documents `git log --all --reverse` throwing `ENOBUFS` on a 36,058-commit history, an error the
+tool's own error handling swallows into an empty result rather than surfacing it, reading as
+"zero commits found." `--max-commits unbounded` is guarded by a cheap `git rev-list --count`
+pre-flight check (`CONFIG.MAX_COMMITS_SAFETY_LIMIT`, default 10,000): exceeding it throws
+loudly before any branch is fetched, rather than truncating silently. A bounded numeric
+`--max-commits <n>` is not checked against this limit -- it is the operator's own explicit,
+self-limiting request, the same way `--days` already permits an arbitrarily large historical
+window with no separate ceiling.
+
+`max_commits_override` in `local_metrics_summary.json` records what was requested (`null` when
+not given, otherwise the number or `"unbounded"`), the same convention
+`history_granularity_override`/`project_lifecycle_override` already follow: an analysis run over
+hundreds of commits is not comparable to one over the default 50, and a reader comparing two
+reports must be able to tell an override was requested rather than assuming a larger repository.
+
 ### Branch Spread (code-quality-metrics-8sq)
 
 A sample can be dominated by long-abandoned, never-merged branches contributing roughly one

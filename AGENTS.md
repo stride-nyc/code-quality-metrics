@@ -300,6 +300,19 @@ team wanting different bars re-derives against its own reference set through
 rejects an attempt to override either of these with a message that says why, and rejects any
 other unrecognized key outright rather than silently ignoring it.
 
+**`MAX_COMMITS` is deliberately absent from every `.codemetrics.json` key class** (it is not in
+`CLASS_A_KEYS`, `CLASS_B_KEYS`, or `META_KEYS`, so a `.codemetrics.json` entry for it still fails
+with "not a recognized override key"). How many commits one run analyzes is a property of that
+run, not a fact about the repository under analysis the way the six keys above are; a repository
+able to widen its own sample size via a config file committed into its own tree is exactly the
+self-selection this override mechanism otherwise exists to prevent. The override this project
+does support instead is CLI-only: `--max-commits <n>|unbounded` on `local-code-metrics.js`,
+mirroring `--history`/`--lifecycle`'s shape (parsed the same way in `parseCliArgs`, recorded the
+same way as `max_commits_override` in the summary). See CLAUDE.md's "Analysis Window" section for
+the full flag semantics, its interaction with `--since` and the empty-window widening fallback,
+and the `CONFIG.MAX_COMMITS_SAFETY_LIMIT` guard against an unbounded run over a very large
+repository (GitHub #89).
+
 **Discoverability:** every run's `local_metrics_summary.json` carries a `config_sources` field
 alongside `history_granularity` — the file(s) that contributed an override, the effective value
 of every overridden key, and whether a class B override is in effect. An override that changes

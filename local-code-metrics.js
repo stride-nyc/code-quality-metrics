@@ -118,12 +118,23 @@ function parseBranchList(output) {
  * --no-merges: git show --numstat diffs a merge against its first parent, so merging a
  * single-commit branch reproduces that commit's diff and the same change is counted twice. A
  * merge commit's content belongs to the commits it merges.
+ *
+ * maxCommits (default CONFIG.MAX_COMMITS) is the per-run --max-commits override, threaded as a
+ * parameter rather than mutated onto CONFIG: the widen fallback (below, in collectLocalMetrics)
+ * calls this same function but must keep the true default regardless of any override in effect,
+ * so the two call sites need to be able to disagree on this value. Number.isFinite(maxCommits)
+ * is false only for the Infinity sentinel an 'unbounded' override resolves to, in which case the
+ * bound is omitted from the command entirely -- unlike a numeric maxCommits, this only applies
+ * meaningfully when sinceStr is also null, since --since already fetches with no count bound.
  * @param {string} ref
  * @param {string|null} sinceStr
+ * @param {number} [maxCommits] effective --max-count bound; Infinity omits it entirely
  * @returns {CommitInfo[]}
  */
-function fetchBranchCommits(ref, sinceStr) {
-  const boundsArg = sinceStr ? `--since="${sinceStr}"` : `--max-count=${CONFIG.MAX_COMMITS}`;
+function fetchBranchCommits(ref, sinceStr, maxCommits = CONFIG.MAX_COMMITS) {
+  const boundsArg = sinceStr
+    ? `--since="${sinceStr}"`
+    : (Number.isFinite(maxCommits) ? `--max-count=${maxCommits}` : '');
   // %B\x1f%cn: committer name appended after the body, needed so isBotCommit/isAIAgentCommit
   // (issue #62) can check committer identity, not just author. See lib/git.js's
   // COMMITTER_SEPARATOR comment for why this is a trailing \x1f-delimited suffix rather than
@@ -138,10 +149,10 @@ function fetchBranchCommits(ref, sinceStr) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -182,6 +193,19 @@ function parseCliArgs(argv) {
     } else if (argv[i] === '--config') {
       if (!argv[i + 1]) throw new Error('--config requires a path');
       options.config = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--max-commits') {
+      if (!argv[i + 1]) throw new Error("--max-commits requires a positive integer or 'unbounded'");
+      const raw = argv[i + 1];
+      if (raw === 'unbounded') {
+        options.maxCommits = 'unbounded';
+      } else {
+        const maxCommits = Number(raw);
+        if (!Number.isInteger(maxCommits) || maxCommits <= 0) {
+          throw new Error(`--max-commits must be a positive integer or 'unbounded', got '${raw}'`);
+        }
+        options.maxCommits = maxCommits;
+      }
       i++;
     }
   }
@@ -232,7 +256,7 @@ function logNoCommitsAnalyzed() {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -243,6 +267,15 @@ async function collectLocalMetrics(options = {}) {
   // a date-bounded window (existing behavior, preserved exactly) and the HEAD-anchored default
   // (code-quality-metrics-g10) below.
   const explicitWindow = options.since !== undefined || options.days !== undefined;
+
+  // Per-run --max-commits override (not a CONFIG mutation -- see fetchBranchCommits' own
+  // comment on why this is threaded as a parameter instead). Infinity represents the
+  // 'unbounded' sentinel: Array.prototype.slice(0, Infinity) already returns the whole array,
+  // and fetchBranchCommits treats a non-finite maxCommits as "omit --max-count entirely",
+  // so both downstream uses need no further special-casing beyond this one resolution.
+  const effectiveMaxCommits = options.maxCommits === 'unbounded'
+    ? Infinity
+    : (options.maxCommits ?? CONFIG.MAX_COMMITS);
 
   // PRECEDENCE (highest to lowest): CLI flags (--since/--days, applied via
   // `options` above and parseCliArgs' own flags) > an explicit --config <path>
@@ -367,6 +400,24 @@ async function collectLocalMetrics(options = {}) {
     : `🔍 Looking for the newest ${CONFIG.MAX_COMMITS} commits (HEAD-anchored, no date filter)`);
   console.log('');
 
+  // Safety ceiling for the --max-commits unbounded sentinel (GitHub #89, CONFIG.MAX_COMMITS_
+  // SAFETY_LIMIT's own comment in lib/config.js): removing the cap entirely can attempt a git
+  // log fetch over a very large history, which can throw ENOBUFS -- an error runGitCommand's
+  // own catch swallows into an empty result, reading as "zero commits found" rather than
+  // surfacing the real problem. A cheap `rev-list --count` pre-flight (never fetches full log
+  // content, so it cannot hit the same failure) checks the actual size before committing to
+  // that fetch; exceeding the limit throws loudly here, before any branch is fetched at all.
+  // Only checked for 'unbounded': a bounded numeric --max-commits is the operator's own
+  // explicit, self-limiting request (effectiveMaxCommits's own comment above).
+  if (options.maxCommits === 'unbounded') {
+    const expectedCommitCount = getExpectedCommitCount(branchesToAnalyze, sinceStr);
+    if (expectedCommitCount > CONFIG.MAX_COMMITS_SAFETY_LIMIT) {
+      throw new Error(
+        `--max-commits unbounded would analyze approximately ${expectedCommitCount} commits, over the safety limit of ${CONFIG.MAX_COMMITS_SAFETY_LIMIT}. Narrow the window with --since/--days, or pass a bounded --max-commits <n> instead.`
+      );
+    }
+  }
+
   // Collect commits from all feature branches
   /** @type {CommitInfo[]} */
   const allCommits = [];
@@ -377,7 +428,7 @@ async function collectLocalMetrics(options = {}) {
     process.stdout.write(`📊 Analyzing branch: ${branch}... `);
 
     try {
-      const branchCommits = fetchBranchCommits(branch, sinceStr);
+      const branchCommits = fetchBranchCommits(branch, sinceStr, effectiveMaxCommits);
       branchCommitCounts[branch] = branchCommits.length;
 
       // Add branch info to each commit
@@ -417,7 +468,7 @@ async function collectLocalMetrics(options = {}) {
     branchesToAnalyze = [fallbackRef];
 
     process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
-    const trunkCommits = fetchBranchCommits(fallbackRef, sinceStr);
+    const trunkCommits = fetchBranchCommits(fallbackRef, sinceStr, effectiveMaxCommits);
     trunkCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });
     branchCommitCounts[fallbackRef] = trunkCommits.length;
     console.log(`${trunkCommits.length} commits`);
@@ -543,9 +594,15 @@ async function collectLocalMetrics(options = {}) {
   // "newest" here means newest by commit.date, which is committer date (fetchBranchCommits'
   // own comment, code-quality-metrics-75 / mbiw) -- the same clock --since filters on, so an
   // explicit window and the HEAD-anchored default both select the commit set they claim to.
+  //
+  // effectiveMaxCommits, not CONFIG.MAX_COMMITS: with an explicit --since, fetchBranchCommits
+  // applies no per-branch count bound at all (its own comment), so this slice is the only place
+  // a --max-commits override can take effect for that mode. slice(0, Infinity) for the
+  // 'unbounded' sentinel returns the whole array, matching fetchBranchCommits' own Infinity
+  // handling with no further special-casing needed here.
   const commitsToAnalyze = [...humanCommits]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, CONFIG.MAX_COMMITS)
+    .slice(0, effectiveMaxCommits)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
   console.log('');
@@ -823,6 +880,14 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_confidence: detectedGranularity.confidence,
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
+    // Visibility for --max-commits (this override has no .codemetrics.json counterpart -- see
+    // effectiveMaxCommits' own comment above for why): null when not given, otherwise whatever
+    // was requested (a number, or the string 'unbounded'), the same shape
+    // history_granularity_override/project_lifecycle_override already follow. An analysis run
+    // over hundreds of commits is not comparable to one over the default 50, and a reader
+    // comparing two reports must be able to tell that an override -- not just a larger repo --
+    // is why the count differs.
+    max_commits_override: options.maxCommits ?? null,
     // Project lifecycle (code-quality-metrics-31w): see the rootCommitShas/includesRepositoryRoot
     // comments above. project_lifecycle is the effective value (project_lifecycle_override when
     // one is given, the structural detection otherwise); project_lifecycle_detected is always the
@@ -1034,7 +1099,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -1042,7 +1107,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>] [--max-commits <n>|unbounded]');
     process.exit(1);
   }
 

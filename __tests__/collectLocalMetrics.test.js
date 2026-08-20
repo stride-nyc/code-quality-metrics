@@ -75,14 +75,16 @@ function mockExecSequence(...values) {
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     // Tests predating the window reproducibility guard (code-quality-metrics-tde9) supply
-    // no value for the independent `git rev-list --count --since=...` cross-check. Answer it
-    // out of band too, defaulting to empty (getExpectedCommitCount treats an unparseable
-    // count as 0, which reads as "unknown" and never triggers the mismatch warning) so it
-    // never consumes a positional value meant for the numstat call that follows it. Matched
-    // on `rev-list` together with `--since` (not `rev-list` alone), so this does not also
-    // swallow the project-lifecycle root-commit query above, which is also a `rev-list` call
-    // but carries no `--since`.
-    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--since')) return '';
+    // no value for the independent `git rev-list --count [--since=...]` cross-check (used both
+    // by that guard's dated-window comparison and by the --max-commits unbounded safety
+    // pre-flight check, which omits --since entirely for a HEAD-anchored run). Answer it out of
+    // band too, defaulting to empty (getExpectedCommitCount treats an unparseable count as 0,
+    // which reads as "unknown"/"under the safety limit" and never triggers a mismatch warning
+    // or the safety-limit error) so it never consumes a positional value meant for the numstat
+    // call that follows it. Matched on `rev-list` together with `--count` (not `rev-list`
+    // alone), so this does not also swallow the project-lifecycle root-commit query above,
+    // which is also a `rev-list` call but carries no `--count`.
+    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--count')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -111,7 +113,7 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // never fires and every prior test's positional values still line up.
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
-    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--since')) return '';
+    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--count')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -1891,5 +1893,249 @@ describe('collectLocalMetrics — bot commit exclusion (issue #62)', () => {
     expect(summary.total_commits).toBe(1);
     expect(summary.bot_commits_count).toBe(1);
     expect(summary.bot_commits_pct).toBe('50.00');
+  });
+});
+
+describe('collectLocalMetrics — --max-commits override', () => {
+  test('uses the --max-commits override instead of the default MAX_COMMITS for the per-branch --max-count when no --since is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 5 });
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).toMatch(/--max-count=5\b/);
+  });
+
+  test('omits --max-count entirely for the unbounded sentinel when no --since is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 'unbounded' });
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).not.toMatch(/--max-count=/);
+
+    // Also confirms the safety pre-flight rev-list call did not shift a positional value onto
+    // this git log call: the real commit was parsed, not the pre-flight's own mocked output.
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(1);
+  });
+
+  test('raises the final analyzed-commit cap above the default MAX_COMMITS when combined with --since', async () => {
+    // fetchBranchCommits does not apply any --max-count when sinceStr is set (it never has --
+    // see fetchBranchCommits' own comment), so the per-branch git log already returns every
+    // commit in the dated window; only the final global slice enforces a count cap in that
+    // mode. Lowering CONFIG.MAX_COMMITS to 2 makes a 3-commit window prove the cap: without the
+    // override, the default would truncate to 2; --max-commits 3 must let all 3 through.
+    const originalMaxCommits = CONFIG.MAX_COMMITS;
+    CONFIG.MAX_COMMITS = 2;
+    try {
+      const SHA1 = 'a'.repeat(40);
+      const SHA2 = 'b'.repeat(40);
+      const SHA3 = 'c'.repeat(40);
+      mockExecSequence(
+        FAKE_ROOT,
+        FAKE_REMOTE,
+        '  feature/x',
+        [
+          `${SHA1}|2026-08-01T10:00:00Z|Dev|feat: one\x1e`,
+          `${SHA2}|2026-08-02T10:00:00Z|Dev|feat: two\x1e`,
+          `${SHA3}|2026-08-03T10:00:00Z|Dev|feat: three\x1e`
+        ].join('\n'),
+        `1\t0\tsrc/one.js`,
+        `1\t0\tsrc/two.js`,
+        `1\t0\tsrc/three.js`
+      );
+      fs.writeFileSync.mockImplementation(() => {});
+
+      await collectLocalMetrics({ since: '2020-01-01', maxCommits: 3 });
+
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      const summary = JSON.parse(summaryCall[1]);
+      expect(summary.total_commits).toBe(3);
+    } finally {
+      CONFIG.MAX_COMMITS = originalMaxCommits;
+    }
+  });
+
+  test('the unbounded sentinel combined with --since analyzes every commit found, with no cap', async () => {
+    const originalMaxCommits = CONFIG.MAX_COMMITS;
+    CONFIG.MAX_COMMITS = 2;
+    try {
+      const SHA1 = 'a'.repeat(40);
+      const SHA2 = 'b'.repeat(40);
+      const SHA3 = 'c'.repeat(40);
+      mockExecSequence(
+        FAKE_ROOT,
+        FAKE_REMOTE,
+        '  feature/x',
+        [
+          `${SHA1}|2026-08-01T10:00:00Z|Dev|feat: one\x1e`,
+          `${SHA2}|2026-08-02T10:00:00Z|Dev|feat: two\x1e`,
+          `${SHA3}|2026-08-03T10:00:00Z|Dev|feat: three\x1e`
+        ].join('\n'),
+        `1\t0\tsrc/one.js`,
+        `1\t0\tsrc/two.js`,
+        `1\t0\tsrc/three.js`
+      );
+      fs.writeFileSync.mockImplementation(() => {});
+
+      await collectLocalMetrics({ since: '2020-01-01', maxCommits: 'unbounded' });
+
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      const summary = JSON.parse(summaryCall[1]);
+      expect(summary.total_commits).toBe(3);
+    } finally {
+      CONFIG.MAX_COMMITS = originalMaxCommits;
+    }
+  });
+
+  // Interaction case: an explicit --since window that returns zero commits still widens
+  // (code-quality-metrics-g10's existing fallback), but the widen fetch itself must keep using
+  // the true default CONFIG.MAX_COMMITS regardless of --max-commits -- a widen is a substitute
+  // default-shaped HEAD-anchored sample, not "the requested window", and an unbounded or
+  // oversized override reaching it would defeat the safety this project's own default provides.
+  // The override still governs the final analyzed-commit count, the same as any other run.
+  test('the widen fallback fetch keeps the true default MAX_COMMITS regardless of --max-commits, but the override still caps the final analyzed count', async () => {
+    const SHA1 = 'a'.repeat(40);
+    const SHA2 = 'b'.repeat(40);
+    const SHA3 = 'c'.repeat(40);
+    const SHA4 = 'd'.repeat(40);
+    const SHA5 = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',   // git branch -a — no main/master, so defaultBranch is null, fallbackRef is 'HEAD'
+      '',              // git log feature/x --since=2020-01-01 — zero commits
+      '',              // git log HEAD --since=2020-01-01 (existing trunk fallback) — zero commits
+      [                // git log HEAD --max-count (the widen fallback) — 5 real commits
+        `${SHA1}|2026-08-01T10:00:00Z|Dev|feat: one\x1e`,
+        `${SHA2}|2026-08-02T10:00:00Z|Dev|feat: two\x1e`,
+        `${SHA3}|2026-08-03T10:00:00Z|Dev|feat: three\x1e`,
+        `${SHA4}|2026-08-04T10:00:00Z|Dev|feat: four\x1e`,
+        `${SHA5}|2026-08-05T10:00:00Z|Dev|feat: five\x1e`
+      ].join('\n'),
+      `1\t0\tsrc/three.js`, // numstat for the newest 3 kept by the --max-commits 3 override
+      `1\t0\tsrc/four.js`,
+      `1\t0\tsrc/five.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ since: '2020-01-01', maxCommits: 3 });
+
+    const widenCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('--max-count'));
+    expect(widenCommand).toBeDefined();
+    expect(widenCommand).toMatch(new RegExp(`--max-count=${CONFIG.MAX_COMMITS}\\b`));
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(3);
+    expect(summary.window_widened).toBe(true);
+  });
+
+  // GitHub #89: an unbounded git log fetch over a very large history can throw ENOBUFS, an
+  // error runGitCommand's own catch swallows into an empty result -- reading as "zero commits
+  // found" rather than surfacing the real problem. The safety pre-flight must stop the run
+  // before that fetch is ever attempted, not after.
+  test('throws a loud error before fetching the full log when an unbounded run would exceed the safety limit', async () => {
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd === 'git rev-parse --show-toplevel') return FAKE_ROOT;
+      if (cmd === 'git remote get-url origin') return FAKE_REMOTE;
+      if (cmd === 'git branch -a') return '  feature/x';
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('rev-list') && cmd.includes('--count')) return String(CONFIG.MAX_COMMITS_SAFETY_LIMIT + 1);
+      throw new Error(`unexpected command reached after the safety check should have stopped the run: ${cmd}`);
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await expect(collectLocalMetrics({ maxCommits: 'unbounded' }))
+      .rejects.toThrow(new RegExp(String(CONFIG.MAX_COMMITS_SAFETY_LIMIT)));
+
+    const fullFetchAttempted = execSync.mock.calls.some(call => String(call[0]).includes('--pretty=format'));
+    expect(fullFetchAttempted).toBe(false);
+  });
+
+  // Visibility (the task's own requirement): an analysis run over hundreds of commits is not
+  // comparable to one over the default 50, and a reader comparing two reports must be able to
+  // tell that an override was requested, the same way history_granularity_override and
+  // project_lifecycle_override already record their own overrides alongside the effective
+  // value they produced.
+  test('records max_commits_override in the summary: null by default, echoing whatever was requested otherwise', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.max_commits_override).toBeNull();
+  });
+
+  test('records a numeric max_commits_override in the summary when --max-commits <n> is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 5 });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.max_commits_override).toBe(5);
+  });
+
+  test('records max_commits_override as "unbounded" when the unbounded sentinel is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 'unbounded' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.max_commits_override).toBe('unbounded');
   });
 });
