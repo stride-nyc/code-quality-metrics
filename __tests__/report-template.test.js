@@ -1437,6 +1437,18 @@ describe('renderReportHtml', () => {
     expect(summary).toMatch(/vendored|generated/);
   });
 
+  // Defect: "see Analysis Scope below" (inside the vendored clause) and "See Findings below
+  // for the full picture" are two pointers in one paragraph, and "for the full picture" names
+  // no fact the reader does not already have -- it just restates that there is more below,
+  // which the link itself already says. Cut the empty phrase; the link to Findings stays.
+  it('points to Findings without the informationless "for the full picture" phrase', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/for the full picture/);
+    expect(summary).toMatch(/See <a href="#findings">Findings<\/a> below\./);
+  });
+
   // The anchor mechanism a file:// page actually uses is fragment-to-id matching: the browser
   // finds the element whose id exactly equals the URL fragment. This is what would break if the
   // href and the id text drifted apart (e.g. a rename on one side only) even though "the markup
