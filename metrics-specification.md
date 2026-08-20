@@ -416,18 +416,23 @@ that test/prod co-change behaves differently in an initial build. Both keep scor
 brownfield band unconditionally, exactly as before this change.
 
 A substituted verdict must not render identically to a brownfield one: n=2 (both supporting
-repositories members of this toolkit's own five-repository eval set — the
+repositories members of this toolkit's own five-repository eval set -- the
 `greenfield-modern-eval-circularity` reservation) is a materially weaker claim than the
 brownfield bands' n=12, and a reader who cannot tell the two apart would trust both equally.
 Each substituted entry carries a `bandProvenance` field (`{ population, n }`), which
 `lib/report-template.js` renders two ways at once rather than one: a sentence appended to
-`describeThreshold`'s usual healthy/critical text naming the population and its n, and a
-separate, purely visual marker on the card itself — a `data-band` attribute, a dashed border,
-and a `band-chip` element — so a reader skimming the page by shape (border style, chip) reaches
-the same conclusion as one reading the threshold prose carefully. Two renderings of the same
-fact were chosen over either alone because this project has already found that a single textual
-cue is easy to miss under a screen of tiles (the same reasoning behind pairing a status border
-color with a status-chip everywhere else in this report).
+`describeThreshold`'s usual healthy/critical text naming the population, and a separate, purely
+visual marker on the card itself -- a `data-band` attribute, a dashed border, and a `band-chip`
+element -- so a reader skimming the page by shape (border style, chip) reaches the same
+conclusion as one reading the threshold prose carefully. Two renderings of the same fact were
+chosen over either alone because this project has already found that a single textual cue is
+easy to miss under a screen of tiles (the same reasoning behind pairing a status border color
+with a status-chip everywhere else in this report). Neither the chip nor this per-tile sentence
+states `bandProvenance.n`: naming it on every substituted tile, on top of the chip and the
+threshold sentence, repeated the same fact three times per tile with no added information --
+the sample size now lives once, in `renderGreenfieldNote`'s group-level note (see "Project
+Lifecycle Detection" above), which every substituted tile's chip and threshold sentence point a
+reader toward instead of restating.
 
 **Detection is a structural fact, not a tuned number.** `windowIncludesRepositoryRoot`
 (`lib/git.js`) checks whether any analyzed commit's SHA is one of the repository's own root
@@ -500,13 +505,19 @@ positive would cost a reader looking at a genuinely mature codebase every band o
 
 **The report says plainly what it is still for.** Before a greenfield band existed, withholding
 four of six "Change size and scope" tiles plus duplication density left most of that group as
-ungraded numbers — honest, but also the point a reader asks what the report is still for. Now
+ungraded numbers -- honest, but also the point a reader asks what the report is still for. Now
 that those five tiles are substituted rather than withheld (see above), `lib/report-template.js`'s
-`renderLifecycleLine` states which band produced them instead: that large/sprawling commits,
-commit size and files-changed at the high end, and duplication density are scored against a
-separate greenfield-modern band (n=2, a much thinner sample than the rest of the page), and that
-test/prod co-change and uncovered production keep using the same brownfield band an established
-repository would see, unconditionally.
+`renderGreenfieldNote` states which band produced them instead, in three short sentences placed
+beside the "Change size and scope" tiles it governs rather than as a paragraph at the top of the
+masthead (an earlier version, `renderLifecycleLine`, led with methodology ahead of the reader's
+own findings; this replaced it): this project is early-stage, so those tiles are compared against
+other early-stage projects rather than mature ones; that comparison rests on a small number of
+reference projects (read live from the substituted band's own provenance, not a hardcoded count,
+so this stays accurate as GitHub #84 grows the population) so the bars are rough; and test/prod
+co-change and uncovered production keep using the same brownfield band an established repository
+would see, unconditionally. Each substituted tile also carries its own band-chip and a threshold
+sentence naming the population (but not repeating the sample size, which lives once in the group
+note) -- see the Threshold Provenance section's `describeThreshold`/`renderBandProvenance` notes.
 
 **Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71).** The rule above has a
 second failure mode besides the false negative already described: a root commit that is itself a
