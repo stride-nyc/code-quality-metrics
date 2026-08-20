@@ -1407,6 +1407,20 @@ describe('renderReportHtml', () => {
     expect(summary).not.toMatch(/led by Commit size trend/);
   });
 
+  // Coordination-task reframe: a run where most banded metrics are healthy and only one is
+  // flagged reads as a fundamentally sound codebase with one thing to watch, not a troubled
+  // one -- opening with the single worst reading, as the old wording always did, inverts
+  // that. The summary must characterize the whole (healthy) before naming the exception.
+  it('characterizes the whole as healthy before naming the concern, when more banded metrics are good than are flagged', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    const healthyIndex = summary.indexOf('healthy');
+    const ledByIndex = summary.indexOf('led by');
+    expect(healthyIndex).toBeGreaterThanOrEqual(0);
+    expect(ledByIndex).toBeGreaterThan(healthyIndex);
+  });
+
   // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
   // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
   // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
