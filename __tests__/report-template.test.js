@@ -2009,6 +2009,19 @@ describe('renderReportHtml', () => {
     expect(occurrences).toBe(1);
   });
 
+  // code-quality-metrics-11ib: "It still flags" frames the healthy majority as a concession
+  // being walked back -- the negative-first reflex compressed into one adverb. Measured on
+  // this repository's own real regenerated run (6 good, 1 warning): "Most metrics scored
+  // against a calibrated threshold in this run are healthy. It still flags 1 warning signal,
+  // led by Duplication density at 5.12 (warning)." Both facts should be stated plainly, in
+  // that order, without the concessive.
+  it('does not use the concessive word "still" when a mixed run has more healthy signals than warnings', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/\bstill\b/);
+  });
+
   // code-quality-metrics-q8zp: the ANALYSIS_IGNORE_PATTERNS bullet and the
   // vendored/generated-default bullet used to collapse into one merged bullet whenever their
   // counts happened to coincide, and that merged bullet's own text embedded
