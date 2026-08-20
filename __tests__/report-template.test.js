@@ -653,6 +653,31 @@ describe('renderReportHtml', () => {
     expect(section).toMatch(/greenfield-modern/i);
   });
 
+  // code-quality-metrics-wo8q: the project's writing standard is no em-dashes in any form,
+  // including the double-hyphen pause -- use commas, colons, semicolons or parentheses
+  // instead. project_lifecycle: 'initial-build' triggers both remaining template-rendered
+  // sources of this pattern at once: describeThreshold's band-provenance sentence (a
+  // substituted tile) and the archetype section's greenfield-suppression sentence.
+  it('contains no double-hyphen parenthetical pauses anywhere in the rendered report', () => {
+    const html = renderReportHtml(fixtureArgs({
+      project_lifecycle: 'initial-build',
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+
+    expect(html).not.toMatch(/ -- /);
+  });
+
   it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {
     // code-quality-metrics-yte: the page groups tiles under fixed headings, so the catalog's
     // own concern-descending order no longer holds across the whole page -- only within a
