@@ -1914,4 +1914,24 @@ describe('collectLocalMetrics — --max-commits override', () => {
     expect(branchLogCommand).toBeDefined();
     expect(branchLogCommand).toMatch(/--max-count=5\b/);
   });
+
+  test('omits --max-count entirely for the unbounded sentinel when no --since is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 'unbounded' });
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).not.toMatch(/--max-count=/);
+  });
 });
