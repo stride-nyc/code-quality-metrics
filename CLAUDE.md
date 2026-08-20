@@ -205,6 +205,19 @@ project unlike the six references. See `calibration/README.md` and the Threshold
 `metrics-specification.md` for the full derivation rule, the external anchors, and all thirteen
 reservations. Do not cite these numbers as validated outcome thresholds.
 
+`.github/workflows/code-metrics.yml` and `pr-metrics.yml` build their own distributions
+directly from the GitHub REST API's whole-diff additions/deletions/files-changed counts, with
+no access to a repository's `ANALYSIS_IGNORE_PATTERNS` exclusion config (the REST API exposes
+per-file diff stats, not a pre-filtered subset of them). `local-code-metrics.js`, by contrast,
+builds `p90_lines_changed`, `p90_files_changed`, `avg_lines_changed`, and
+`net_additions_ratio_median` from `counted_additions`/`counted_deletions`/
+`counted_files_changed` (see "Configuration" below), the exclusion-aware siblings of the raw
+totals. Whenever a repository has `ANALYSIS_IGNORE_PATTERNS` configured, a local run's values
+for those fields are not directly comparable to the same-named fields in a workflow-generated
+report for that repository: the local numbers exclude vendored/generated volume the workflow
+numbers still include. Equal whenever nothing is excluded, since `counted_*` equals the raw
+total in that case.
+
 ### Project Lifecycle Detection
 
 Four tiles above (large/sprawling commit %, p90 lines/files changed) plus duplication density carry a further bias when the analyzed window is a genuine initial build: every reference repository the bands above were calibrated against is a decades-old codebase measured during maintenance, and an initial build carries scaffolding, vendored dependencies and generated files that bias large-commit and p90-lines-changed toward a worse verdict (Hattori and Lanza, EVOL 2008). `project_lifecycle` (`'initial-build' | 'established' | 'undetermined'`) drives this: `windowIncludesRepositoryRoot` (`lib/git.js`) checks whether the analyzed window reaches the repository's own root commit(s), a structural fact rather than a tuned age or commit-count threshold. These five tiles used to be withheld outright for such a window; now that a greenfield-modern reference band exists (`THRESHOLDS.GREENFIELD_MODERN`, `lib/thresholds.js`), `buildMetricCatalog` (`lib/report.js`) scores them against it instead — a much thinner (n=2) but lifecycle-appropriate comparison, visibly marked on the rendered card (a `band-chip`, a dashed border, and a threshold sentence naming the population) so it is never mistaken for the brownfield (n=12) verdict shown elsewhere on the page. Neither the chip nor the threshold sentence states the sample size itself: it lives once, in a short group-level note (`renderGreenfieldNote`, `lib/report-template.js`) rendered beside the "Change size and scope" tiles rather than repeated per tile or as a paragraph at the top of the masthead. Test/prod co-change and uncovered production are deliberately not substituted and keep scoring against the brownfield band regardless of lifecycle: the bias this paragraph describes is specific to change-size and duplication metrics, and no equivalent claim exists for either of those two. See "Project Lifecycle and Change-Size Withholding" in `metrics-specification.md` for the substitution mechanism and the per-metric decision.
