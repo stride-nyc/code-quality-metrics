@@ -70,6 +70,35 @@ function readOptionalDuplicateAnalysis(dir) {
 }
 
 /**
+ * Validate that every commit record read from local_commit_metrics.json carries the
+ * counted_additions/counted_deletions fields lib/report.js's topCommits ranks on
+ * (code-quality-metrics-2byz). A file written before PR #94 lacks those fields; the
+ * comparator's subtraction then evaluates to NaN, and Array.prototype.sort treats NaN as
+ * "leave this pair alone", so topCommits silently returns the input order instead of a
+ * ranking. Two consumers rely on that ranking without checking it themselves (the Flight
+ * Log table and the narrative's example commits), so untrusted disk data is rejected here,
+ * at the file-read boundary, rather than inside topCommits itself: that function is a pure
+ * helper called from both lib/report-template.js and generate-drift-report.js, and the
+ * actual defect is a stale file entering the pipeline, not the ranking logic. Throwing
+ * (never falling back to total_additions/total_deletions) matches
+ * CONFIG.MAX_COMMITS_SAFETY_LIMIT's own choice to fail loudly rather than silently
+ * substitute a different basis than the one requested.
+ * @param {Array<object>} metrics
+ * @returns {void}
+ */
+function assertCountedFieldsPresent(metrics) {
+  for (const commit of metrics) {
+    if (typeof commit.counted_additions !== 'number' || typeof commit.counted_deletions !== 'number') {
+      const sha = commit.sha || commit.full_sha || '(unknown sha)';
+      throw new Error(
+        `local_commit_metrics.json commit ${sha} is missing counted_additions/counted_deletions. ` +
+        'This file was written before PR #94 added those fields. Re-run "node local-code-metrics.js" to regenerate it.'
+      );
+    }
+  }
+}
+
+/**
  * Read and compute everything generateReport and generateReportWithNarrative
  * both need: the two required JSON inputs, the vendored fonts, and the
  * deterministic metric catalog. Kept in one place so both entry points stay
@@ -80,6 +109,7 @@ function readOptionalDuplicateAnalysis(dir) {
 function readReportInputs(dir) {
   const summary = readRequiredJson(dir, 'local_metrics_summary.json');
   const metrics = readRequiredJson(dir, 'local_commit_metrics.json');
+  assertCountedFieldsPresent(metrics);
   const fontData = readFontData();
   const duplicates = readOptionalDuplicateAnalysis(dir);
   const catalog = buildMetricCatalog(summary, duplicates);

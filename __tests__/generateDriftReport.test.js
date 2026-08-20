@@ -127,6 +127,18 @@ describe('generateReport', () => {
     expect(() => generateReport(dir)).toThrow(/Run "node local-code-metrics\.js" first/);
   });
 
+  it('throws naming counted_additions/counted_deletions and instructing a re-run of local-code-metrics.js when a commit record in local_commit_metrics.json lacks them (a stale pre-PR#94 file)', () => {
+    const dir = makeTmpDir();
+    writeFixtureInputs(dir);
+    const staleMetrics = [
+      { sha: 'aaa11111', full_sha: 'aaa1111111111111111111111111111111111111', date: '2026-08-01T00:00:00.000Z', author: 'Alice', message: 'feat: add widget', total_additions: 200, total_deletions: 50, files_changed: 4 }
+    ];
+    fs.writeFileSync(path.join(dir, 'local_commit_metrics.json'), JSON.stringify(staleMetrics, null, 2));
+
+    expect(() => generateReport(dir)).toThrow(/counted_additions/);
+    expect(() => generateReport(dir)).toThrow(/re-run "node local-code-metrics\.js"/i);
+  });
+
   it('exits with status 1 and a clear stderr message, no raw stack trace, when run as a CLI against a directory missing the required json files', () => {
     const dir = makeTmpDir();
     const scriptPath = path.join(__dirname, '..', 'generate-drift-report.js');
