@@ -292,29 +292,75 @@ describe('renderReportHtml', () => {
     expect(html).toContain('squashed');
   });
 
-  // code-quality-metrics-31w, updated by the code-quality-metrics coordination task:
-  // flight-info-spike, a three-week greenfield spike, used to be graded against bands
-  // calibrated on maintenance-era windows of decades-old codebases and came out labelled
-  // legacy-bottleneck; those tiles are now scored against a much thinner (n=2)
-  // greenfield-modern band instead of being withheld. The masthead has to say plainly which
-  // band produced those verdicts, rather than leaving a reader to assume every tile came from
-  // the same twelve-repository benchmark the rest of the page uses.
-  it('states plainly, in the masthead, that change-size and duplication tiles are scored against the thinner greenfield-modern band when project_lifecycle is initial-build', () => {
+  // code-quality-metrics-31w, rewritten by the code-quality-metrics coordination task: the
+  // masthead used to carry a ~110-word, three-sentence paragraph naming what does not apply
+  // ("do not transfer", "much thinner sample", "not substituted", jargon like "brownfield" and
+  // "quantiles of maintenance-era windows") ahead of the reader's own findings in
+  // renderTopSummary. A reader's first line about their own project should say what they are
+  // being compared to, not the tool's reasoning for why. This moves a short version next to
+  // the "Change size and scope" tiles it actually governs -- after renderTopSummary's own
+  // headline, never before it -- and states the population's sample size dynamically (read
+  // from the substituted band's own bandProvenance.n) rather than a hardcoded literal.
+  it('states the early-stage comparison briefly, beside the "Change size and scope" tiles it governs, not as a paragraph in the masthead', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
     const masthead = mastheadSection(html);
 
-    expect(masthead).toMatch(/initial build/);
-    expect(masthead).toMatch(/greenfield-modern/i);
-    expect(masthead).toMatch(/n\s*=\s*2/i);
+    expect(masthead).not.toMatch(/initial build/i);
+    expect(masthead).not.toMatch(/greenfield-modern/i);
+
+    const headingIndex = html.indexOf('<h2 class="metric-category-heading">Change size and scope</h2>');
+    expect(headingIndex).toBeGreaterThanOrEqual(0);
+    const gridIndex = html.indexOf('<div class="metric-grid">', headingIndex);
+    expect(gridIndex).toBeGreaterThan(headingIndex);
+
+    const noteStart = html.indexOf('class="greenfield-note"');
+    expect(noteStart).toBeGreaterThan(headingIndex);
+    expect(noteStart).toBeLessThan(gridIndex);
+
+    const pOpen = html.lastIndexOf('<p', noteStart);
+    const pClose = html.indexOf('</p>', noteStart);
+    const noteText = html.slice(pOpen, pClose).replace(/<[^>]+>/g, '');
+
+    expect(noteText.toLowerCase()).toContain('early-stage');
+    expect(noteText).toMatch(/just 2 reference projects/);
+    // Roughly a third of the ~110-word paragraph this replaces.
+    const wordCount = noteText.trim().split(/\s+/).filter(Boolean).length;
+    expect(wordCount).toBeLessThan(50);
+
+    // Findings (renderTopSummary's own headline) must still come first -- the whole point of
+    // moving this out of the masthead.
+    const summaryIndex = html.indexOf('<section class="report-summary">');
+    expect(summaryIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeLessThan(noteStart);
   });
 
-  // [guard] an established repository's masthead must not carry the initial-build sentence at
-  // all -- proven by mutation: see the production-code cycle for this line.
-  it('[guard] says nothing about an initial build in the masthead when project_lifecycle is established', () => {
+  // code-quality-metrics coordination task: proves renderGreenfieldNote reads its sample size
+  // from the substituted entry's own bandProvenance.n rather than a hardcoded "2" -- the same
+  // requirement the lifecycle-line rewrite states explicitly (do not hardcode n=2, read the
+  // count from the reference band so it stays true as the sample grows).
+  it('[guard] reads the reference-band sample size dynamically rather than a hardcoded literal', () => {
+    const args = fixtureArgs({ project_lifecycle: 'initial-build' });
+    const largeCommitsEntry = args.catalog.find(entry => entry.key === 'large_commits_pct');
+    largeCommitsEntry.bandProvenance = { ...largeCommitsEntry.bandProvenance, n: 7 };
+
+    const html = renderReportHtml(args);
+    const noteStart = html.indexOf('class="greenfield-note"');
+    const pOpen = html.lastIndexOf('<p', noteStart);
+    const pClose = html.indexOf('</p>', noteStart);
+    const noteText = html.slice(pOpen, pClose);
+
+    expect(noteText).toMatch(/just 7 reference projects/);
+    expect(noteText).not.toMatch(/just 2 reference projects/);
+  });
+
+  // [guard] an established repository must show no trace of the greenfield note anywhere on
+  // the page, masthead or metric grid alike.
+  it('[guard] says nothing about the early-stage comparison anywhere when project_lifecycle is established', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'established' }));
     const masthead = mastheadSection(html);
 
     expect(masthead).not.toMatch(/initial build/);
+    expect(html).not.toContain('class="greenfield-note"');
   });
 
   // code-quality-metrics-bmg: the archetype verdict headlined the report, above every metric
@@ -790,6 +836,7 @@ describe('renderReportHtml', () => {
       '.gauge-band', '.gauge-needle', '.gauge-hub',
       '.status-chip', '.metric-value', '.metric-label', '.metric-threshold',
       '.metric-description-measures', '.metric-description-dora',
+      '.metric-meaning', '.metric-what-is', '.metric-methodology', '.greenfield-note',
       '.flight-log', '.findings',
       '.duplicate-code', '.duplicate-static', '.duplicate-layer-indicator', 'footer'
     ]) {
@@ -804,6 +851,28 @@ describe('renderReportHtml', () => {
 
     expect(html).not.toContain('0.676056338028169');
     expect(html).toContain('0.68');
+  });
+
+  // code-quality-metrics-stoc (P0): renderStatCard renders a visible <span class="status-chip">
+  // stating the word good/warning/critical/unmeasured; renderGaugeCard sets data-status on the
+  // article but never renders that span, so every hasGauge tile (large/sprawling commits,
+  // test/prod co-change, uncovered production, and any gauge-rendered duplication tile) prints
+  // its value, its band, and its qualifiers, but never the word saying whether it passes -- a
+  // needle position against a colored arc is the only signal, invisible in text extraction,
+  // print, and screen readers. large_commits_pct is a gauge entry (hasGauge: true); pushing its
+  // value above THRESHOLDS.LARGE_COMMITS_PCT.healthy (18) makes it status 'warning'.
+  it('renders a visible status chip stating "warning" on a gauge card scored warning', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '25.00' }));
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('<span class="status-chip">warning</span>');
+  });
+
+  it('renders a visible status chip stating "good" on a gauge card scored good', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '15.00' }));
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('<span class="status-chip">good</span>');
   });
 
   // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
@@ -840,10 +909,10 @@ describe('renderReportHtml', () => {
   });
 
   // code-quality-metrics coordination task: a substituted greenfield-modern verdict must not
-  // render identically to a brownfield one -- n=2 is a much weaker claim than the brownfield
-  // bands' n=12, and a card that looked the same either way would mislead a reader into
-  // trusting both equally.
-  it('names the greenfield-modern band and its thinner evidence on a card substituted under project_lifecycle: initial-build', () => {
+  // render identically to a brownfield one -- naming the population it was scored against is
+  // a much weaker claim than the brownfield bands carry, and a card that looked the same
+  // either way would mislead a reader into trusting both equally.
+  it('names the greenfield-modern band on a card substituted under project_lifecycle: initial-build', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
     const cards = html.split('<article class="metric-card"');
     const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
@@ -851,13 +920,35 @@ describe('renderReportHtml', () => {
 
     expect(largeCommitsCard).toBeDefined();
     expect(largeCommitsCard.toLowerCase()).toContain('greenfield-modern');
-    expect(largeCommitsCard).toMatch(/n\s*=\s*2/);
 
     // test_coverage_rate is deliberately not substituted (see lib/report.js's
     // GREENFIELD_SUBSTITUTED_KEYS comment) -- its card must not claim a greenfield-modern
     // provenance it does not have.
     expect(testCoverageCard).toBeDefined();
     expect(testCoverageCard.toLowerCase()).not.toContain('greenfield-modern');
+  });
+
+  // code-quality-metrics coordination task: the sample size behind the greenfield-modern band
+  // (n=2) used to repeat on the chip of every substituted tile and again in that tile's own
+  // threshold sentence -- the same over-exposure problem the lifecycle-line rewrite fixes at
+  // the page level, just per-tile. The reader should be able to find it once (the group-level
+  // note near "Change size and scope"), not on every tile, and not at all in the chip.
+  it('[guard] does not state the reference-band sample size on the chip or in the per-tile threshold sentence, now that it lives once in the group-level note', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+
+    const chipStart = largeCommitsCard.indexOf('class="band-chip"');
+    const chipEnd = largeCommitsCard.indexOf('</span>', chipStart);
+    const chip = largeCommitsCard.slice(chipStart, chipEnd);
+    expect(chip).not.toMatch(/n\s*=/i);
+
+    const detailsStart = largeCommitsCard.indexOf('<details class="metric-methodology">');
+    const thresholdStart = largeCommitsCard.indexOf('class="metric-threshold"', detailsStart);
+    const thresholdEnd = largeCommitsCard.indexOf('</p>', thresholdStart);
+    const thresholdSentence = largeCommitsCard.slice(thresholdStart, thresholdEnd);
+    expect(thresholdSentence).not.toMatch(/n\s*=/i);
+    expect(thresholdSentence).toContain('greenfield-modern');
   });
 
   // A prose sentence buried below the gauge is easy to skim past; a substituted verdict also
@@ -916,6 +1007,106 @@ describe('renderReportHtml', () => {
     expect(messageQualityCard).toBeDefined();
     expect(messageQualityCard).toContain('class="metric-threshold"');
     expect(messageQualityCard.toLowerCase()).toContain('no healthy/critical band');
+  });
+
+  // code-quality-metrics coordination task: measured on 73V's "Large commits" tile, the card
+  // rendered ~15 words on what the metric is, ~3 stating the band, and ~110 words of
+  // qualifiers (chip, tiering, band-provenance, literature aside) -- roughly 6:1 against the
+  // reader, and never stated the plain fact a reader actually wants: 26 against a band of 48
+  // is comfortably inside range. This is that missing sentence: a plain-language comparison
+  // of the value to its own healthy bar, independent of and in addition to the qualifier-heavy
+  // describeThreshold text.
+  it('states in plain language what the value means against its healthy bar, for a two-band, higher-is-worse metric scored good', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '15.00' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('class="metric-meaning"');
+    expect(largeCommitsCard).toContain('15, comfortably inside the 18 bar.');
+  });
+
+  it('states in plain language what the value means against its healthy bar, for a two-band, higher-is-worse metric scored warning', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '25.00' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('class="metric-meaning"');
+    expect(largeCommitsCard).toContain('25, over the 18 bar.');
+  });
+
+  it('states in plain language what the value means against its healthy bar, for a two-band, higher-is-better metric', () => {
+    // test_coverage_rate is higher-is-better, two-band (healthy: 23). Default fixture value
+    // 55 is good (>= 23); a lowered value crosses to warning.
+    const goodHtml = renderReportHtml(fixtureArgs({ test_coverage_rate: '55.00' }));
+    const goodCard = goodHtml.split('<article class="metric-card"').find(card => card.includes('>Test/prod co-change</p>'));
+    expect(goodCard).toContain('55, at or above the 23 bar.');
+
+    const warningHtml = renderReportHtml(fixtureArgs({ test_coverage_rate: '10.00' }));
+    const warningCard = warningHtml.split('<article class="metric-card"').find(card => card.includes('>Test/prod co-change</p>'));
+    expect(warningCard).toContain('10, under the 23 bar.');
+  });
+
+  // large_commits_pct is two-band under the current calibration, so a three-band critical
+  // meaning can only be demonstrated against a synthetic, restored critical bound (same
+  // technique the existing "renders a threshold description" test above already uses).
+  it('states in plain language what the value means against its critical line, for a three-band metric scored critical', () => {
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let html;
+    try {
+      html = renderReportHtml(fixtureArgs({ large_commits_pct: '40.00' }));
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('40, well past the 30 critical line.');
+  });
+
+  // The meaning line depends on a real band to compare against. Entries with a
+  // descriptiveNote (band withdrawn -- net_additions_ratio_median, message_quality_pct) or no
+  // boundary at all (velocity, a purely informational entry) have neither, so there is no
+  // plain-language comparison to make; adding one would fabricate a bar that does not exist.
+  it('[guard] omits the meaning line for entries with no real band to compare against', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+
+    const netAdditionsCard = cards.find(card => card.includes('>Net-new ratio (median)</p>'));
+    expect(netAdditionsCard).not.toContain('class="metric-meaning"');
+
+    const velocityCard = cards.find(card => card.includes('>Velocity</p>'));
+    expect(velocityCard).not.toContain('class="metric-meaning"');
+  });
+
+  // code-quality-metrics coordination task: the same tile measured on 73V gave 15 words to
+  // what the metric is and 110 to qualifiers. describeVerdictMeaning above fixes the missing
+  // "what this means for this repo" sentence; this fixes the ratio itself by moving
+  // everything that is methodology (the threshold/tiering sentence, the band-provenance
+  // clause, the literature aside inside `measures`, and the DORA-connection sentence) behind
+  // a collapsed disclosure, leaving only the metric's own first sentence -- "what it is" --
+  // in the reading path alongside the value and the new meaning line.
+  it('shows only the metric\'s first sentence in the reading path, moving its threshold prose, literature aside, and DORA connection behind a collapsed Methodology disclosure', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '15.00' }));
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    const whatIsIndex = largeCommitsCard.indexOf('class="metric-what-is"');
+    expect(whatIsIndex).toBeGreaterThanOrEqual(0);
+    expect(largeCommitsCard).toContain('How often a commit is big enough that nobody realistically read it line by line.');
+
+    const detailsIndex = largeCommitsCard.indexOf('<details class="metric-methodology">');
+    expect(detailsIndex).toBeGreaterThan(whatIsIndex);
+    expect(largeCommitsCard).toContain('<summary>Methodology</summary>');
+
+    const methodologySection = largeCommitsCard.slice(detailsIndex);
+    expect(methodologySection).toContain('Healthy below 18. No critical bound');
+    expect(methodologySection).toContain('a pattern this project\'s own calibration data hit too.');
+    expect(methodologySection).toContain('Working in small batches is one of the practices DORA ties most directly to healthy delivery.');
+
+    // The first sentence must appear only once (in the visible spot), not duplicated inside
+    // the collapsed section too.
+    const firstSentence = 'How often a commit is big enough that nobody realistically read it line by line.';
+    const occurrences = largeCommitsCard.split(firstSentence).length - 1;
+    expect(occurrences).toBe(1);
   });
 
   it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
@@ -987,6 +1178,11 @@ describe('renderReportHtml', () => {
     expect(velocityCard).not.toMatch(/Healthy (above|below)/);
   });
 
+  // code-quality-metrics coordination task: `measures` used to render as one contiguous block.
+  // It now splits at its first sentence -- the plain "what this is" statement, kept visible in
+  // the reading path -- with everything after that sentence (the literature/caveat aside)
+  // moved into the collapsed Methodology disclosure alongside `dora`. Both halves must still
+  // reach the card; they just no longer sit next to each other as one literal substring.
   it('renders a description of what each metric measures and its DORA connection inside the card', () => {
     const html = renderReportHtml(fixtureArgs());
 
@@ -995,7 +1191,11 @@ describe('renderReportHtml', () => {
     // description reaches the card, not the prose itself. large_commits_pct is
     // always present in the catalog.
     const { measures, dora } = METRIC_DESCRIPTIONS.large_commits_pct;
-    expect(html).toContain(measures);
+    const firstSentenceEnd = measures.indexOf('. ') + 1;
+    const primary = measures.slice(0, firstSentenceEnd);
+    const rest = measures.slice(firstSentenceEnd).trim();
+    expect(html).toContain(primary);
+    expect(html).toContain(rest);
     expect(html).toContain(dora);
 
     const cards = html.split('<article class="metric-card"').slice(1);
