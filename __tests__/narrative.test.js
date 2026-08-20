@@ -2,7 +2,7 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative, buildNarrativePayload, buildNarrativeTopCommits, validateNarrative } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload, buildNarrativeTopCommits, describeBandProvenance, validateNarrative } = require('../lib/narrative');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { CONFIG } = require('../lib/config');
 
@@ -192,6 +192,43 @@ describe('generateFindingsNarrative: client provided', () => {
   });
 });
 
+describe('describeBandProvenance', () => {
+  // CALLED SHOT (code-quality-metrics-0b8f, RED 1): measured on the regenerated 73V report,
+  // which scored its change-size and duplication tiles against THRESHOLDS.GREENFIELD_MODERN
+  // (n=2), while the narrative still asserted "six reference repositories" -- a provenance
+  // claim contradicting the tiles on the same page. describeBandProvenance must name the
+  // population an entry's own bandProvenance records (set only by lib/report.js's
+  // substituteBand, mirroring how the rendered band-chip and greenfield note already read it),
+  // not a hardcoded count.
+  // Predicted failure before implementing: the stub always returns BENCHMARK_PROVENANCE_NOTE
+  // verbatim (the hardcoded "six-repository benchmark" text), so `toMatch(/greenfield-modern/)`
+  // fails with "Received string: ...six-repository benchmark...".
+  test('names the greenfield-modern population and its sample size when a payload entry carries a substituted band', () => {
+    const payload = [
+      { key: 'large_commits_pct', label: 'Large commits', value: '58', direction: 'higher-is-worse', status: 'warning', healthyBoundary: '48', criticalBoundary: null, bandProvenance: { population: 'greenfield-modern', n: 2 } }
+    ];
+
+    const note = describeBandProvenance(payload);
+
+    expect(note).toMatch(/greenfield-modern/);
+    expect(note).toMatch(/\b2\b/);
+  });
+
+  // GUARD, not a called-shot RED: the default (brownfield) population carries no
+  // bandProvenance at all on any entry -- this is the ordinary, unsubstituted run, which must
+  // keep stating the six-repository benchmark exactly as before.
+  test('states the six-repository benchmark when no payload entry carries a substituted band', () => {
+    const payload = [
+      { key: 'large_commits_pct', label: 'Large commits', value: '15', direction: 'higher-is-worse', status: 'good', healthyBoundary: '18', criticalBoundary: null }
+    ];
+
+    const note = describeBandProvenance(payload);
+
+    expect(note).toMatch(/six-repository/);
+    expect(note).not.toMatch(/greenfield-modern/);
+  });
+});
+
 describe('generateFindingsNarrative: top commits sent to the model', () => {
   // CALLED SHOT (code-quality-metrics-j78y, RED 2): generateFindingsNarrative currently embeds
   // the raw topCommits array directly into the request content, so a commit dominated by an
@@ -225,6 +262,30 @@ describe('generateFindingsNarrative: top commits sent to the model', () => {
     expect(sentContent).toContain('"prod_additions":200');
     expect(sentContent).not.toContain('9868');
     expect(sentContent).not.toContain('4811');
+
+    logSpy.mockRestore();
+  });
+
+  // CALLED SHOT (code-quality-metrics-0b8f, RED 2): generateFindingsNarrative currently embeds
+  // the hardcoded BENCHMARK_PROVENANCE_NOTE constant directly, regardless of the catalog it is
+  // given. This pins the integration: when a catalog entry carries a substituted band, the
+  // note actually sent to the model must name that population.
+  // Predicted failure before implementing: the content still contains the static hardcoded
+  // "six-repository benchmark" text and no "greenfield-modern" substring, so `toMatch` fails.
+  test('sends a provenance note naming the greenfield-modern population when a catalog entry carries a substituted band', async () => {
+    const catalog = [
+      { key: 'large_commits_pct', label: 'Large commits', value: 58, direction: 'higher-is-worse', status: 'warning', healthyBoundary: 48, criticalBoundary: null, bandProvenance: { population: 'greenfield-modern', n: 2 } }
+    ];
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, []);
+
+    const sentContent = create.mock.calls[0][0].messages[0].content;
+    expect(sentContent).toMatch(/greenfield-modern/);
+    expect(sentContent).not.toMatch(/quantiles of a six-repository benchmark/);
 
     logSpy.mockRestore();
   });
