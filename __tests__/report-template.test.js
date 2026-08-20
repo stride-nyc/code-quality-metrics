@@ -987,6 +987,37 @@ describe('renderReportHtml', () => {
     expect(velocityCard).not.toContain('class="metric-meaning"');
   });
 
+  // code-quality-metrics coordination task: the same tile measured on 73V gave 15 words to
+  // what the metric is and 110 to qualifiers. describeVerdictMeaning above fixes the missing
+  // "what this means for this repo" sentence; this fixes the ratio itself by moving
+  // everything that is methodology (the threshold/tiering sentence, the band-provenance
+  // clause, the literature aside inside `measures`, and the DORA-connection sentence) behind
+  // a collapsed disclosure, leaving only the metric's own first sentence -- "what it is" --
+  // in the reading path alongside the value and the new meaning line.
+  it('shows only the metric\'s first sentence in the reading path, moving its threshold prose, literature aside, and DORA connection behind a collapsed Methodology disclosure', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '15.00' }));
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    const whatIsIndex = largeCommitsCard.indexOf('class="metric-what-is"');
+    expect(whatIsIndex).toBeGreaterThanOrEqual(0);
+    expect(largeCommitsCard).toContain('How often a commit is big enough that nobody realistically read it line by line.');
+
+    const detailsIndex = largeCommitsCard.indexOf('<details class="metric-methodology">');
+    expect(detailsIndex).toBeGreaterThan(whatIsIndex);
+    expect(largeCommitsCard).toContain('<summary>Methodology</summary>');
+
+    const methodologySection = largeCommitsCard.slice(detailsIndex);
+    expect(methodologySection).toContain('Healthy below 18. No critical bound');
+    expect(methodologySection).toContain('a pattern this project\'s own calibration data hit too.');
+    expect(methodologySection).toContain('Working in small batches is one of the practices DORA ties most directly to healthy delivery.');
+
+    // The first sentence must appear only once (in the visible spot), not duplicated inside
+    // the collapsed section too.
+    const firstSentence = 'How often a commit is big enough that nobody realistically read it line by line.';
+    const occurrences = largeCommitsCard.split(firstSentence).length - 1;
+    expect(occurrences).toBe(1);
+  });
+
   it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
     // test_coverage_rate is two-band. A gauge asserting a red zone it cannot
     // support would overstate what the data shows, so it must render only two
@@ -1056,6 +1087,11 @@ describe('renderReportHtml', () => {
     expect(velocityCard).not.toMatch(/Healthy (above|below)/);
   });
 
+  // code-quality-metrics coordination task: `measures` used to render as one contiguous block.
+  // It now splits at its first sentence -- the plain "what this is" statement, kept visible in
+  // the reading path -- with everything after that sentence (the literature/caveat aside)
+  // moved into the collapsed Methodology disclosure alongside `dora`. Both halves must still
+  // reach the card; they just no longer sit next to each other as one literal substring.
   it('renders a description of what each metric measures and its DORA connection inside the card', () => {
     const html = renderReportHtml(fixtureArgs());
 
@@ -1064,7 +1100,11 @@ describe('renderReportHtml', () => {
     // description reaches the card, not the prose itself. large_commits_pct is
     // always present in the catalog.
     const { measures, dora } = METRIC_DESCRIPTIONS.large_commits_pct;
-    expect(html).toContain(measures);
+    const firstSentenceEnd = measures.indexOf('. ') + 1;
+    const primary = measures.slice(0, firstSentenceEnd);
+    const rest = measures.slice(firstSentenceEnd).trim();
+    expect(html).toContain(primary);
+    expect(html).toContain(rest);
     expect(html).toContain(dora);
 
     const cards = html.split('<article class="metric-card"').slice(1);
