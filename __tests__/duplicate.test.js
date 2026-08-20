@@ -262,27 +262,32 @@ describe('resolveModuleNeighbors', () => {
     fs.existsSync.mockReturnValue(true);
   });
 
+  // code-quality-metrics-34fu: candidates are normalized relative to a root (repo root
+  // in real usage) rather than returned in whatever form they arrived in, so the same
+  // real file cannot enter the set twice under two different spellings. These four
+  // tests pass an explicit root so the fixture's `/project/...` paths stay realistic
+  // without depending on this process's actual working directory.
   test('returns only the input files when they have no local imports', () => {
     fs.readFileSync.mockReturnValue('const x = 1;');
     const input = ['/project/src/lib/git.js'];
-    const result = resolveModuleNeighbors(input);
-    expect(result).toContain('/project/src/lib/git.js');
+    const result = resolveModuleNeighbors(input, '/project');
+    expect(result).toContain('src/lib/git.js');
     expect(result).toHaveLength(1);
   });
 
   test('returns changed files plus resolved local imports', () => {
     fs.readFileSync.mockReturnValue("const { CONFIG } = require('./config');");
     const input = ['/project/src/lib/git.js'];
-    const result = resolveModuleNeighbors(input);
-    expect(result).toContain('/project/src/lib/git.js');
-    expect(result).toContain('/project/src/lib/config.js');
+    const result = resolveModuleNeighbors(input, '/project');
+    expect(result).toContain('src/lib/git.js');
+    expect(result).toContain('src/lib/config.js');
     expect(result).toHaveLength(2);
   });
 
   test('skips import resolution for non-JS files and includes them as-is', () => {
     const input = ['/project/.github/workflows/pr-metrics.yml'];
-    const result = resolveModuleNeighbors(input);
-    expect(result).toContain('/project/.github/workflows/pr-metrics.yml');
+    const result = resolveModuleNeighbors(input, '/project');
+    expect(result).toContain('.github/workflows/pr-metrics.yml');
     expect(fs.readFileSync).not.toHaveBeenCalled();
   });
 
@@ -298,8 +303,8 @@ describe('resolveModuleNeighbors', () => {
       "const fs = require('fs');\nconst x = require('lodash');\nconst y = require('./local');"
     );
     const input = ['/project/src/lib/git.js'];
-    const result = resolveModuleNeighbors(input);
-    expect(result).toContain('/project/src/lib/local.js');
+    const result = resolveModuleNeighbors(input, '/project');
+    expect(result).toContain('src/lib/local.js');
     expect(result.some(p => p.includes('lodash'))).toBe(false);
     expect(result.some(p => p.includes('node_modules'))).toBe(false);
   });
@@ -321,6 +326,31 @@ describe('resolveModuleNeighbors', () => {
     } finally {
       CONFIG.DUPLICATE_IGNORE_PATTERNS = original;
     }
+  });
+
+  // code-quality-metrics-34fu: a file already present in the candidate set (e.g. a
+  // production file passed in directly) can also be reached a second time as a resolved
+  // import target of another file. path.resolve() always returns an absolute path, so the
+  // same real file entered the Set under two different string spellings (its original
+  // relative form, and the newly resolved absolute form) and was never deduplicated.
+  // Verified live against 73V: the semantic-duplicate layer then paired the file with
+  // itself, reporting a guaranteed "byte-for-byte identical" finding that carries zero
+  // information and consumes one of a handful of semantic-analysis slots.
+  test('dedupes the same real file when it is passed in directly and also reached as a resolved import target', () => {
+    fs.readFileSync.mockImplementation((filePath) => {
+      if (filePath === 'backend/routes/index.js') {
+        return "const authorize = require('../middleware/authorizeWithProviderScope');";
+      }
+      return 'module.exports = function authorizeWithProviderScope() {};';
+    });
+
+    const result = resolveModuleNeighbors([
+      'backend/middleware/authorizeWithProviderScope.js',
+      'backend/routes/index.js'
+    ]);
+
+    expect(result).toHaveLength(2);
+    expect(result.filter(p => p === 'backend/middleware/authorizeWithProviderScope.js')).toHaveLength(1);
   });
 
 });
