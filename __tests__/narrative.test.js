@@ -25,13 +25,37 @@ function fixtureSummary(overrides) {
 }
 
 describe('fallbackFindings (shared deterministic helper)', () => {
-  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
-  // is null -- see lib/thresholds.js), so 40% -- above healthy (18), with no critical bound to
-  // exceed -- renders as a warning bullet, not a critical one.
-  test('is exported from lib/report-template and returns templated bullets for critical/warning entries', () => {
+  // code-quality-metrics-ponf: the 73V Findings section listed three warnings and nothing
+  // else, even though four other tiles on the same page were comfortably healthy -- a reader
+  // finished the section believing the repository had only problems. fallbackFindings must
+  // report both halves of a mixed run: large_commits_pct is two-band (LARGE_COMMITS_PCT.critical
+  // is null -- see lib/thresholds.js), so 40% -- above healthy (18) -- renders as a warning
+  // bullet, and every other banded tile in this fixture is healthy, so all of them must appear
+  // too, not be truncated away. test_isolation_rate, velocity_commits_per_day, commit_size_trend
+  // and velocity_trend (all 'neutral' here) and message_quality_pct/net_additions_ratio_median/
+  // avg_lines_changed (always informational, no verdict) must NOT appear: none of them carries a
+  // real pass/fail call (see hasVerdict, lib/report.js).
+  test('shows both the warning and every healthy banded entry for a mixed run, not warnings only', () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const bullets = fallbackFindings(catalog);
-    expect(bullets).toEqual(['Large commits: 40 (warning)']);
+    expect(bullets).toEqual([
+      'Large commits: 40 (warning)',
+      'Sprawling commits: 8 (good)',
+      'Uncovered production: 5 (good)',
+      'Test/prod co-change: 55 (good)',
+      'Commit size, high end: 150 (good)',
+      'Files changed, high end: 5 (good)'
+    ]);
+  });
+
+  // GUARD, not a called-shot RED: proves a genuinely healthy run (no warning at all) reports
+  // every healthy tile and no warning bullet, rather than the fair-mix fix accidentally
+  // requiring at least one concern to render anything.
+  test('shows every healthy banded entry and no warning bullet when nothing is a concern', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const bullets = fallbackFindings(catalog);
+    expect(bullets.some(b => b.includes('(warning)') || b.includes('(critical)'))).toBe(false);
+    expect(bullets).toEqual(expect.arrayContaining(['Large commits: 15 (good)']));
   });
 });
 
