@@ -360,6 +360,38 @@ config override already use — rather than adding a fourth shape. The note stat
 bands are quantiles of maintenance-era windows on decades-old codebases and do not transfer to
 an initial build.
 
+**Substituting instead of withholding, once a greenfield reference band exists (code-quality-metrics
+coordination task).** Withholding was the right call while no greenfield band existed to score
+against; once `calibration/derive-bands.js --population greenfield-modern` was adopted as
+`THRESHOLDS.GREENFIELD_MODERN` (see "Greenfield-modern reference set" above), withholding a
+comparison that is now possible would throw away information a reader could otherwise have. All
+five of the withheld tiles (large/sprawling commit %, p90 lines/files changed, duplication
+density) are substituted: `buildMetricCatalog` scores them against `THRESHOLDS.GREENFIELD_MODERN`
+instead of calling `withholdEntry`, via a new `substituteBand` helper, whenever
+`project_lifecycle` is `'initial-build'` and that threshold object holds a band for the key —
+falling through to the original `withholdEntry` behavior for any key it does not cover, so the
+withholding path stays intact rather than being deleted. `test_coverage_rate` and
+`uncovered_prod_rate` are deliberately **not** substituted, even though the greenfield-modern
+population derives a value for the former: the Hattori-and-Lanza bias this section exists to
+correct is specifically about change-size and duplication metrics inflated by scaffolding,
+vendored dependencies and generated files, and no equivalent published or reasoned claim exists
+that test/prod co-change behaves differently in an initial build. Both keep scoring against the
+brownfield band unconditionally, exactly as before this change.
+
+A substituted verdict must not render identically to a brownfield one: n=2 (both supporting
+repositories members of this toolkit's own five-repository eval set — the
+`greenfield-modern-eval-circularity` reservation) is a materially weaker claim than the
+brownfield bands' n=12, and a reader who cannot tell the two apart would trust both equally.
+Each substituted entry carries a `bandProvenance` field (`{ population, n }`), which
+`lib/report-template.js` renders two ways at once rather than one: a sentence appended to
+`describeThreshold`'s usual healthy/critical text naming the population and its n, and a
+separate, purely visual marker on the card itself — a `data-band` attribute, a dashed border,
+and a `band-chip` element — so a reader skimming the page by shape (border style, chip) reaches
+the same conclusion as one reading the threshold prose carefully. Two renderings of the same
+fact were chosen over either alone because this project has already found that a single textual
+cue is easy to miss under a screen of tiles (the same reasoning behind pairing a status border
+color with a status-chip everywhere else in this report).
+
 **Detection is a structural fact, not a tuned number.** `windowIncludesRepositoryRoot`
 (`lib/git.js`) checks whether any analyzed commit's SHA is one of the repository's own root
 commit(s), found by `git rev-list --max-parents=0 --all` in `local-code-metrics.js` and compared
@@ -429,12 +461,15 @@ already-documented bias this ticket opened against, not a new harm this rule int
 missed greenfield window costs nothing beyond leaving today's known bias in place, while a false
 positive would cost a reader looking at a genuinely mature codebase every band on the page.
 
-**The report says plainly what it is still for.** Withholding four of six "Change size and
-scope" tiles plus duplication density leaves most of that group as ungraded numbers — honest,
-but also the point a reader asks what the report is still for. `lib/report-template.js`'s
-`renderLifecycleLine` states the answer in the masthead rather than leaving it to be inferred
-from a screen of ungraded tiles: "This report shows shape and trend for those tiles, not a
-grade."
+**The report says plainly what it is still for.** Before a greenfield band existed, withholding
+four of six "Change size and scope" tiles plus duplication density left most of that group as
+ungraded numbers — honest, but also the point a reader asks what the report is still for. Now
+that those five tiles are substituted rather than withheld (see above), `lib/report-template.js`'s
+`renderLifecycleLine` states which band produced them instead: that large/sprawling commits,
+commit size and files-changed at the high end, and duplication density are scored against a
+separate greenfield-modern band (n=2, a much thinner sample than the rest of the page), and that
+test/prod co-change and uncovered production keep using the same brownfield band an established
+repository would see, unconditionally.
 
 **Scaffold root commit detection (code-quality-metrics-fex3, GitHub #71).** The rule above has a
 second failure mode besides the false negative already described: a root commit that is itself a

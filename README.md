@@ -302,8 +302,16 @@ considerably thinner sample than the n = 12 behind the rest of this table, and b
 repositories are also part of this toolkit's own evaluation set, so a verdict scored against this
 band for either of those two repositories specifically is weaker evidence than the same verdict
 would be for anyone else (see `calibration/README.md`'s "Greenfield reference set" section and
-GitHub #84). See `metrics-specification.md`'s "Project Lifecycle and Change-Size Withholding"
-section for how and when a report uses it.
+GitHub #84).
+
+When `project_lifecycle` is `initial-build`, a report scores large commits, sprawling commits,
+commit size and files-changed at the high end, and duplication density against this band instead
+of withholding them outright. Test/prod co-change and uncovered production are not switched: they
+keep using the same brownfield band an established repository sees, since there is no equivalent
+evidence that they behave differently in an initial build. Every substituted tile is marked
+visibly, not rendered the same as a brownfield verdict: a `band-chip` on the card, a dashed
+border, and a sentence naming the population and its n. See `metrics-specification.md`'s "Project
+Lifecycle and Change-Size Withholding" section for the full mechanism.
 
 ## DORA Archetype Classification
 

@@ -218,9 +218,15 @@ vendored dependencies and generated files (Hattori and Lanza, EVOL 2008), and a 
 codebase's small total-lines denominator makes duplication swing on a few blocks.
 code-quality-metrics-31w added a structural detector for this (`windowIncludesRepositoryRoot`
 in `lib/git.js`, surfaced as `project_lifecycle: "initial-build"` in every run's summary) and
-withholds the biased verdicts for a window that trips it, rather than scoring them against
+withheld the biased verdicts for a window that trips it, rather than scoring them against
 maintenance-era bands. code-quality-metrics-4cv is the other half: measuring a reference set
-during that same phase, so the withheld verdicts have somewhere to go instead.
+during that same phase, so the withheld verdicts have somewhere to go instead. Now that
+`GREENFIELD_MODERN` is adopted, `lib/report.js`'s `buildMetricCatalog` scores these five keys
+(plus `SPRAWLING_COMMITS_PCT` and `P90_FILES_CHANGED`, which carry the same bias for the same
+change-size reasoning) against it instead of withholding, whenever `project_lifecycle` is
+`"initial-build"` -- see `metrics-specification.md`'s "Project Lifecycle and Change-Size
+Withholding" section for the substitution mechanism and why `TEST_COVERAGE_RATE` and
+`UNCOVERED_PROD_RATE` are deliberately left scored against the brownfield band instead.
 
 **Two sub-populations, not one.** The reference repositories used elsewhere in this file began
 between 1996 and 2011, so their first months are also an old-tooling era: pre-CI as practiced
