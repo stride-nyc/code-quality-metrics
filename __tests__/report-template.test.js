@@ -1421,6 +1421,19 @@ describe('renderReportHtml', () => {
     expect(ledByIndex).toBeGreaterThan(healthyIndex);
   });
 
+  // Measured on stride-nyc/73V's real run: the healthy-first branch repeated "against a
+  // calibrated threshold" once for the whole and once for the exception ("Most metrics
+  // scored against a calibrated threshold in this run are healthy. It still flags 2 warning
+  // signals against a calibrated threshold, led by..."), which reads as a stutter rather than
+  // two facts. The phrase should appear at most once in this branch.
+  it('does not repeat "against a calibrated threshold" when characterizing the whole as healthy', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    const occurrences = (summary.match(/against a calibrated threshold/g) || []).length;
+    expect(occurrences).toBe(1);
+  });
+
   // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
   // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
   // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
