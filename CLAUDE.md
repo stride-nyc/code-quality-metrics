@@ -11,10 +11,10 @@ Key insight: Local analysis reveals 10x higher drift rates than remote analysis 
 ## Running the Tools
 
 ```bash
-# Analyze the local repository (outputs JSON files + console report)
+# Analyze the local repository (writes JSON files to .codemetrics/ + prints a console report)
 node local-code-metrics.js
 
-# Render local_drift_report.html from those JSON files
+# Render .codemetrics/local_drift_report.html from those JSON files
 npm run report   # node generate-drift-report.js
 
 # Manually trigger GitHub Actions workflows
@@ -33,6 +33,65 @@ the current code expects (`counted_additions`/`counted_deletions`, added by PR #
 throws, naming the missing field and telling the operator to re-run
 `local-code-metrics.js`, rather than rendering a report ranked on stale or absent data
 (code-quality-metrics-2byz).
+
+### Output Location (code-quality-metrics-w3wn)
+
+All of `local-code-metrics.js`'s output -- `local_commit_metrics.json`, `local_metrics_summary.json`,
+`local_duplicate_analysis.json`, `local_claude_analysis.json` -- and `generate-drift-report.js`'s
+`local_drift_report.html` (plus `local_drift_report.scrubbed.html`, when `scrub-report-
+instruction.md`'s scrub has been run) are written to a `.codemetrics/` directory inside the
+analyzed repository, created with `fs.mkdirSync(..., { recursive: true })` when absent, rather
+than to that repository's own root. Measured across the six repositories this toolkit
+evaluates: writing directly into the root left 235 untracked files behind, and only this
+repository's own `.gitignore` protected against them (`local_*.json`/`local_*.html`) -- every
+target repository had no protection at all, so each file was one `git add .` away from being
+committed, and two of the six are client repositories whose JSON carries author names, commit
+messages, `prod_file_paths` and model prose.
+
+`.codemetrics/` deliberately pairs with the existing per-repo `.codemetrics.json` config file:
+same prefix, one convention rather than two, and hidden by default in a repository someone else
+opens. **Note the deliberate near-collision**: a tracked `.codemetrics.json` *file* and an
+ignored `.codemetrics/` *directory* coexist in the same repository without conflict -- they are
+different filesystem entries -- but the shared prefix is intentional, not an accident to be
+confused for one.
+
+Both `CONFIG.DUPLICATE_IGNORE_PATTERNS` and `CONFIG.ANALYSIS_IGNORE_PATTERNS` (`lib/config.js`)
+carry a `'**/.codemetrics/**'` entry so a second run never measures the first run's own output
+as if it were the codebase under analysis -- see "Configuration" below for why this is the one
+case where seeding `ANALYSIS_IGNORE_PATTERNS` with a non-empty default does not compromise the
+provable-behaviour-preservation argument that key's empty default otherwise rests on.
+
+**`--output-dir <path>`** overrides the default `.codemetrics/` location entirely, for both
+commands (`generate-drift-report.js`'s existing positional directory argument already covered
+this; `local-code-metrics.js` gained the CLI flag with this change). Deliberately CLI-only, no
+`.codemetrics.json` key, for the same reason `--max-commits` is CLI-only (see "Analysis Window"
+below): where a run writes its output is a property of the run, not a fact about the repository
+being measured.
+
+**Legacy root-level files are refused, not read.** If `.codemetrics/` is absent but a legacy
+`local_metrics_summary.json` or `local_commit_metrics.json` sits one directory up (from before
+this change, or from a `local-code-metrics.js` run against an older tool version),
+`generate-drift-report.js`'s `readRequiredJson` throws, naming the legacy file's exact path and
+instructing a re-run of `local-code-metrics.js`, rather than silently reading the older file as
+if it were current. Given this project's repeated trouble with stale inputs producing plausible
+output (the `counted_additions`/`counted_deletions` guard above exists for exactly this reason),
+a path-mismatch failure that reads as a stale-data problem is a worse failure mode than a loud,
+specific refusal.
+
+**The `backup-<timestamp>-<label>_<filename>` convention is an operator/agent concern, not a
+tool-owned feature.** Regenerating a report destroys the previous one, and across this project's
+own sessions agents have manually copied output aside before re-running, inventing that naming
+pattern as they went -- accounting for 175 of the 235 untracked files measured across the six
+evaluation repositories. Nothing in `local-code-metrics.js` or `generate-drift-report.js`
+creates, reads, or cleans up a file matching that pattern, and this change does not add such a
+mechanism: it would be a materially larger feature (retention policy, cleanup logic, its own
+tests) than the output-location move this issue is about. A backup kept inside `.codemetrics/`
+(in a self-chosen subdirectory, e.g. one named `history/`) is automatically covered by the
+`'**/.codemetrics/**'` exclusion above and so will not skew a later run's measurements; a backup
+kept elsewhere in the repository is not, and remains the operator's own responsibility to keep
+out of the analyzed tree. Never delete a file matching this pattern with a glob (`rm -f
+backup-*`) -- see AGENTS.md's own warning on this, which predates and still applies to the
+`.codemetrics/` location.
 
 ### Analysis Window
 
@@ -155,7 +214,7 @@ npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
 
 Three public components sharing pure-computation logic via `lib/`:
 
-1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
+1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json` into a `.codemetrics/` directory inside the analyzed repository (see "Output Location" above), and prints a console report with insights.
 
    The `lib/` directory contains the internal modules:
    - `lib/config.js` — CONFIG object; detector and analysis settings (large/sprawling commit cutoffs, message-quality word count, AI pre-filter and duplicate-detector tuning, test-file patterns), the single source of truth for those settings (**shared with workflows**)
