@@ -88,7 +88,13 @@ describe('generateFindingsNarrative: client provided', () => {
     errorSpy.mockRestore();
   });
 
-  test('falls back to fallbackFindings, with a visible rejection notice, when the narrative fails validation', async () => {
+  // code-quality-metrics-zuee: the 73V report's Findings section opened with this exact
+  // rejection notice, quoting the model's full rejected paragraph, as the first thing a reader
+  // saw -- internal consistency-check plumbing rendered as though it were report content. The
+  // diagnostic still needs to exist somewhere for debugging, so it moves to console.error
+  // (stderr) rather than being dropped outright; only its presence in the rendered bullets is
+  // removed.
+  test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
       positive_findings: [],
@@ -96,15 +102,18 @@ describe('generateFindingsNarrative: client provided', () => {
       recommended_actions: []
     });
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result[0]).toMatch(/narrative rejected/i);
-    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy.mock.calls[0][0]).toMatch(/999/);
+    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result.some(item => /narrative rejected/i.test(item))).toBe(false);
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatch(/999/);
 
     logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   // GUARD, not a called-shot RED: written after the try/catch already added
