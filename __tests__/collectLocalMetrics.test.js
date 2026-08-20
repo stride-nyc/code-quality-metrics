@@ -929,8 +929,11 @@ describe('collectLocalMetrics — successful run', () => {
       expect(summary.history_granularity_confidence).toBe('high');
       expect(summary.history_granularity_override).toBeNull();
       expect(summary.history_granularity_signals).toEqual({
-        pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0
+        pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0, sample_size: 1
       });
+      // [guard] nothing forced anything here: effective already equals detected, so there is no
+      // reason to name.
+      expect(summary.history_granularity_forced_reason).toBeNull();
     });
   });
 
@@ -968,6 +971,39 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.history_granularity_detected).toBe('squashed');
     expect(summary.history_granularity_confidence).toBe('low');
     expect(summary.history_granularity).toBe('granular');
+  });
+
+  test('records history_granularity_forced_reason as workflow_type_feature_branch when the workflow_type gate forces granularity away from a raw squashed detection with no operator override (code-quality-metrics-q5uz)', async () => {
+    // Same scenario as the test above: history_granularity_override is null here (no --history
+    // flag was given), yet history_granularity ('granular') differs from
+    // history_granularity_detected ('squashed') -- the workflow_type: feature_branch gate forced
+    // it. Before this field existed, a reader comparing two summary files could not distinguish
+    // this case from "nothing overrode anything": both recorded history_granularity_override:
+    // null. Reproduces the 73V run, which narrated "overridden because the analyzed commits are
+    // unique to unmerged branches" in the rendered report while the JSON recorded null.
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-15T10:00:00Z|Dev|feat: dev container (#660)`,
+      `${SHA_B}|2024-01-14T10:00:00Z|Dev|feat: change one`,
+      `${SHA_C}|2024-01-13T10:00:00Z|Dev|feat: change two`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      gitLog,
+      NUMSTAT, NUMSTAT, NUMSTAT
+    );
+
+    const summary = await collectLocalMetrics().then(() => {
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      return JSON.parse(summaryCall[1]);
+    });
+
+    expect(summary.history_granularity_override).toBeNull();
+    expect(summary.history_granularity_forced_reason).toBe('workflow_type_feature_branch');
   });
 
   test('threads the workflow_type gate through to the metric catalog: a feature-branch sample with low-confidence squashed detection shows a real large_commits_pct verdict, not merely a present one (code-quality-metrics-drv)', async () => {
@@ -1029,6 +1065,10 @@ describe('collectLocalMetrics — successful run', () => {
     expect(summary.history_granularity).toBe('granular');
     expect(summary.history_granularity_detected).toBe('squashed');
     expect(summary.history_granularity_override).toBe('granular');
+    // [guard] the operator's own --history flag is the reason effective differs from detected
+    // here, not the workflow_type gate (which would also fire for this feature-branch sample,
+    // but the operator override takes precedence and is what a reader should be told).
+    expect(summary.history_granularity_forced_reason).toBe('operator');
   });
 
   test('writes local_metrics_summary.json with three-way test classification rates', async () => {
@@ -2244,5 +2284,50 @@ describe('collectLocalMetrics — --max-commits override', () => {
     const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
     const summary = JSON.parse(summaryCall[1]);
     expect(summary.max_commits_override).toBe('unbounded');
+  });
+});
+
+describe('collectLocalMetrics — history granularity population (code-quality-metrics-66oo)', () => {
+  test('computes history_granularity_signals.pr_reference_share over the analyzed commit population, not the pre-slice candidate pool', async () => {
+    // Four candidate commits are fetched for the branch, oldest to newest. The two
+    // oldest carry a trailing PR reference; the two newest do not. --max-commits 2
+    // keeps only the two newest (commit_c, commit_d) for analysis -- neither of
+    // which references a PR -- while the two PR-referenced commits (commit_a,
+    // commit_b) are fetched as candidates but never analyzed.
+    //
+    // Reproduces code-quality-metrics-66oo: the 73V run reported a PR-reference
+    // share (4.82%) computed over the 1246-commit pre-slice candidate pool
+    // (filtered_from), while 21 of the 50 commits actually analyzed (42%)
+    // carried a visible reference -- a population mismatch between what the
+    // detector counts and what the report's "analyzed commit subjects" sentence
+    // (and the Flight Log) describes.
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const SHA_D = 'd'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-01T10:00:00Z|Dev|feat: a (#100)`,
+      `${SHA_B}|2024-01-02T10:00:00Z|Dev|feat: b (#101)`,
+      `${SHA_C}|2024-01-03T10:00:00Z|Dev|feat: c`,
+      `${SHA_D}|2024-01-04T10:00:00Z|Dev|feat: d`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      gitLog,
+      `1\t0\tsrc/c.js`,  // git show numstat for commit_c (analyzed first: oldest of the kept two)
+      `1\t0\tsrc/d.js`   // git show numstat for commit_d
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 2 });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(2);
+    expect(summary.history_granularity_signals.pr_reference_share).toBe(0);
+    expect(summary.history_granularity_detected).toBe('granular');
   });
 });

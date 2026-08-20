@@ -523,15 +523,20 @@ async function collectLocalMetrics(options = {}) {
   // boundary would starve detection of merge/committer signal that the actual analyzed window
   // does contain. In HEAD-anchored mode (effectiveSinceStr null from the start) these are
   // unbounded too, matching fetchBranchCommits' own null-means-no-date-filter contract.
+  //
+  // The `commits` population passed to detectHistoryGranularity below is deferred until
+  // commitsToAnalyze exists (code-quality-metrics-66oo): merge/committer signals are fetched
+  // here because historyRefs/effectiveSinceStr are already in scope, but the PR-reference share
+  // itself must be computed over the same commits the rest of the report calls "analyzed" --
+  // the ones that survive bot-filtering and the MAX_COMMITS slice into commitsToAnalyze, not
+  // uniqueCommits (the full pre-slice candidate pool across every branch, which can be an order
+  // of magnitude larger; measured on 73V: 1246 candidates against 50 actually analyzed).
   const historyRefs = branchesToAnalyze.join(' ');
   const historySinceArg = effectiveSinceStr ? `--since="${effectiveSinceStr}" ` : '';
   const mergeLog = runGitCommand(`git log --merges ${historySinceArg}--pretty=format:"%H" ${historyRefs}`);
   const mergeCommitCount = mergeLog ? mergeLog.split('\n').filter(Boolean).length : 0;
   const committerLog = runGitCommand(`git log --no-merges ${historySinceArg}--pretty=format:"%cn" ${historyRefs}`);
   const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
-  const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
-  const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
-  const historyGranularity = options.history ?? detectedForWithholding;
 
   // Project lifecycle (code-quality-metrics-31w): purely structural, no tuned number. Every
   // reference window this toolkit's bands were calibrated on measures maintenance-era work on
@@ -606,6 +611,40 @@ async function collectLocalMetrics(options = {}) {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
   console.log('');
+
+  // History granularity detection itself (code-quality-metrics-66oo): commitsToAnalyze, not
+  // uniqueCommits, so pr_reference_share describes the same population the report's Flight Log
+  // and "analyzed commit subjects" sentence describe. merge_commit_count and committerNames
+  // above stay window-scoped rather than analyzed-set-scoped: a true merge commit cannot appear
+  // in commitsToAnalyze at all (fetchBranchCommits strips them with --no-merges), so restricting
+  // that signal to the analyzed set would make it read zero unconditionally and lose the very
+  // evidence-for-granular signal it exists to carry.
+  const detectedGranularity = detectHistoryGranularity({ commits: commitsToAnalyze, committerNames, mergeCommitCount });
+  const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
+  const historyGranularity = options.history ?? detectedForWithholding;
+
+  // Names the reason history_granularity (effective) differs from history_granularity_detected
+  // (raw), when it does (code-quality-metrics-q5uz). history_granularity_override alone cannot
+  // carry this: it is documented, and used elsewhere (project_lifecycle_override,
+  // max_commits_override), specifically as "the operator's own CLI flag, or null" -- overloading
+  // it to also mean "the workflow_type gate fired" would break that established meaning. Before
+  // this field existed, a workflow_type: feature_branch run that silently forced granular over a
+  // raw squashed/unknown detection recorded history_granularity_override: null, identical to a
+  // run where nothing overrode anything -- exactly the 73V case, which narrated the override in
+  // its rendered report while the JSON gave no sign anything had happened.
+  //
+  // null when historyGranularity already equals the raw detected value: nothing forced anything,
+  // so there is no reason to name. Otherwise: 'operator' when an explicit --history flag is why
+  // (it sets historyGranularity directly, taking precedence over detectedForWithholding
+  // entirely); 'workflow_type_feature_branch' when resolveHistoryGranularityForWithholding's
+  // feature-branch gate is why; 'unknown_defaults_to_squashed' when its other branch (an
+  // undetermined raw verdict defaulting to squashed under workflow_type: trunk, per
+  // code-quality-metrics-bnq) is why.
+  const historyGranularityForcedReason = historyGranularity === detectedGranularity.value
+    ? null
+    : (options.history != null
+      ? 'operator'
+      : (workflowType === 'feature_branch' ? 'workflow_type_feature_branch' : 'unknown_defaults_to_squashed'));
 
   /** @type {CommitMetric[]} */
   const metrics = [];
@@ -899,6 +938,12 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_confidence: detectedGranularity.confidence,
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
+    // Names the reason history_granularity differs from history_granularity_detected: null when
+    // it does not differ, otherwise 'operator' | 'workflow_type_feature_branch' |
+    // 'unknown_defaults_to_squashed'. See historyGranularityForcedReason's own comment above for
+    // why this is a separate field rather than folded into history_granularity_override
+    // (code-quality-metrics-q5uz).
+    history_granularity_forced_reason: historyGranularityForcedReason,
     // Visibility for --max-commits (this override has no .codemetrics.json counterpart -- see
     // effectiveMaxCommits' own comment above for why): null when not given, otherwise whatever
     // was requested (a number, or the string 'unbounded'), the same shape
