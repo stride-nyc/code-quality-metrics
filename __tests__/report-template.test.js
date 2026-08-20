@@ -713,6 +713,22 @@ describe('renderReportHtml', () => {
     expect(indices).toEqual(sortedIndices);
   });
 
+  // code-quality-metrics-wo8q: test_coverage_rate, test_isolation_rate and uncovered_prod_rate
+  // (lib/metric-descriptions.js) all carry the identical DORA footnote beginning "Automated
+  // testing is not one of the seven capabilities...", and all three sit under the "Test
+  // practice" heading (METRIC_GROUP_BY_KEY, lib/report.js). Rendered per-tile, the same
+  // sentence appeared verbatim three times in one section; it should read once.
+  it('states a repeated DORA footnote once per section instead of once per tile', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const headingStart = html.indexOf('<h2 class="metric-category-heading">Test practice</h2>');
+    expect(headingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingIndex = html.indexOf('<h2 class="metric-category-heading">', headingStart + 1);
+    const section = html.slice(headingStart, nextHeadingIndex > -1 ? nextHeadingIndex : html.length);
+
+    const occurrences = (section.match(/Automated testing is not one of the seven capabilities/g) || []).length;
+    expect(occurrences).toBe(1);
+  });
+
   // message_quality_pct dropped out of the gauge set (code-quality-metrics-6ti): a gauge
   // implies a band, and this metric no longer has one.
   it('renders a semicircular gauge svg for each catalog entry with hasGauge true', () => {
