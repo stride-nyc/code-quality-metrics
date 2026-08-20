@@ -530,6 +530,52 @@ issues.
 Do not weaken a gate to land a change. If one blocks you and you believe it is wrong, say so and
 leave it failing rather than editing the assertion.
 
+### Document register
+
+Everything below restates something computed elsewhere, so all of it can go stale. Only two
+documents are protected by a test. **Assume the rest are wrong until you check them.**
+
+| File | What it holds | Gated |
+|---|---|---|
+| `CLAUDE.md` | project instructions, Key Metrics table, CONFIG table | **yes** — both tables |
+| `ai_drift_metrics_coverage_map.html` | per-metric provenance, band tiers, limits, contradicting evidence | **yes** — critical rows and informational metrics |
+| `calibration/observations.json` | the measurements themselves, plus reservations | **yes** — band derivation and detector settings |
+| `metrics-specification.md` | per-metric definitions, threshold tables, output schema | no |
+| `README.md` | user-facing quick start and a threshold table | no |
+| `measuring-ai-code-drift-using-github-metrics.md` | the article, and the record of every withdrawn figure | no |
+| `calibration/README.md` | derivation rule, reference set, reservations, reproduction recipe | no |
+| `calibration/reference-configs/README.md` | per-repo exclusions and the evidence for each | no |
+| `calibration/research-findings.md` | the nine-question evidence base behind every band | no |
+| `calibration/research-brief.md` | the evidentiary standard those findings were held to | no |
+| `AGENTS.md` | this file | no |
+| `scrub-report-instruction.md`, `codemetrics-config-instruction.md` | operator briefs | no |
+
+**What to update when.**
+
+| If you change | Also update |
+|---|---|
+| a band in `lib/thresholds.js` | `CLAUDE.md` table, coverage map, `metrics-specification.md`, `README.md` |
+| a band's tier (three-band to two-band, or a metric to informational) | all of the above, plus any prose asserting a critical crossing exists |
+| a detector setting in `lib/config.js` | re-measure, then everything in the row above |
+| a metric's definition or a JSON field name | `metrics-specification.md` schema, both workflows, `CLAUDE.md` |
+| the derivation rule in `calibration/derive-bands.js` | `calibration/README.md`, `metrics-specification.md` provenance section |
+| a cited figure or its provenance | `measuring-ai-code-drift-using-github-metrics.md`, `metrics-specification.md`, coverage map |
+
+**The ungated ones drift, and it is not hypothetical.** `metrics-specification.md` and
+`measuring-ai-code-drift-using-github-metrics.md` both carried DORA attributions that appear in
+no DORA publication, for long enough to be cited onward; both needed hand-correction. After the
+2026-08 re-measurement dropped every critical bound, `README.md` still stated Large Commit
+`≤19%` where the code holds 18, and still headed a section "three-band metrics" when no
+three-band metric remained. Nothing failed.
+
+`metrics-specification.md` is the highest-risk of these because it restates every band. If you
+are extending the provenance gate, start there.
+
+**A grep is not enough.** A stale *number* is findable. A stale *claim* is not: "both crossed
+their critical lines" stays grammatical after the critical bound is withdrawn, and prose
+asserting a three-band shape reads fine when the metric has two. When a tier changes, read the
+surrounding sentences, do not just swap the digits.
+
 **When modifying `.github/workflows/` or `lib/`**, run a workflow smoke test:
 
 ```bash
