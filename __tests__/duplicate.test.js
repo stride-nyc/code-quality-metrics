@@ -152,6 +152,48 @@ describe('runDuplicateCheck', () => {
     expect(command).toContain('--min-lines 10');
     expect(command).toContain('--min-tokens 100');
   });
+
+  // code-quality-metrics-3i6e: without --absolute, jscpd's own report names every file
+  // by bare basename only (verified live: two files named main.tf in different
+  // directories both reported as "main.tf", with no directory prefix on either side,
+  // even when their basenames are unique in the whole scanned set). A repository with
+  // more than one file sharing a basename (e.g. terraform/main.tf,
+  // terraform/environments/development/main.tf) then renders an unresolvable "duplicates
+  // main.tf" the reader cannot act on. --absolute makes jscpd's report carry the full
+  // path so it can be normalized back to something distinguishable.
+  test('passes --absolute to jscpd so files sharing a basename across directories can be told apart', () => {
+    fs.existsSync.mockReturnValue(false);
+    runDuplicateCheck(['terraform/environments/development/main.tf']);
+    const command = execSync.mock.calls[0][0];
+    expect(command).toContain('--absolute');
+  });
+
+  // code-quality-metrics-3i6e: --absolute makes jscpd report firstFile.name/secondFile.name
+  // as absolute paths. Left unconverted, that would trade one bug (an unresolvable bare
+  // basename) for another (an absolute local filesystem path reaching a report shared
+  // outside the client context, the same leak fixed for the semantic layer in
+  // code-quality-metrics-34fu). Both members of a pair must render on the same,
+  // repo-relative basis.
+  test('normalizes firstFile/secondFile names from absolute paths back to paths relative to the working directory', () => {
+    const firstAbsolute = path.join(process.cwd(), 'terraform/environments/development/main.tf');
+    const secondAbsolute = path.join(process.cwd(), 'terraform/environments/staging/main.tf');
+    fs.readFileSync.mockReturnValue(JSON.stringify({
+      duplicates: [{
+        firstFile: { name: firstAbsolute, start: 28, end: 53 },
+        secondFile: { name: secondAbsolute, start: 17, end: 42 },
+        lines: 26,
+        tokens: 110
+      }]
+    }));
+
+    const result = runDuplicateCheck([
+      'terraform/environments/development/main.tf',
+      'terraform/environments/staging/main.tf'
+    ]);
+
+    expect(result[0].firstFile.name).toBe('terraform/environments/development/main.tf');
+    expect(result[0].secondFile.name).toBe('terraform/environments/staging/main.tf');
+  });
 });
 
 describe('runDuplicateAnalysis', () => {
