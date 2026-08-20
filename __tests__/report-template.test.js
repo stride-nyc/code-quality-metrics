@@ -1392,6 +1392,51 @@ describe('renderReportHtml', () => {
     expect(summary).not.toMatch(/led by Commit size trend/);
   });
 
+  // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
+  // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
+  // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
+  // The counts above are already computed on the remaining lines; telling the reader they
+  // need a second discount is worse than saying nothing.
+  it('does not claim the vendored/generated share reframes counts above when ANALYSIS_IGNORE_PATTERNS already excluded that volume', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/reframes/);
+    expect(summary).not.toMatch(/vendored|generated/);
+  });
+
+  // The case the original wording was right for, and must not regress: ANALYSIS_IGNORE_PATTERNS
+  // is empty, so the vendored/generated volume is still baked into every count above -- the
+  // callout stays exactly as before.
+  it('[guard] still calls out the vendored/generated share when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/reframes/);
+    expect(summary).toMatch(/vendored|generated/);
+  });
+
   // The anchor mechanism a file:// page actually uses is fragment-to-id matching: the browser
   // finds the element whose id exactly equals the URL fragment. This is what would break if the
   // href and the id text drifted apart (e.g. a rename on one side only) even though "the markup
