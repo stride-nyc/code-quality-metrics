@@ -2003,4 +2003,49 @@ describe('collectLocalMetrics — --max-commits override', () => {
       CONFIG.MAX_COMMITS = originalMaxCommits;
     }
   });
+
+  // Interaction case: an explicit --since window that returns zero commits still widens
+  // (code-quality-metrics-g10's existing fallback), but the widen fetch itself must keep using
+  // the true default CONFIG.MAX_COMMITS regardless of --max-commits -- a widen is a substitute
+  // default-shaped HEAD-anchored sample, not "the requested window", and an unbounded or
+  // oversized override reaching it would defeat the safety this project's own default provides.
+  // The override still governs the final analyzed-commit count, the same as any other run.
+  test('the widen fallback fetch keeps the true default MAX_COMMITS regardless of --max-commits, but the override still caps the final analyzed count', async () => {
+    const SHA1 = 'a'.repeat(40);
+    const SHA2 = 'b'.repeat(40);
+    const SHA3 = 'c'.repeat(40);
+    const SHA4 = 'd'.repeat(40);
+    const SHA5 = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',   // git branch -a — no main/master, so defaultBranch is null, fallbackRef is 'HEAD'
+      '',              // git log feature/x --since=2020-01-01 — zero commits
+      '',              // git log HEAD --since=2020-01-01 (existing trunk fallback) — zero commits
+      [                // git log HEAD --max-count (the widen fallback) — 5 real commits
+        `${SHA1}|2026-08-01T10:00:00Z|Dev|feat: one\x1e`,
+        `${SHA2}|2026-08-02T10:00:00Z|Dev|feat: two\x1e`,
+        `${SHA3}|2026-08-03T10:00:00Z|Dev|feat: three\x1e`,
+        `${SHA4}|2026-08-04T10:00:00Z|Dev|feat: four\x1e`,
+        `${SHA5}|2026-08-05T10:00:00Z|Dev|feat: five\x1e`
+      ].join('\n'),
+      `1\t0\tsrc/three.js`, // numstat for the newest 3 kept by the --max-commits 3 override
+      `1\t0\tsrc/four.js`,
+      `1\t0\tsrc/five.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ since: '2020-01-01', maxCommits: 3 });
+
+    const widenCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('--max-count'));
+    expect(widenCommand).toBeDefined();
+    expect(widenCommand).toMatch(new RegExp(`--max-count=${CONFIG.MAX_COMMITS}\\b`));
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(3);
+    expect(summary.window_widened).toBe(true);
+  });
 });
