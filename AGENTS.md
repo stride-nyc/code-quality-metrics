@@ -156,6 +156,39 @@ fixture:
 Anything a repository holds that you did not create is evidence until proven otherwise. Do not
 delete untracked files there to tidy up, and back them up before any run that could overwrite them.
 
+**Never `rm` with a glob inside a repository you are analyzing.** An agent cleaning up after its
+own run used `rm -f backup-*.json` and destroyed two pre-existing untracked files that happened to
+match. Delete by exact path, only files you created.
+
+## Reusable Operator Instructions
+
+Two procedures are written up as standalone briefs. Point an agent at the file rather than
+restating the procedure, and do not paraphrase them into a shorter brief: both encode failure
+modes that are not obvious, and both end in a human review gate that a paraphrase tends to drop.
+
+| File | Use when |
+|---|---|
+| `codemetrics-config-instruction.md` | determining what a repository vendors or generates, and writing its `.codemetrics.json` |
+| `scrub-report-instruction.md` | preparing a generated HTML report to be viewed outside the client context |
+
+**`codemetrics-config-instruction.md`** exists because the two ignore keys behave differently in a
+way that has caught every configuration written so far: `DUPLICATE_IGNORE_PATTERNS` unions onto
+eleven built-in vendored patterns, `ANALYSIS_IGNORE_PATTERNS` unions onto nothing. A config setting
+only the first leaves build output counted in every size-shaped metric. It also covers what to
+leave alone (test fixtures, migrations, expected-output files) and the `lifecycle` key.
+
+**`scrub-report-instruction.md`** exists because a generated report carries far more identifying
+material than it appears to. A measured example leaked author names, a client brand name inside a
+commit subject, ticket identifiers and a file tree that named the client's business domain. The
+brief derives its sensitive-string list from the target repository rather than guessing, and
+verifies against that list. It scrubs the HTML only, deliberately; the JSON files beside it are
+left untouched and still carry everything.
+
+Both briefs end by requiring a human to read the agent's summary before the output is used or
+shared. That gate is not optional and is not satisfied by the agent asserting the work looks
+correct. Automated scrubbing catches strings, not meaning; an exclusion list changes what every
+number means.
+
 ## Analysis Window and Branch Spread (code-quality-metrics-g10, code-quality-metrics-8sq)
 
 With no `--since`/`--days`, the default window is HEAD-anchored, not anchored on today: the
@@ -496,6 +529,52 @@ issues.
 
 Do not weaken a gate to land a change. If one blocks you and you believe it is wrong, say so and
 leave it failing rather than editing the assertion.
+
+### Document register
+
+Everything below restates something computed elsewhere, so all of it can go stale. Only two
+documents are protected by a test. **Assume the rest are wrong until you check them.**
+
+| File | What it holds | Gated |
+|---|---|---|
+| `CLAUDE.md` | project instructions, Key Metrics table, CONFIG table | **yes** — both tables |
+| `ai_drift_metrics_coverage_map.html` | per-metric provenance, band tiers, limits, contradicting evidence | **yes** — critical rows and informational metrics |
+| `calibration/observations.json` | the measurements themselves, plus reservations | **yes** — band derivation and detector settings |
+| `metrics-specification.md` | per-metric definitions, threshold tables, output schema | no |
+| `README.md` | user-facing quick start and a threshold table | no |
+| `measuring-ai-code-drift-using-github-metrics.md` | the article, and the record of every withdrawn figure | no |
+| `calibration/README.md` | derivation rule, reference set, reservations, reproduction recipe | no |
+| `calibration/reference-configs/README.md` | per-repo exclusions and the evidence for each | no |
+| `calibration/research-findings.md` | the nine-question evidence base behind every band | no |
+| `calibration/research-brief.md` | the evidentiary standard those findings were held to | no |
+| `AGENTS.md` | this file | no |
+| `scrub-report-instruction.md`, `codemetrics-config-instruction.md` | operator briefs | no |
+
+**What to update when.**
+
+| If you change | Also update |
+|---|---|
+| a band in `lib/thresholds.js` | `CLAUDE.md` table, coverage map, `metrics-specification.md`, `README.md` |
+| a band's tier (three-band to two-band, or a metric to informational) | all of the above, plus any prose asserting a critical crossing exists |
+| a detector setting in `lib/config.js` | re-measure, then everything in the row above |
+| a metric's definition or a JSON field name | `metrics-specification.md` schema, both workflows, `CLAUDE.md` |
+| the derivation rule in `calibration/derive-bands.js` | `calibration/README.md`, `metrics-specification.md` provenance section |
+| a cited figure or its provenance | `measuring-ai-code-drift-using-github-metrics.md`, `metrics-specification.md`, coverage map |
+
+**The ungated ones drift, and it is not hypothetical.** `metrics-specification.md` and
+`measuring-ai-code-drift-using-github-metrics.md` both carried DORA attributions that appear in
+no DORA publication, for long enough to be cited onward; both needed hand-correction. After the
+2026-08 re-measurement dropped every critical bound, `README.md` still stated Large Commit
+`≤19%` where the code holds 18, and still headed a section "three-band metrics" when no
+three-band metric remained. Nothing failed.
+
+`metrics-specification.md` is the highest-risk of these because it restates every band. If you
+are extending the provenance gate, start there.
+
+**A grep is not enough.** A stale *number* is findable. A stale *claim* is not: "both crossed
+their critical lines" stays grammatical after the critical bound is withdrawn, and prose
+asserting a three-band shape reads fine when the metric has two. When a tier changes, read the
+surrounding sentences, do not just swap the digits.
 
 **When modifying `.github/workflows/` or `lib/`**, run a workflow smoke test:
 
