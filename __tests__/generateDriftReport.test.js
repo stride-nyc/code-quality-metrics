@@ -44,7 +44,7 @@ function writeFixtureInputs(dir) {
     note: 'test summary'
   };
   const metrics = [
-    { sha: 'aaa11111', full_sha: 'aaa1111111111111111111111111111111111111', date: '2026-08-01T00:00:00.000Z', author: 'Alice', message: 'feat: add widget', total_additions: 200, total_deletions: 50, files_changed: 4 }
+    { sha: 'aaa11111', full_sha: 'aaa1111111111111111111111111111111111111', date: '2026-08-01T00:00:00.000Z', author: 'Alice', message: 'feat: add widget', total_additions: 200, total_deletions: 50, files_changed: 4, counted_additions: 200, counted_deletions: 50 }
   ];
   fs.writeFileSync(path.join(dir, 'local_metrics_summary.json'), JSON.stringify(summary, null, 2));
   fs.writeFileSync(path.join(dir, 'local_commit_metrics.json'), JSON.stringify(metrics, null, 2));
