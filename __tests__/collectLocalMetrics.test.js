@@ -2079,4 +2079,63 @@ describe('collectLocalMetrics — --max-commits override', () => {
     const fullFetchAttempted = execSync.mock.calls.some(call => String(call[0]).includes('--pretty=format'));
     expect(fullFetchAttempted).toBe(false);
   });
+
+  // Visibility (the task's own requirement): an analysis run over hundreds of commits is not
+  // comparable to one over the default 50, and a reader comparing two reports must be able to
+  // tell that an override was requested, the same way history_granularity_override and
+  // project_lifecycle_override already record their own overrides alongside the effective
+  // value they produced.
+  test('records max_commits_override in the summary: null by default, echoing whatever was requested otherwise', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.max_commits_override).toBeNull();
+  });
+
+  test('records a numeric max_commits_override in the summary when --max-commits <n> is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 5 });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.max_commits_override).toBe(5);
+  });
+
+  test('records max_commits_override as "unbounded" when the unbounded sentinel is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 'unbounded' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.max_commits_override).toBe('unbounded');
+  });
 });

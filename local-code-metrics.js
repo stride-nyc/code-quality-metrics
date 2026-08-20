@@ -880,6 +880,14 @@ async function collectLocalMetrics(options = {}) {
     history_granularity_confidence: detectedGranularity.confidence,
     history_granularity_signals: detectedGranularity.signals,
     history_granularity_override: options.history ?? null,
+    // Visibility for --max-commits (this override has no .codemetrics.json counterpart -- see
+    // effectiveMaxCommits' own comment above for why): null when not given, otherwise whatever
+    // was requested (a number, or the string 'unbounded'), the same shape
+    // history_granularity_override/project_lifecycle_override already follow. An analysis run
+    // over hundreds of commits is not comparable to one over the default 50, and a reader
+    // comparing two reports must be able to tell that an override -- not just a larger repo --
+    // is why the count differs.
+    max_commits_override: options.maxCommits ?? null,
     // Project lifecycle (code-quality-metrics-31w): see the rootCommitShas/includesRepositoryRoot
     // comments above. project_lifecycle is the effective value (project_lifecycle_override when
     // one is given, the structural detection otherwise); project_lifecycle_detected is always the
