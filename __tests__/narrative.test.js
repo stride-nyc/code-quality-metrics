@@ -192,6 +192,44 @@ describe('generateFindingsNarrative: client provided', () => {
   });
 });
 
+describe('generateFindingsNarrative: top commits sent to the model', () => {
+  // CALLED SHOT (code-quality-metrics-j78y, RED 2): generateFindingsNarrative currently embeds
+  // the raw topCommits array directly into the request content, so a commit dominated by an
+  // excluded vendored sync still exposes its inflated whole-diff total to the model. This pins
+  // the integration: the content the model actually receives must reflect
+  // buildNarrativeTopCommits' scoped shape, not the raw input.
+  // Predicted failure before implementing: generateFindingsNarrative still does
+  // `JSON.stringify(topCommits)` unchanged, so the sent content contains the literal "9868"
+  // substring -- the `not.toContain` assertion fails with "Received string containing 9868".
+  test('sends each top commit\'s exclusion-scoped production counts to the model, not the raw whole-diff totals', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const topCommits = [{
+      sha: 'cc7c77aa',
+      message: 'vendor: sync terraform modules',
+      total_additions: 9868,
+      total_deletions: 4811,
+      files_changed: 6,
+      prod_additions: 200,
+      prod_deletions: 16,
+      prod_files_count: 2,
+      test_files_count: 0
+    }];
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, topCommits);
+
+    const sentContent = create.mock.calls[0][0].messages[0].content;
+    expect(sentContent).toContain('"prod_additions":200');
+    expect(sentContent).not.toContain('9868');
+    expect(sentContent).not.toContain('4811');
+
+    logSpy.mockRestore();
+  });
+});
+
 describe('narrative output budget', () => {
   // code-quality-metrics-ll1 follow-up item 1: measured against a real fresh run (a scratch
   // clone of this repo, current schema, METRIC_DESCRIPTIONS included) with 10 live API calls
