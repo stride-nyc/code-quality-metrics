@@ -1107,7 +1107,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>] [--max-commits <n>|unbounded]');
     process.exit(1);
   }
 
