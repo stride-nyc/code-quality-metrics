@@ -202,11 +202,16 @@ describe('renderReportHtml', () => {
     expect(html).toContain('across 7 branch');
   });
 
-  // code-quality-metrics-kprr: 73V's report excluded 63.99% of changed lines across 3 files,
-  // and that fact only ever appeared in the last section of the page (Analysis Scope), printed
-  // twice. Two thirds of the analyzed diff going unmeasured is a masthead fact, not something a
-  // reader only finds by scrolling to the very end.
-  it('states the excluded share in the masthead when ANALYSIS_IGNORE_PATTERNS excludes a large share of changed lines', () => {
+  // code-quality-metrics-nnla: the masthead exclusion-share line (added on a bad instruction
+  // during code-quality-metrics-kprr) restated the same fact Analysis Scope already carries,
+  // and the top summary's own vendored clause restated it a third time with a false claim
+  // ("reframes every count above") on top -- every banded metric already excludes vendored/
+  // generated content before computing (large_commits_pct counts production lines, the line/
+  // file distributions read counted_* since PR #94, sprawling_commits_pct counts non-excluded
+  // files, and the test rates treat an excluded path as neither test nor production), so there
+  // is nothing left above for a masthead line to "reframe." The exclusion now appears exactly
+  // once, in Analysis Scope (see the exclusionsSection tests below).
+  it('does not render an exclusion-share line in the masthead, even when ANALYSIS_IGNORE_PATTERNS excludes a large share of changed lines', () => {
     const html = renderReportHtml(fixtureArgs({
       analysis_exclusions: {
         patterns: ['**/vendor/**'],
@@ -217,8 +222,8 @@ describe('renderReportHtml', () => {
     }));
     const masthead = mastheadSection(html);
 
-    expect(masthead).toContain('63.99');
-    expect(masthead).toContain('excluded');
+    expect(masthead).not.toContain('masthead-exclusion');
+    expect(masthead).not.toContain('63.99');
   });
 
   it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
