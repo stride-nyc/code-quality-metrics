@@ -16,9 +16,15 @@ function makeSummary(overrides = {}) {
   };
 }
 
-/** Build a minimal CommitMetric-like object */
+/**
+ * Build a minimal CommitMetric-like object. counted_additions/counted_deletions default to
+ * mirror total_additions/total_deletions (the "nothing excluded" case) unless a test
+ * overrides them explicitly to model a commit with excluded volume -- mirrors lib/git.js's
+ * analyzeCommit, where counted_* equals total_* whenever ANALYSIS_IGNORE_PATTERNS matched
+ * nothing.
+ */
 function makeMetric(overrides = {}) {
-  return {
+  const merged = {
     large_commit: false,
     total_additions: 10,
     total_deletions: 10,
@@ -37,6 +43,11 @@ function makeMetric(overrides = {}) {
     message: 'chore: update',
     commit_type: 'feature_branch',
     ...overrides
+  };
+  return {
+    counted_additions: merged.total_additions,
+    counted_deletions: merged.total_deletions,
+    ...merged
   };
 }
 
@@ -287,5 +298,28 @@ describe('generateInsights', () => {
     ];
     const { warnings } = generateInsights(makeSummary(), metrics);
     expect(warnings.some(w => w.includes('addition-heavy'))).toBe(true);
+  });
+
+  // code-quality-metrics-ce9m: computeAiBatchShare's ratio must be judged on
+  // counted_additions/counted_deletions (exclusion-scoped), not total_additions/
+  // total_deletions (whole-diff). Measured case (73V, cc7c77aa): 14,679 total changed lines,
+  // 14,410 of them excluded terraform, leaving 216 real production lines and a counted ratio
+  // (48:20 = 2.4) below AI_BATCH_SHARE.additionsRatio (3), even though the whole-diff ratio
+  // (14410:1) clears it easily. Alone among 3 commits, this must not push the addition-heavy
+  // share above the 30% warning threshold.
+  test('does not count a commit toward the AI-batch-share warning when its ratio only clears the threshold on excluded whole-diff volume', () => {
+    const metrics = [
+      makeMetric({
+        large_commit: true,
+        total_additions: 14410,
+        total_deletions: 1,
+        counted_additions: 48,
+        counted_deletions: 20
+      }),
+      makeMetric(),
+      makeMetric()
+    ];
+    const { warnings } = generateInsights(makeSummary(), metrics);
+    expect(warnings.some(w => w.includes('addition-heavy'))).toBe(false);
   });
 });
