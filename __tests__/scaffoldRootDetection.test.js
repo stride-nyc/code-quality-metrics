@@ -120,4 +120,27 @@ describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
 
     expect(result).toBe(ROOT);
   });
+
+  // GitHub #89: this query emits one 40-character SHA per commit across every ref
+  // (`git log --all --reverse --pretty=format:%H`), and execSync's ~1MB default maxBuffer
+  // overflows around 24,000-25,000 commits -- measured directly on ziglang/zig's
+  // 36,058-commit history, which produced ~1.48MB of output and threw ENOBUFS. Asserting the
+  // option execSync itself was actually called with, not just the returned value, since a
+  // buffer overflow depends on the exec call's own options, not on anything observable from
+  // the return value alone.
+  test('raises the forward-walk git log query\'s maxBuffer above execSync\'s ~1MB default (GitHub #89)', () => {
+    const ROOT = 'a'.repeat(40);
+    execSync.mockImplementation(command => {
+      if (typeof command === 'string' && command.includes('--name-only')) return 'LICENSE';
+      if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
+      throw new Error(`unexpected command in this test: ${command}`);
+    });
+
+    findEffectiveRootSha(ROOT);
+
+    const forwardWalkCall = execSync.mock.calls.find(
+      call => typeof call[0] === 'string' && call[0].includes('--reverse') && call[0].includes('%H')
+    );
+    expect(forwardWalkCall[1].maxBuffer).toBeGreaterThan(1024 * 1024);
+  });
 });
