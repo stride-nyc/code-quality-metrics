@@ -735,9 +735,15 @@ async function collectLocalMetrics(options = {}) {
   // Bounded [-1, +1]: 1.0 = entirely net-new code, 0.0 = balanced, negative = net deletion (cleanup)
   // Replaces the unbounded additions / max(deletions, 1) formula, which inflated ratios to ~500
   // for net-new-file commits (zero deletions), distorting both median and p90.
+  //
+  // Built from counted_additions/counted_deletions, not the raw whole-diff total_additions/
+  // total_deletions (code-quality-metrics-ce9m): a vendored dependency sync (e.g. a large
+  // excluded deletion) would otherwise dominate this informational metric even though it
+  // describes no real development. Equal to the raw fields, and so equal to every prior
+  // measurement, whenever nothing is excluded.
   const ratios = metrics.map(m => {
-    const total = m.total_additions + m.total_deletions;
-    return total === 0 ? 0 : (m.total_additions - m.total_deletions) / total;
+    const total = m.counted_additions + m.counted_deletions;
+    return total === 0 ? 0 : (m.counted_additions - m.counted_deletions) / total;
   });
   const ratioStats = computeStatistics(ratios, timestamps);
 

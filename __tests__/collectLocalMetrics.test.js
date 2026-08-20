@@ -1777,6 +1777,35 @@ describe('collectLocalMetrics — analysis exclusions and vendored-default share
     expect(summary.p90_files_changed).toBe(1);
   });
 
+  // code-quality-metrics-ce9m: net_additions_ratio_median must be computed from
+  // counted_additions/counted_deletions (exclusion-scoped), not total_additions/
+  // total_deletions (whole-diff), so a vendored sync does not dominate an informational
+  // metric meant to describe the shape of real development. One analyzed commit: an excluded
+  // bin/ file that is a 500-line vendored deletion (net cleanup), plus a real 100/10 addition
+  // in an ordinary file (net-additive). The whole-diff ratio reads as a net deletion
+  // ((100-510)/(100+510) ~ -0.67); the counted ratio, from the 100/10 that is actually real
+  // development, reads as strongly net-additive ((100-10)/(100+10) ~ 0.818).
+  test('computes net_additions_ratio_median from the exclusion-aware counted fields, not the whole-diff totals', async () => {
+    const SHA = 'f'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `0\t500\tbin/Debug/App.dll\n100\t10\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.net_additions_ratio_median).toBeCloseTo(90 / 110, 5);
+  });
+
   // The other required direction (GitHub #90): with no ANALYSIS_IGNORE_PATTERNS configured,
   // the distributions must be bit-for-bit identical to what the whole-diff totals alone would
   // have produced -- nothing is excluded, so counted equals raw and nothing here changes.
