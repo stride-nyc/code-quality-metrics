@@ -1050,4 +1050,47 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/velocity/i);
   });
+
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 1): the regenerated 73V report contained 12
+  // real em-dash characters in the Findings narrative, violating this project's no-em-dash
+  // writing standard. containsDisallowedDash is currently a stub that always returns false, so
+  // validateNarrative never rejects this. Predicted failure before implementing: the bullet
+  // has no numbers and starts with "Positive: " (not "Concern: "), so every existing check
+  // passes it through, and `expect(result.valid).toBe(false)` fails with
+  // "Expected: false, Received: true".
+  test('rejects a bullet containing a literal em dash character', () => {
+    const bullets = ['Positive: Commit sizes are shrinking — a good sign for review load.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/em dash/i);
+  });
+
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 2): the same regenerated 73V report also
+  // contained 7 double-hyphen pauses in generated prose, a form the writing standard forbids
+  // just as much as a real em dash. containsDisallowedDash only checks for the literal
+  // character so far. Predicted failure before implementing: the bullet below has no em-dash
+  // character, no numbers, and starts with "Concern: " but names no informational label, so it
+  // passes every existing check; `expect(result.valid).toBe(false)` fails with
+  // "Expected: false, Received: true".
+  test('rejects a bullet containing a double hyphen used as a pause', () => {
+    const bullets = ['Concern: Large commits are common -- worth addressing before the next release.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/dash/i);
+  });
+
+  // GUARD, not a called-shot RED: an ordinary single hyphen (a compound word, or a negative
+  // number already exercised by the concern-score test above) must not be rejected -- only a
+  // literal em dash or a double hyphen counts as the forbidden pause.
+  test('does not reject a bullet containing an ordinary single hyphen in a compound word', () => {
+    const bullets = ['Positive: Well-tested production code shipped this period.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
 });
