@@ -1934,4 +1934,41 @@ describe('collectLocalMetrics — --max-commits override', () => {
     expect(branchLogCommand).toBeDefined();
     expect(branchLogCommand).not.toMatch(/--max-count=/);
   });
+
+  test('raises the final analyzed-commit cap above the default MAX_COMMITS when combined with --since', async () => {
+    // fetchBranchCommits does not apply any --max-count when sinceStr is set (it never has --
+    // see fetchBranchCommits' own comment), so the per-branch git log already returns every
+    // commit in the dated window; only the final global slice enforces a count cap in that
+    // mode. Lowering CONFIG.MAX_COMMITS to 2 makes a 3-commit window prove the cap: without the
+    // override, the default would truncate to 2; --max-commits 3 must let all 3 through.
+    const originalMaxCommits = CONFIG.MAX_COMMITS;
+    CONFIG.MAX_COMMITS = 2;
+    try {
+      const SHA1 = 'a'.repeat(40);
+      const SHA2 = 'b'.repeat(40);
+      const SHA3 = 'c'.repeat(40);
+      mockExecSequence(
+        FAKE_ROOT,
+        FAKE_REMOTE,
+        '  feature/x',
+        [
+          `${SHA1}|2026-08-01T10:00:00Z|Dev|feat: one\x1e`,
+          `${SHA2}|2026-08-02T10:00:00Z|Dev|feat: two\x1e`,
+          `${SHA3}|2026-08-03T10:00:00Z|Dev|feat: three\x1e`
+        ].join('\n'),
+        `1\t0\tsrc/one.js`,
+        `1\t0\tsrc/two.js`,
+        `1\t0\tsrc/three.js`
+      );
+      fs.writeFileSync.mockImplementation(() => {});
+
+      await collectLocalMetrics({ since: '2020-01-01', maxCommits: 3 });
+
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      const summary = JSON.parse(summaryCall[1]);
+      expect(summary.total_commits).toBe(3);
+    } finally {
+      CONFIG.MAX_COMMITS = originalMaxCommits;
+    }
+  });
 });

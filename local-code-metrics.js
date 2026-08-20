@@ -576,9 +576,15 @@ async function collectLocalMetrics(options = {}) {
   // "newest" here means newest by commit.date, which is committer date (fetchBranchCommits'
   // own comment, code-quality-metrics-75 / mbiw) -- the same clock --since filters on, so an
   // explicit window and the HEAD-anchored default both select the commit set they claim to.
+  //
+  // effectiveMaxCommits, not CONFIG.MAX_COMMITS: with an explicit --since, fetchBranchCommits
+  // applies no per-branch count bound at all (its own comment), so this slice is the only place
+  // a --max-commits override can take effect for that mode. slice(0, Infinity) for the
+  // 'unbounded' sentinel returns the whole array, matching fetchBranchCommits' own Infinity
+  // handling with no further special-casing needed here.
   const commitsToAnalyze = [...humanCommits]
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, CONFIG.MAX_COMMITS)
+    .slice(0, effectiveMaxCommits)
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
   console.log('');
