@@ -2,7 +2,7 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative, buildNarrativePayload, buildNarrativeTopCommits, describeBandProvenance, validateNarrative } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload, buildNarrativeTopCommits, describeBandProvenance, validateNarrative, NARRATIVE_SYSTEM_PROMPT } = require('../lib/narrative');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { CONFIG } = require('../lib/config');
 
@@ -23,6 +23,32 @@ function fixtureSummary(overrides) {
     velocity_commits_per_day: 3.2
   }, overrides);
 }
+
+describe('NARRATIVE_SYSTEM_PROMPT', () => {
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 3): the system prompt gives the model no
+  // instruction against an em dash or double-hyphen pause at all, so validateNarrative's
+  // containsDisallowedDash check is the only line of defense today. A prompt-level instruction
+  // is not a guarantee, but its absence means every rejection is a wasted generation the model
+  // never had a chance to avoid.
+  // Predicted failure before implementing: the prompt string has no mention of "em dash" (or
+  // "--"), so `toMatch(/em dash/i)` fails with "Received: <the full prompt text, no match>".
+  test('instructs the model not to use an em dash or a double-hyphen pause', () => {
+    expect(NARRATIVE_SYSTEM_PROMPT).toMatch(/em dash/i);
+  });
+
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 4): a real generated bullet welded a finding to
+  // its own methodology caveat in one run-on sentence ("Commit sizes are trending in the right
+  // direction ... and the benchmark boundaries used here reflect observations from six
+  // reference repositories, not validated outcome thresholds, so this is a directional signal
+  // rather than a guarantee"), the same blend-meaning-with-qualifiers defect PR #95 already
+  // fixed on the tiles. Nothing in the prompt tells the model to keep a finding and its
+  // caveat in separate sentences.
+  // Predicted failure before implementing: no rule in the prompt mentions keeping a finding
+  // and a caveat in separate sentences, so `toMatch(/separate sentence/i)` fails.
+  test('instructs the model to keep a finding and its methodology caveat in separate sentences', () => {
+    expect(NARRATIVE_SYSTEM_PROMPT).toMatch(/separate sentence/i);
+  });
+});
 
 describe('fallbackFindings (shared deterministic helper)', () => {
   // code-quality-metrics-ponf: the 73V Findings section listed three warnings and nothing
