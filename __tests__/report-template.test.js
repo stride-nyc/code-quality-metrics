@@ -2043,6 +2043,32 @@ describe('renderReportHtml', () => {
     expect(summary).toContain('healthy at or below 18');
   });
 
+  // code-quality-metrics-11ib: covers the "mixed with several warnings" case named in the
+  // brief (measured shape: daloopa, 5 good and 2 warnings, "led by Test/prod co-change at 12
+  // (warning)"). Two banded metrics are forced into warning here (test_coverage_rate 12,
+  // p90_files_changed 20), leaving 4 good (large/sprawling/uncovered production/p90 lines) --
+  // still more good than flagged, so this exercises the same healthy-dominant branch as the
+  // single-warning test above, with two concerns instead of one. Both forced entries carry the
+  // same fixed two-band concern (-1), so buildMetricCatalog's stable concern-descending sort
+  // breaks the tie by original catalog order, which is test_coverage_rate before
+  // p90_files_changed -- that is what actually decides which one leads here, not a new
+  // property of this fix. Not a new RED: this is the same generalized code path already fixed
+  // by the prior two commits, exercised here with a different shape to confirm the fix was not
+  // accidentally single-warning-specific.
+  it('names specific healthy signals and both warnings in a mixed run with several warnings', () => {
+    const html = renderReportHtml(fixtureArgs({
+      test_coverage_rate: '12.00',
+      p90_files_changed: 20
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/Most metrics/);
+    expect(summary).not.toMatch(/\bstill\b/);
+    expect(summary).toMatch(/2 warning signals/);
+    expect(summary).toMatch(/led by Test\/prod co-change at 12 \(warning\)/);
+    expect(summary).toContain('Sprawling commits');
+  });
+
   // code-quality-metrics-q8zp: the ANALYSIS_IGNORE_PATTERNS bullet and the
   // vendored/generated-default bullet used to collapse into one merged bullet whenever their
   // counts happened to coincide, and that merged bullet's own text embedded
