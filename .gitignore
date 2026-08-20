@@ -16,6 +16,7 @@
 local_*.json
 local_*.html
 demo/*.txt
+temp/*
 RETROSPECTIVE*.md
 
 # Test coverage
