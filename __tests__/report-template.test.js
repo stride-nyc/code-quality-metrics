@@ -496,6 +496,12 @@ describe('renderReportHtml', () => {
     expect(section).not.toMatch(/fell below the healthy line/);
     expect(section).toContain('class="verdict" data-status="neutral"');
     expect(section).toMatch(/initial build/i);
+    // large_commits_pct and sprawling_commits_pct are now substituted against the
+    // greenfield-modern band (lib/report.js's GREENFIELD_SUBSTITUTED_KEYS) rather than
+    // withheld, so the suppression rationale must say so -- not repeat the stale "these two
+    // signals have a withheld verdict" claim that is no longer true of either of them.
+    expect(section).not.toMatch(/withheld verdict/);
+    expect(section).toMatch(/greenfield-modern/i);
   });
 
   it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {

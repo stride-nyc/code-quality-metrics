@@ -273,34 +273,53 @@ describe('buildMetricCatalog when history_granularity is squashed', () => {
 });
 
 describe('buildMetricCatalog when project_lifecycle is initial-build', () => {
-  const WITHHELD_KEYS = ['large_commits_pct', 'sprawling_commits_pct', 'p90_lines_changed', 'p90_files_changed'];
+  const SUBSTITUTED_KEYS = {
+    large_commits_pct: 'LARGE_COMMITS_PCT',
+    sprawling_commits_pct: 'SPRAWLING_COMMITS_PCT',
+    p90_lines_changed: 'P90_LINES_CHANGED',
+    p90_files_changed: 'P90_FILES_CHANGED'
+  };
 
-  it('withholds the four change-size verdicts: no gauge, neutral status, sentinel concern, no boundary, and an explanation naming the initial build', () => {
+  it('substitutes the four change-size verdicts with the greenfield-modern band instead of withholding them', () => {
     const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'initial-build' }));
-    for (const key of WITHHELD_KEYS) {
+    for (const [key, greenfieldKey] of Object.entries(SUBSTITUTED_KEYS)) {
       const entry = entries.find(e => e.key === key);
-      expect(entry.hasGauge).toBe(false);
-      expect(entry.status).toBe('neutral');
-      expect(entry.concern).toBe(-Infinity);
-      expect(entry.healthyBoundary).toBeNull();
-      expect(entry.criticalBoundary).toBeNull();
-      expect(entry.descriptiveNote).toMatch(/initial build/);
+      const band = THRESHOLDS.GREENFIELD_MODERN[greenfieldKey];
+      expect(entry.healthyBoundary).toBe(band.healthy);
+      expect(entry.criticalBoundary).toBe(band.critical ?? null);
+      expect(entry.descriptiveNote).toBeUndefined();
+      expect(entry.bandProvenance).toEqual({ population: 'greenfield-modern', n: 2 });
     }
   });
 
-  it('withholds the duplication density verdict too, with the same initial-build explanation', () => {
+  it('substitutes the duplication density verdict too, against the greenfield-modern band', () => {
     const dup = {
-      statistics: { percentage: THRESHOLDS.DUPLICATION_PCT.healthy + 5, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
+      statistics: { percentage: THRESHOLDS.GREENFIELD_MODERN.DUPLICATION_PCT.healthy + 5, duplicatedLines: 10, lines: 1000, clones: 1, sources: 5 },
       semantic_findings: [],
       layers_run: { static: true, semantic: false }
     };
     const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'initial-build' }), dup);
     const density = entries.find(e => e.key === 'duplication_density_pct');
-    expect(density.hasGauge).toBe(false);
-    expect(density.status).toBe('neutral');
-    expect(density.healthyBoundary).toBeNull();
+    expect(density.hasGauge).toBe(true);
+    expect(density.status).toBe('warning');
+    expect(density.healthyBoundary).toBe(THRESHOLDS.GREENFIELD_MODERN.DUPLICATION_PCT.healthy);
     expect(density.criticalBoundary).toBeNull();
-    expect(density.descriptiveNote).toMatch(/initial build/);
+    expect(density.descriptiveNote).toBeUndefined();
+    expect(density.bandProvenance).toEqual({ population: 'greenfield-modern', n: 2 });
+  });
+
+  // test_coverage_rate is deliberately NOT substituted: the initial-build bias this
+  // substitution addresses (Hattori and Lanza, EVOL 2008 -- scaffolding, vendored
+  // dependencies and generated files inflating change-size and duplication metrics) has no
+  // equivalent claim for test/prod co-change, so there is no basis to prefer the thinner
+  // n=2 greenfield-modern band over the brownfield one already in use. It also was never
+  // withheld for initial-build in the first place (WITHHELD_WHEN_GREENFIELD_KEYS never
+  // included it), so this asserts the pre-existing behavior stays exactly as it was.
+  it('[guard] leaves test_coverage_rate scored against the brownfield band, not substituted, under initial-build', () => {
+    const entries = buildMetricCatalog(fullSummary({ project_lifecycle: 'initial-build' }));
+    const testCoverage = entries.find(e => e.key === 'test_coverage_rate');
+    expect(testCoverage.healthyBoundary).toBe(THRESHOLDS.TEST_COVERAGE_RATE.healthy);
+    expect(testCoverage.bandProvenance).toBeUndefined();
   });
 
   // [guard] duplication being unmeasurable for an unrelated reason (unsupported language) must
