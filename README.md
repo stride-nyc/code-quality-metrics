@@ -23,15 +23,20 @@ Research shows that AI coding tools can lead to increased batch sizes, reduced r
 ### 3. Local Repository Analysis (Node.js Script)
 - **File:** `local-code-metrics.js`
 - **Purpose:** Immediate analysis of your local development patterns
-- **Output:** Console report and JSON files with detailed metrics
+- **Output:** Console report and JSON files with detailed metrics, written to a `.codemetrics/`
+  directory created inside the analyzed repository (never its root) -- override the location
+  with `--output-dir <path>`
 - **Requires:** Node.js >= 18
 - **Works with:** feature-branch workflows and trunk-based workflows. Repos with no feature branches fall back to analyzing the default branch directly instead of returning an empty report.
 
 ### 4. Drift Report Generator (Node.js Script)
 - **File:** `generate-drift-report.js`
 - **Purpose:** Render a standalone HTML report from a completed local analysis run
-- **Output:** `local_drift_report.html`
-- **Requires:** `local_metrics_summary.json` and `local_commit_metrics.json` already present in the target directory (produced by `local-code-metrics.js`, see [Drift Report](#drift-report))
+- **Output:** `local_drift_report.html`, written alongside its inputs in `.codemetrics/`
+- **Requires:** `local_metrics_summary.json` and `local_commit_metrics.json` already present in
+  `.codemetrics/` under the target directory (produced by `local-code-metrics.js`, see [Drift
+  Report](#drift-report)) -- pass an explicit directory argument to point at a different
+  location (e.g. one created with `--output-dir`)
 
 ## Quick Start
 
@@ -174,18 +179,47 @@ before, rather than guessing at merge state.
 ## Drift Report
 
 Once `node local-code-metrics.js` has written `local_metrics_summary.json` and
-`local_commit_metrics.json` into a directory, turn that run into a standalone
-HTML report:
+`local_commit_metrics.json` into `.codemetrics/` (created inside the analyzed
+repository, not its root -- see [Output Location](#output-location) below),
+turn that run into a standalone HTML report:
 
 ```bash
-npm run report                        # reads/writes in the current directory
+npm run report                        # reads/writes .codemetrics/ under the current directory
 node generate-drift-report.js [dir]   # or target a specific directory directly
 ```
 
-This writes `local_drift_report.html` into that directory. The generator does
+This writes `local_drift_report.html` alongside its inputs. The generator does
 not run git or recompute any metric itself; it only reads the two JSON files
 a prior `local-code-metrics.js` run already produced, and exits with a clear
-error naming whichever file is missing if either one is absent.
+error naming whichever file is missing if either one is absent -- including a
+specific message if a *legacy* root-level copy from before this tool moved to
+`.codemetrics/` is found instead: that older file is named and refused, not
+read, and the message tells you to re-run `local-code-metrics.js`.
+
+## Output Location
+
+`local-code-metrics.js` and `generate-drift-report.js` both write into a
+`.codemetrics/` directory created inside the analyzed repository (never its
+root), created automatically if it does not already exist. This pairs with
+the existing per-repo `.codemetrics.json` config file convention -- same
+prefix, one directory (ignored by default, hidden in a repository someone
+else opens) rather than a scatter of `local_*.json`/`local_*.html` files with
+no protection in `.gitignore`.
+
+- **`--output-dir <path>`** overrides the default location entirely, for both
+  commands. There is no `.codemetrics.json` key for this: where a run writes
+  its output is a property of that run, not a fact about the repository being
+  analyzed (the same reasoning behind `--max-commits` being CLI-only).
+- Both `local_*.json`/`local_*.html` scanning and the commit-shape metrics
+  (`large_commit`, `sprawling_commit`, duplication density, and the rest)
+  exclude `.codemetrics/` by default, so a second run never measures the first
+  run's own output.
+- Regenerating a report overwrites the previous one in place. This tool does
+  not create, read, or manage backup copies of prior output -- keeping one
+  aside before re-running is the operator's own responsibility. A backup kept
+  inside `.codemetrics/` (e.g. under a self-chosen `history/` subdirectory)
+  is covered by the same exclusion above and will not skew a later
+  measurement; a backup kept elsewhere in the repository is not.
 
 Every number and gauge in the report (large commits, sprawling commits, test
 coverage, message quality, net-new ratio, and the rest) is deterministic,
@@ -466,10 +500,13 @@ your-repo/
 │   └── pr-metrics.yml               # Real-time PR feedback
 ├── local-code-metrics.js            # Local analysis script
 ├── generate-drift-report.js         # Drift report generator (reads the JSON below)
-├── local_commit_metrics.json        # Generated: detailed data
-├── local_metrics_summary.json       # Generated: summary stats
-├── local_claude_analysis.json       # Generated: Claude analysis (optional)
-└── local_drift_report.html          # Generated: standalone HTML drift report
+├── .codemetrics.json                 # Optional: per-repo config overrides (tracked, hand-written)
+└── .codemetrics/                     # Generated output directory (add to your own .gitignore; --output-dir overrides)
+    ├── local_commit_metrics.json     # Generated: detailed data
+    ├── local_metrics_summary.json    # Generated: summary stats
+    ├── local_claude_analysis.json    # Generated: Claude analysis (optional)
+    ├── local_duplicate_analysis.json # Generated: duplicate-detection findings (optional)
+    └── local_drift_report.html       # Generated: standalone HTML drift report
 ```
 
 ## Integration Examples

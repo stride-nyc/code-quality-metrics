@@ -11,10 +11,10 @@ Key insight: Local analysis reveals 10x higher drift rates than remote analysis 
 ## Running the Tools
 
 ```bash
-# Analyze the local repository (outputs JSON files + console report)
+# Analyze the local repository (writes JSON files to .codemetrics/ + prints a console report)
 node local-code-metrics.js
 
-# Render local_drift_report.html from those JSON files
+# Render .codemetrics/local_drift_report.html from those JSON files
 npm run report   # node generate-drift-report.js
 
 # Manually trigger GitHub Actions workflows
@@ -33,6 +33,65 @@ the current code expects (`counted_additions`/`counted_deletions`, added by PR #
 throws, naming the missing field and telling the operator to re-run
 `local-code-metrics.js`, rather than rendering a report ranked on stale or absent data
 (code-quality-metrics-2byz).
+
+### Output Location (code-quality-metrics-w3wn)
+
+All of `local-code-metrics.js`'s output -- `local_commit_metrics.json`, `local_metrics_summary.json`,
+`local_duplicate_analysis.json`, `local_claude_analysis.json` -- and `generate-drift-report.js`'s
+`local_drift_report.html` (plus `local_drift_report.scrubbed.html`, when `scrub-report-
+instruction.md`'s scrub has been run) are written to a `.codemetrics/` directory inside the
+analyzed repository, created with `fs.mkdirSync(..., { recursive: true })` when absent, rather
+than to that repository's own root. Measured across the six repositories this toolkit
+evaluates: writing directly into the root left 235 untracked files behind, and only this
+repository's own `.gitignore` protected against them (`local_*.json`/`local_*.html`) -- every
+target repository had no protection at all, so each file was one `git add .` away from being
+committed, and two of the six are client repositories whose JSON carries author names, commit
+messages, `prod_file_paths` and model prose.
+
+`.codemetrics/` deliberately pairs with the existing per-repo `.codemetrics.json` config file:
+same prefix, one convention rather than two, and hidden by default in a repository someone else
+opens. **Note the deliberate near-collision**: a tracked `.codemetrics.json` *file* and an
+ignored `.codemetrics/` *directory* coexist in the same repository without conflict -- they are
+different filesystem entries -- but the shared prefix is intentional, not an accident to be
+confused for one.
+
+Both `CONFIG.DUPLICATE_IGNORE_PATTERNS` and `CONFIG.ANALYSIS_IGNORE_PATTERNS` (`lib/config.js`)
+carry a `'**/.codemetrics/**'` entry so a second run never measures the first run's own output
+as if it were the codebase under analysis -- see "Configuration" below for why this is the one
+case where seeding `ANALYSIS_IGNORE_PATTERNS` with a non-empty default does not compromise the
+provable-behaviour-preservation argument that key's empty default otherwise rests on.
+
+**`--output-dir <path>`** overrides the default `.codemetrics/` location entirely, for both
+commands (`generate-drift-report.js`'s existing positional directory argument already covered
+this; `local-code-metrics.js` gained the CLI flag with this change). Deliberately CLI-only, no
+`.codemetrics.json` key, for the same reason `--max-commits` is CLI-only (see "Analysis Window"
+below): where a run writes its output is a property of the run, not a fact about the repository
+being measured.
+
+**Legacy root-level files are refused, not read.** If `.codemetrics/` is absent but a legacy
+`local_metrics_summary.json` or `local_commit_metrics.json` sits one directory up (from before
+this change, or from a `local-code-metrics.js` run against an older tool version),
+`generate-drift-report.js`'s `readRequiredJson` throws, naming the legacy file's exact path and
+instructing a re-run of `local-code-metrics.js`, rather than silently reading the older file as
+if it were current. Given this project's repeated trouble with stale inputs producing plausible
+output (the `counted_additions`/`counted_deletions` guard above exists for exactly this reason),
+a path-mismatch failure that reads as a stale-data problem is a worse failure mode than a loud,
+specific refusal.
+
+**The `backup-<timestamp>-<label>_<filename>` convention is an operator/agent concern, not a
+tool-owned feature.** Regenerating a report destroys the previous one, and across this project's
+own sessions agents have manually copied output aside before re-running, inventing that naming
+pattern as they went -- accounting for 175 of the 235 untracked files measured across the six
+evaluation repositories. Nothing in `local-code-metrics.js` or `generate-drift-report.js`
+creates, reads, or cleans up a file matching that pattern, and this change does not add such a
+mechanism: it would be a materially larger feature (retention policy, cleanup logic, its own
+tests) than the output-location move this issue is about. A backup kept inside `.codemetrics/`
+(in a self-chosen subdirectory, e.g. one named `history/`) is automatically covered by the
+`'**/.codemetrics/**'` exclusion above and so will not skew a later run's measurements; a backup
+kept elsewhere in the repository is not, and remains the operator's own responsibility to keep
+out of the analyzed tree. Never delete a file matching this pattern with a glob (`rm -f
+backup-*`) -- see AGENTS.md's own warning on this, which predates and still applies to the
+`.codemetrics/` location.
 
 ### Analysis Window
 
@@ -155,7 +214,7 @@ npm install   # triggers `prepare`, which sets core.hooksPath to .githooks
 
 Three public components sharing pure-computation logic via `lib/`:
 
-1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json`, and prints a console report with insights.
+1. **`local-code-metrics.js`**: Standalone Node.js script (requires Node ≥18). Orchestration entry point that delegates to focused modules in `lib/`. Reads local git history via shell commands, classifies files as test vs. production, computes metrics, writes `local_commit_metrics.json` + `local_metrics_summary.json` + (optionally) `local_claude_analysis.json` into a `.codemetrics/` directory inside the analyzed repository (see "Output Location" above), and prints a console report with insights.
 
    The `lib/` directory contains the internal modules:
    - `lib/config.js` — CONFIG object; detector and analysis settings (large/sprawling commit cutoffs, message-quality word count, AI pre-filter and duplicate-detector tuning, test-file patterns), the single source of truth for those settings (**shared with workflows**)
@@ -314,8 +373,8 @@ Two files hold configuration, each the single source of truth for a different ki
 | `AI_RISK_ADDITIONS_RATIO` | 3 | Additions/deletions multiplier for Claude pre-filter |
 | `DUPLICATE_MIN_LINES` | 10 | Minimum lines for jscpd to flag a duplicate block |
 | `DUPLICATE_MIN_TOKENS` | 100 | Minimum tokens for jscpd to flag a duplicate block |
-| `DUPLICATE_IGNORE_PATTERNS` | 11 patterns | Globs jscpd ignores: vendored (`deps`, `vendor`, `third_party`, `node_modules`, `.terraform`), generated, and five lock files including `.terraform.lock.hcl`, which the `*.lock` catch-all misses because its name ends in `.hcl`. Per-repo additions go in the target's `.codemetrics.json`, not here (class A, so bands still apply) |
-| `ANALYSIS_IGNORE_PATTERNS` | 0 patterns | Globs excluded from the commit-shape metrics: large/sprawling commit, prod/test classification, uncovered prod rate, and (GitHub #90) the line-count distributions -- `avg`/`p50`/`p90`/`p95_lines_changed` and `avg`/`p50`/`p90_files_changed`, built from `analyzeCommit`'s `counted_additions`/`counted_deletions`/`counted_files_changed` (`lib/git.js`), not the raw whole-diff totals. A matched path counts as neither test nor production. `total_additions`, `total_deletions` and `files_changed` stay whole-diff regardless of this setting, by design (see `lib/git.js`'s own comment on those fields), as does `net_additions_ratio`. Default is empty, deliberately: seeding it would change every existing measurement, including the calibration observations. Per-repo additions go in the target's `.codemetrics.json` (class A, so bands still apply) |
+| `DUPLICATE_IGNORE_PATTERNS` | 12 patterns | Globs jscpd ignores: vendored (`deps`, `vendor`, `third_party`, `node_modules`, `.terraform`), generated, five lock files including `.terraform.lock.hcl` (which the `*.lock` catch-all misses because its name ends in `.hcl`), and this tool's own `.codemetrics/` output directory (code-quality-metrics-w3wn), so a second run never scores its own prior report as duplicated code. Per-repo additions go in the target's `.codemetrics.json`, not here (class A, so bands still apply) |
+| `ANALYSIS_IGNORE_PATTERNS` | 1 pattern | Globs excluded from the commit-shape metrics: large/sprawling commit, prod/test classification, uncovered prod rate, and (GitHub #90) the line-count distributions -- `avg`/`p50`/`p90`/`p95_lines_changed` and `avg`/`p50`/`p90_files_changed`, built from `analyzeCommit`'s `counted_additions`/`counted_deletions`/`counted_files_changed` (`lib/git.js`), not the raw whole-diff totals. A matched path counts as neither test nor production. `total_additions`, `total_deletions` and `files_changed` stay whole-diff regardless of this setting, by design (see `lib/git.js`'s own comment on those fields), as does `net_additions_ratio`. Default was empty, deliberately: seeding it would change every existing measurement, including the calibration observations. The sole entry now present, `**/.codemetrics/**` (code-quality-metrics-w3wn), is a documented, narrow exception to that rule, not a violation of it: this tool only began writing that directory with this change, so it cannot appear in any repository's history or in any recorded observation, and seeding it is therefore provably retroactively inert -- see "Output Location" above for the full reasoning and `calibration/observations.json`'s `config_change_log` for the corresponding record update. Per-repo additions go in the target's `.codemetrics.json` (class A, so bands still apply) |
 | `REPO_FURNITURE_PATTERNS` | 10 patterns | Conventional repo-scaffolding filenames (`LICENSE`/`LICENCE`/`COPYING`, `README`, `.gitignore`, `.gitattributes`, `CODE_OF_CONDUCT`, `CONTRIBUTING`, `SECURITY`, `CHANGELOG`, anything under `.github/`) used only by scaffold root commit detection (`isRepoFurniture`, `lib/git.js`'s `commitIntroducesProductionFiles`) — not folded into `analyzeCommit`'s own prod/test classification, so no other metric is affected |
 | `BOT_ACCOUNT_PATTERNS` | 6 patterns | Dependency/CI bot account name patterns (dependabot, renovate, github-actions, release/version-bump bots, generic `[bot]` accounts), matched against author and committer. `AI_AGENT_PATTERNS` below always takes precedence: a bot-flavored AI-agent account name is never classified as a bot (`isBotCommit`, `lib/metrics.js`) |
 | `AI_AGENT_PATTERNS` | 6 patterns | AI coding agent name patterns (Claude, Copilot, Cursor, Devin, Aider, Codex), matched against author, committer, and `Co-Authored-By:` trailers. A match here exempts a commit from `BOT_ACCOUNT_PATTERNS` unconditionally — these commits are the subject this toolkit measures, never noise |

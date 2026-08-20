@@ -149,10 +149,10 @@ function fetchBranchCommits(ref, sinceStr, maxCommits = CONFIG.MAX_COMMITS) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -207,6 +207,10 @@ function parseCliArgs(argv) {
         options.maxCommits = maxCommits;
       }
       i++;
+    } else if (argv[i] === '--output-dir') {
+      if (!argv[i + 1]) throw new Error('--output-dir requires a path');
+      options.outputDir = argv[i + 1];
+      i++;
     }
   }
   return options;
@@ -256,7 +260,7 @@ function logNoCommitsAnalyzed() {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -1069,8 +1073,31 @@ async function collectLocalMetrics(options = {}) {
   // Generate insights
   const { insights, warnings, recommendations } = generateInsights(summary, metrics);
 
-  // Save results
-  const outputDir = process.cwd();
+  // Save results (code-quality-metrics-w3wn): written into a .codemetrics/ directory inside
+  // the analyzed repository, not its root. Measured across the six repositories this toolkit
+  // evaluates, writing local_*.json/local_*.html directly into the target's root left 235
+  // untracked files behind, none of them protected by that repository's own .gitignore --
+  // every one was one `git add .` away from being committed into a client repo, and two of the
+  // six are client repositories whose JSON carries author names, commit messages,
+  // prod_file_paths and model prose. `.codemetrics/` pairs with the existing per-repo
+  // `.codemetrics.json` config file (same prefix, one convention rather than two) and is
+  // hidden by default in a repository someone else opens. Deliberate near-collision: a tracked
+  // `.codemetrics.json` file and an ignored `.codemetrics/` directory can coexist in the same
+  // repository without conflict, since one is a file and the other a directory.
+  //
+  // --output-dir (options.outputDir) overrides this default entirely, mirroring --max-commits'
+  // own reasoning (see CLAUDE.md's "Analysis Window" section): where a run writes its output is
+  // a property of the run, not a fact about the repository, so this has no .codemetrics.json
+  // key -- CLI-only.
+  //
+  // Created when absent, left alone when already present (an existing directory is not
+  // recreated or emptied -- prior local_*.json/html here are simply overwritten by the writes
+  // below, the same overwrite-in-place behavior this tool has always had at its old root-level
+  // location).
+  const outputDir = options.outputDir ?? path.join(process.cwd(), '.codemetrics');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
   const metricsFile = path.join(outputDir, 'local_commit_metrics.json');
   const summaryFile = path.join(outputDir, 'local_metrics_summary.json');
 
@@ -1215,7 +1242,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -1223,7 +1250,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>] [--max-commits <n>|unbounded]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>] [--max-commits <n>|unbounded] [--output-dir <path>]');
     process.exit(1);
   }
 

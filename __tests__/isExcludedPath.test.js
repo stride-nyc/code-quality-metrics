@@ -11,11 +11,15 @@ const { isExcludedPath } = require('../lib/metrics');
 // excluded, then asserts a sibling, unmatched file was not -- an empty-pattern-list test
 // alone would be a vacuous green (the ignore-list-is-empty trap this project has hit before).
 describe('isExcludedPath', () => {
-  // --- degenerate/zero case: establishes the API and the empty-default behavior ---
-  test('returns false for any file when ANALYSIS_IGNORE_PATTERNS is empty (default)', () => {
-    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual([]);
+  // --- degenerate/zero case: establishes the API and the near-empty default behavior ---
+  // code-quality-metrics-w3wn: the default is no longer literally empty -- it seeds exactly
+  // one entry, the tool's own .codemetrics/ output directory -- but an ordinary production
+  // path is still never excluded by default.
+  test("excludes only the tool's own .codemetrics/ output directory by default, nothing else", () => {
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/.codemetrics/**']);
     expect(isExcludedPath('bin/Debug/App.dll')).toBe(false);
     expect(isExcludedPath('src/app.js')).toBe(false);
+    expect(isExcludedPath('.codemetrics/local_commit_metrics.json')).toBe(true);
   });
 
   describe('with a configured pattern', () => {

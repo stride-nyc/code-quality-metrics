@@ -35,19 +35,33 @@ describe('CONFIG duplicate detection defaults', () => {
   test('CONFIG.DUPLICATE_IGNORE_PATTERNS no longer carries the flight-info-spike-specific **/designs/** pattern', () => {
     expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).not.toContain('**/designs/**');
   });
+
+  // code-quality-metrics-w3wn: local-code-metrics.js now writes its own output into a
+  // .codemetrics/ directory inside the analyzed repository. Without this entry, a second run
+  // would hand jscpd local_commit_metrics.json (an array of per-commit records sharing one
+  // schema -- exactly the shape a clone detector reads as duplication) and
+  // local_drift_report.html (a large generated file) as if they were the codebase's own code,
+  // whenever that directory is ever committed.
+  test("CONFIG.DUPLICATE_IGNORE_PATTERNS excludes the tool's own .codemetrics/ output directory", () => {
+    expect(CONFIG.DUPLICATE_IGNORE_PATTERNS).toContain('**/.codemetrics/**');
+  });
 });
 
 // code-quality-metrics-3yd: the direct fix for code-quality-metrics-y8j. Nothing today lets a
 // path count as neither test nor production; ANALYSIS_IGNORE_PATTERNS is the mechanism.
-// DEFAULT MUST BE EMPTY: seeding it with the vendored/generated patterns already in
-// DUPLICATE_IGNORE_PATTERNS would change every existing measurement, including the 34
-// calibration observations __tests__/thresholdProvenance.test.js gates against CONFIG. An
-// empty default keeps every current number identical -- this test is what makes that
-// provable rather than assumed.
+// DEFAULT WAS EMPTY, and still is except for one entry: seeding it with the vendored/generated
+// patterns already in DUPLICATE_IGNORE_PATTERNS would change every existing measurement,
+// including the 34 calibration observations __tests__/thresholdProvenance.test.js gates
+// against CONFIG (that gate's METRIC_AFFECTING_CONFIG_KEYS does not even include this key,
+// precisely because nothing was ever recorded against it before this change). The one seeded
+// entry, '**/.codemetrics/**' (code-quality-metrics-w3wn), is a deliberate, narrow exception:
+// this tool only began writing that directory with this change, so no repository's history
+// could contain it, and the entry is provably retroactively inert -- it changes zero historical
+// measurement, the same guarantee the empty default provided. See CLAUDE.md's Configuration
+// section for the full reasoning.
 describe('CONFIG analysis-exclusion defaults', () => {
-  test('CONFIG.ANALYSIS_IGNORE_PATTERNS defaults to an empty array', () => {
-    expect(Array.isArray(CONFIG.ANALYSIS_IGNORE_PATTERNS)).toBe(true);
-    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toHaveLength(0);
+  test("CONFIG.ANALYSIS_IGNORE_PATTERNS defaults to excluding only the tool's own .codemetrics/ output directory", () => {
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/.codemetrics/**']);
   });
 
   test('CONFIG.AI_DUPLICATE_MAX_FILES defaults to 40', () => {

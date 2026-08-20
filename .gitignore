@@ -13,6 +13,13 @@
 .env.local
 
 # Generated output files
+# .codemetrics/ (code-quality-metrics-w3wn) is local-code-metrics.js's own default output
+# directory. The two local_* patterns below already matched every file that ever landed
+# inside it by name alone (this line predates the directory), but the directory is named
+# explicitly here too: it is the canonical location this project's README/CLAUDE.md tell
+# every other target repository to add to their own .gitignore, so this repository's own
+# ignore file should show the same pattern, not rely on a name-based coincidence.
+.codemetrics/
 local_*.json
 local_*.html
 demo/*.txt

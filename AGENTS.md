@@ -139,9 +139,11 @@ and neither is TDD reported by something the same agent spawned.
 
 ## Running the Report Against an External Repository
 
-`local-code-metrics.js` writes its JSON and HTML output to `process.cwd()` under fixed names, so
-two runs in the same directory overwrite each other with no warning. This is the same shape as the
-jscpd shared-output race, which was fixed in the tool; this one lives in how runs are dispatched.
+`local-code-metrics.js` writes its JSON and HTML output to a `.codemetrics/` directory created
+inside the analyzed repository (`process.cwd()` + `.codemetrics/`, overridable with `--output-dir
+<path>`; see CLAUDE.md's "Output Location" section) under fixed names, so two runs targeting the
+same output directory overwrite each other with no warning. This is the same shape as the jscpd
+shared-output race, which was fixed in the tool; this one lives in how runs are dispatched.
 
 **Copy the repository into your scratchpad and run there.** Never run in place against a shared
 fixture:
@@ -155,10 +157,18 @@ fixture:
 
 Anything a repository holds that you did not create is evidence until proven otherwise. Do not
 delete untracked files there to tidy up, and back them up before any run that could overwrite them.
+`.codemetrics/` is excluded from this tool's own analysis by default (`CONFIG.DUPLICATE_IGNORE_
+PATTERNS`/`CONFIG.ANALYSIS_IGNORE_PATTERNS` both carry a `'**/.codemetrics/**'` entry), but that
+exclusion is about what the *next measurement* counts, not about the filesystem: it does not make
+a file inside `.codemetrics/` safe to delete carelessly.
 
 **Never `rm` with a glob inside a repository you are analyzing.** An agent cleaning up after its
 own run used `rm -f backup-*.json` and destroyed two pre-existing untracked files that happened to
-match. Delete by exact path, only files you created.
+match. Delete by exact path, only files you created. This tool does not create, read, or manage
+backup copies of prior output itself -- see CLAUDE.md's "Output Location" section for why that
+convention is left as an operator/agent concern rather than a feature this tool owns. If you keep
+one aside before re-running, keep it inside `.codemetrics/` (e.g. a self-chosen `history/`
+subdirectory) so it inherits the exclusion above, and still delete it by exact path, never a glob.
 
 ## Reusable Operator Instructions
 
