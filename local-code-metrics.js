@@ -817,7 +817,18 @@ async function collectLocalMetrics(options = {}) {
   // commit that does introduce a production file -- before checking whether the analyzed
   // window includes "the start of history". See lib/git.js's findEffectiveRootSha for the
   // full mechanism and its caveats.
-  const effectiveRootShas = rootCommitShas.map(findEffectiveRootSha);
+  const effectiveRootResults = rootCommitShas.map(findEffectiveRootSha);
+  const effectiveRootShas = effectiveRootResults.map(r => r.sha);
+  // True when the forward-walk query itself failed (GitHub #89) rather than genuinely finding
+  // no later production-bearing commit -- see findEffectiveRootSha's own comment. Folded into
+  // detectedLifecycle below the same way root_commit_detection_failed already is: a swallowed
+  // failure here previously read as a confident scaffold_root_detected: false, indistinguishable
+  // from a genuinely non-scaffold root.
+  const effectiveRootDetectionFailed = effectiveRootResults.some(r => r.failed);
+  if (effectiveRootDetectionFailed) {
+    console.log('⚠️ Unable to walk forward from a scaffold root commit; project_lifecycle will report as undetermined rather than established.');
+    console.log('');
+  }
   const scaffoldRootDetected = rootCommitShas.some((sha, i) => sha !== effectiveRootShas[i]);
 
   // See the rootCommitShas comment above: this is the actual structural check, run once the
@@ -827,13 +838,14 @@ async function collectLocalMetrics(options = {}) {
     analyzedShas: metrics.map(m => m.full_sha),
     rootShas: effectiveRootShas
   });
-  // 'undetermined' when the root-commit query itself failed: neither 'established' (which
-  // would silently assert brownfield bands apply, exactly the defect this guards against)
-  // nor 'initial-build' (which would assert a fact the failed query never confirmed).
-  // Distinct from both, and paired with root_commit_detection_failed below so the failure
-  // is visible in the written summary rather than reading as a confident verdict either way
-  // (code-quality-metrics-dqri).
-  const detectedLifecycle = rootCommitDetectionFailed
+  // 'undetermined' when the root-commit query, or the scaffold forward-walk query, itself
+  // failed: neither 'established' (which would silently assert brownfield bands apply, exactly
+  // the defect this guards against) nor 'initial-build' (which would assert a fact the failed
+  // query never confirmed). Distinct from both, and paired with root_commit_detection_failed /
+  // effective_root_detection_failed below so the failure is visible in the written summary
+  // rather than reading as a confident verdict either way (code-quality-metrics-dqri, GitHub
+  // #89).
+  const detectedLifecycle = (rootCommitDetectionFailed || effectiveRootDetectionFailed)
     ? 'undetermined'
     : (includesRepositoryRoot ? 'initial-build' : 'established');
 
@@ -904,6 +916,10 @@ async function collectLocalMetrics(options = {}) {
       // True when `git rev-list --max-parents=0 --all` itself failed rather than
       // succeeding with no roots -- see project_lifecycle's own comment above.
       root_commit_detection_failed: rootCommitDetectionFailed,
+      // True when the scaffold forward-walk query itself failed (GitHub #89) rather than
+      // genuinely finding no later production-bearing commit -- see findEffectiveRootSha's own
+      // comment for the mechanism.
+      effective_root_detection_failed: effectiveRootDetectionFailed,
       // True when at least one raw root commit introduced zero production files and was
       // replaced by a later effective root (code-quality-metrics-fex3, GitHub #71 part 2) --
       // see findEffectiveRootSha's own comment for the mechanism and its caveats.

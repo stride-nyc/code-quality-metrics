@@ -71,7 +71,7 @@ describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
 
     const result = findEffectiveRootSha(ROOT);
 
-    expect(result).toBe(ROOT);
+    expect(result).toEqual({ sha: ROOT, failed: false });
   });
 
   // Real case (code-quality-metrics-fex3, GitHub #71): stride-nyc/73V's root commit ec1026c4
@@ -100,7 +100,7 @@ describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
 
     const result = findEffectiveRootSha(ROOT);
 
-    expect(result).toBe(BUILD_START);
+    expect(result).toEqual({ sha: BUILD_START, failed: false });
   });
 
   // [guard] if every later commit is also scaffold-only (no production file anywhere in the
@@ -118,7 +118,7 @@ describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
 
     const result = findEffectiveRootSha(ROOT);
 
-    expect(result).toBe(ROOT);
+    expect(result).toEqual({ sha: ROOT, failed: false });
   });
 
   // GitHub #89: this query emits one 40-character SHA per commit across every ref
@@ -142,5 +142,25 @@ describe('findEffectiveRootSha (code-quality-metrics-fex3, GitHub #71)', () => {
       call => typeof call[0] === 'string' && call[0].includes('--reverse') && call[0].includes('%H')
     );
     expect(forwardWalkCall[1].maxBuffer).toBeGreaterThan(1024 * 1024);
+  });
+
+  // GitHub #89 part 2, the half that matters more: a genuine failure of the forward-walk query
+  // (ENOBUFS on a large history, or any other git failure) must not read the same as "no later
+  // commit introduces a production file" -- that collapse is exactly what made
+  // scaffold_root_detected: false indistinguishable from a genuine negative. Mirrors
+  // findRepositoryRootShas' own { shas, failed } shape (code-quality-metrics-dqri).
+  test('reports failed: true and returns the root sha unchanged when the forward-walk git log query itself fails, rather than reading it as no production-bearing commit found', () => {
+    const ROOT = 'a'.repeat(40);
+    execSync.mockImplementation(command => {
+      if (typeof command === 'string' && command.includes('--name-only')) return 'LICENSE';
+      if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) {
+        throw new Error('ENOBUFS: stdout maxBuffer exceeded');
+      }
+      throw new Error(`unexpected command in this test: ${command}`);
+    });
+
+    const result = findEffectiveRootSha(ROOT);
+
+    expect(result).toEqual({ sha: ROOT, failed: true });
   });
 });

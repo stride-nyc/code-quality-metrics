@@ -716,6 +716,7 @@ describe('collectLocalMetrics — successful run', () => {
       window_includes_repository_root: false,
       repository_root_commit_count: 0,
       root_commit_detection_failed: false,
+      effective_root_detection_failed: false,
       scaffold_root_detected: false
     });
   });
@@ -747,6 +748,7 @@ describe('collectLocalMetrics — successful run', () => {
       window_includes_repository_root: false,
       repository_root_commit_count: 0,
       root_commit_detection_failed: true,
+      effective_root_detection_failed: false,
       scaffold_root_detected: false
     });
   });
@@ -796,6 +798,48 @@ describe('collectLocalMetrics — successful run', () => {
     const summary = JSON.parse(summaryCall[1]);
     expect(summary.project_lifecycle).toBe('initial-build');
     expect(summary.project_lifecycle_signals.scaffold_root_detected).toBe(true);
+  });
+
+  // GitHub #89: when the root commit is a scaffold and the forward-walk query itself fails
+  // (ENOBUFS on a large history, or any other git failure), that failure must not read as "no
+  // later production-bearing commit found" -- the same collapse root_commit_detection_failed
+  // above already guards against for the repository-root query. project_lifecycle must read
+  // 'undetermined', not a confident 'established', with the failure visible in
+  // project_lifecycle_signals.
+  test('records project_lifecycle as undetermined, not established, when the scaffold forward-walk query itself fails (GitHub #89)', async () => {
+    const ROOT_SHA = 'c'.repeat(40); // stands in for 73V's ec1026c4 (LICENSE + README only)
+
+    execSync.mockImplementation(command => {
+      if (typeof command !== 'string') return '';
+      if (command.includes('--merged')) return '';
+      if (command.includes('--merges')) return '';
+      if (command.includes('format:"%cn"')) return '';
+      if (command.includes('%P')) return 'p'.repeat(40);
+      if (command.includes('--max-parents=0')) return ROOT_SHA;
+      if (command.includes('--name-only')) {
+        if (command.includes(ROOT_SHA)) return 'LICENSE\nREADME.md';
+        if (command.includes(SHA)) return 'src/app.js\nsrc/app.test.js';
+        throw new Error(`unexpected sha in --name-only query: ${command}`);
+      }
+      if (command.includes('--reverse') && command.includes('%H')) {
+        throw new Error('ENOBUFS: stdout maxBuffer exceeded');
+      }
+      if (command.includes('rev-parse')) return FAKE_ROOT;
+      if (command.includes('remote get-url')) return FAKE_REMOTE;
+      if (command === 'git branch -a') return '  feature/x';
+      if (command.includes('git log --no-merges') && command.includes('feature/x')) {
+        return `${SHA}|2025-01-24T10:00:00Z|Dev|feat: add thing`;
+      }
+      if (command.includes('--numstat')) return NUMSTAT;
+      return '';
+    });
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('undetermined');
+    expect(summary.project_lifecycle_signals.effective_root_detection_failed).toBe(true);
   });
 
   // [guard] proves the scaffold walk-forward path does not fire, and existing behavior is
