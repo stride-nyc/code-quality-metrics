@@ -998,6 +998,28 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('unmerged branches');
   });
 
+  // carried from code-quality-metrics-66oo: the rendered sentence stated a percentage
+  // ("4.82% of analyzed commit subjects reference a pull request") without naming what
+  // population it was a share of, even though the true share of the actual analyzed
+  // population was 42% -- a reader had no denominator to sanity-check the number against.
+  // signals.sample_size (lib/git.js's detectHistoryGranularity) now records the exact
+  // denominator; this asserts the rendered sentence names it.
+  it('names the denominator behind the pull-request-reference share in the discarded-detection provenance line', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'feature_branch',
+      history_granularity: 'granular',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
+      history_granularity_signals: { pr_reference_share: 0.42, squash_committer_share: 0, merge_commit_count: 0, sample_size: 50 },
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 0, lines_count: 0, lines_pct: '0.00' }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('42% of the 50 analyzed commit subjects');
+  });
+
   // code-quality-metrics-g39 changed what "nothing to show" means: Analysis Scope now also
   // carries the branch list, so a real run (which always has branches_analyzed) always has
   // something to show. The section is omitted, without throwing, only when a summary carries
