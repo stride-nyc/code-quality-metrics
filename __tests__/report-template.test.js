@@ -128,6 +128,37 @@ describe('renderReportHtml', () => {
     expect(masthead).toContain('30');
   });
 
+  // code-quality-metrics-rub1: on a real run (dotnetdependencytracer) the summary headline was
+  // the seventh line a reader met -- lines 3 to 6 were methodology (analyzed span with a
+  // HEAD-anchored parenthetical repeating the previous line, a staleness note, a granularity
+  // note) standing between the masthead's bare identity line and the reader's own finding. The
+  // finding must precede the methodology that qualifies it: only the short identity line (h1,
+  // workflow type, commit count) stays ahead of the summary headline now: the span, staleness
+  // and granularity lines all move to after it.
+  it('renders the summary headline before the masthead detail lines (analyzed span, staleness, granularity) that used to precede it', () => {
+    const html = renderReportHtml(fixtureArgs({
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'high',
+      analyzed_span_start: '2026-05-27',
+      analyzed_span_end: '2026-06-12',
+      window_requested_since: null,
+      window_widened: false
+    }));
+
+    const identityEnd = html.indexOf('</header>');
+    const summaryStart = html.indexOf('<section class="report-summary">');
+    const spanLineStart = html.indexOf('<p class="masthead-span">');
+    const granularityLineStart = html.indexOf('<p class="masthead-granularity">');
+
+    expect(identityEnd).toBeGreaterThanOrEqual(0);
+    expect(summaryStart).toBeGreaterThan(identityEnd);
+    expect(spanLineStart).toBeGreaterThanOrEqual(0);
+    expect(granularityLineStart).toBeGreaterThanOrEqual(0);
+    expect(spanLineStart).toBeGreaterThan(summaryStart);
+    expect(granularityLineStart).toBeGreaterThan(summaryStart);
+  });
+
   // code-quality-metrics-kprr: local_metrics_summary.json records filtered_from (the fetched
   // history before the MAX_COMMITS cap narrowed it down to total_commits), but the report never
   // mentioned it -- a reader had no way to tell "50 commits analyzed" apart from "50 out of
@@ -202,11 +233,16 @@ describe('renderReportHtml', () => {
     expect(html).toContain('across 7 branch');
   });
 
-  // code-quality-metrics-kprr: 73V's report excluded 63.99% of changed lines across 3 files,
-  // and that fact only ever appeared in the last section of the page (Analysis Scope), printed
-  // twice. Two thirds of the analyzed diff going unmeasured is a masthead fact, not something a
-  // reader only finds by scrolling to the very end.
-  it('states the excluded share in the masthead when ANALYSIS_IGNORE_PATTERNS excludes a large share of changed lines', () => {
+  // code-quality-metrics-nnla: the masthead exclusion-share line (added on a bad instruction
+  // during code-quality-metrics-kprr) restated the same fact Analysis Scope already carries,
+  // and the top summary's own vendored clause restated it a third time with a false claim
+  // ("reframes every count above") on top -- every banded metric already excludes vendored/
+  // generated content before computing (large_commits_pct counts production lines, the line/
+  // file distributions read counted_* since PR #94, sprawling_commits_pct counts non-excluded
+  // files, and the test rates treat an excluded path as neither test nor production), so there
+  // is nothing left above for a masthead line to "reframe." The exclusion now appears exactly
+  // once, in Analysis Scope (see the exclusionsSection tests below).
+  it('does not render an exclusion-share line in the masthead, even when ANALYSIS_IGNORE_PATTERNS excludes a large share of changed lines', () => {
     const html = renderReportHtml(fixtureArgs({
       analysis_exclusions: {
         patterns: ['**/vendor/**'],
@@ -217,8 +253,8 @@ describe('renderReportHtml', () => {
     }));
     const masthead = mastheadSection(html);
 
-    expect(masthead).toContain('63.99');
-    expect(masthead).toContain('excluded');
+    expect(masthead).not.toContain('masthead-exclusion');
+    expect(masthead).not.toContain('63.99');
   });
 
   it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
@@ -248,9 +284,11 @@ describe('renderReportHtml', () => {
       window_requested_since: null,
       window_widened: false
     }));
-    const masthead = mastheadSection(html);
 
-    expect(masthead).toContain('69 days');
+    // code-quality-metrics-rub1: this line now renders in renderMastheadDetail, after the
+    // summary headline, not inside the <header class="masthead"> element -- checked against
+    // the whole document rather than the masthead-scoped helper, which no longer contains it.
+    expect(html).toContain('69 days');
   });
 
   // [guard] not a called-shot RED: the threshold guard (STALE_WINDOW_GAP_DAYS) was written in
@@ -264,9 +302,8 @@ describe('renderReportHtml', () => {
       window_requested_since: null,
       window_widened: false
     }));
-    const masthead = mastheadSection(html);
 
-    expect(masthead).not.toContain('masthead-staleness');
+    expect(html).not.toContain('masthead-staleness');
   });
 
   // code-quality-metrics-2l1x: the same short window backing a stale masthead also backs
@@ -710,14 +747,25 @@ describe('renderReportHtml', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
 
+    // code-quality-metrics-rub1: scoped to the metric grid itself, not the whole document.
+    // The affirmative top summary now names every banded-good entry's label too (in the
+    // catalog's own concern order, not grouped by METRIC_GROUP_ORDER), so an unscoped
+    // html.indexOf(label) would find that earlier mention instead of the tile this test is
+    // actually about.
+    const gridStart = html.indexOf('<section class="metric-category">');
+    const gridEnd = html.indexOf('<section class="archetype-note">');
+    expect(gridStart).toBeGreaterThanOrEqual(0);
+    expect(gridEnd).toBeGreaterThan(gridStart);
+    const gridHtml = html.slice(gridStart, gridEnd);
+
     expect(args.catalog).toHaveLength(13);
     for (const entry of args.catalog) {
-      expect(html).toContain(entry.label);
+      expect(gridHtml).toContain(entry.label);
     }
 
     const expectedOrder = METRIC_GROUP_ORDER.flatMap(group => args.catalog.filter(entry => entry.group === group));
     expect(expectedOrder).toHaveLength(args.catalog.length);
-    const indices = expectedOrder.map(entry => html.indexOf(entry.label));
+    const indices = expectedOrder.map(entry => gridHtml.indexOf(entry.label));
     const sortedIndices = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sortedIndices);
   });
@@ -1820,58 +1868,91 @@ describe('renderReportHtml', () => {
     expect(summary).toContain('40');
   });
 
-  // [guard] proven by mutation: forcing the `concerns.length === 0` branch condition to `false`
-  // (so the "no measured signal" branch can never be taken, even when concerns is actually
-  // empty) failed this test with a thrown TypeError ("Cannot read properties of undefined
-  // (reading 'label')") from `concerns[0]` being undefined -- reverted after confirming.
-  it('[guard] states no signal crossed a threshold when the catalog has no concerns', () => {
-    const html = renderReportHtml(fixtureArgs({
-      large_commits_pct: '5.00', sprawling_commits_pct: '5.00', uncovered_prod_rate: '1.00', test_coverage_rate: '90.00'
-    }));
+  // code-quality-metrics-rub1: the true degenerate case is having NO banded evidence at all
+  // (bandedGoodCount 0, not merely "no concerns this run") -- e.g. squashed-history windows,
+  // where every commit-unit metric is withheld outright (see CLAUDE.md's "History Granularity
+  // and Commit-Unit Withholding"). There is nothing positive to name here, so the plain
+  // "no measured signal" sentence is the honest one. This replaces a prior version of this
+  // test that used an all-healthy fixture (six banded metrics, all status 'good') and asserted
+  // this exact degenerate sentence for it -- that fixture is precisely the case rub1 reports as
+  // a regression: a run with real positive evidence must not read as "no signal crossed a
+  // threshold." See the affirmative-path test below for that corrected case.
+  it('[guard] states no signal crossed a threshold when literally nothing is banded (e.g. squashed history withholding every commit-unit metric)', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed' }));
     const summary = summarySection(html);
 
     expect(summary).toContain('No measured signal in this run crossed a warning or critical threshold.');
   });
 
-  // code-quality-metrics-g39: "Consider whether the top summary should mention a high vendored
-  // share explicitly, since a reader who never scrolls would otherwise miss the one fact that
-  // changes how everything else reads" -- measured: flight-info-spike at 72%.
-  it('calls out a high vendored/generated share explicitly in the top summary', () => {
+  // code-quality-metrics-rub1, THE MAIN REGRESSION: a run with real positive evidence (every
+  // banded metric healthy, zero concerns of any kind) used to render the exact same degenerate
+  // sentence as a run with NO evidence at all ("No measured signal in this run crossed a
+  // warning or critical threshold."), even the favorable branch pivoted negative ("It still
+  // flags"). Measured on dotnetdependencytracer: 8 positive findings, zero warnings, and the
+  // masthead told the reader only that nothing bad was detected. The default fixture (see
+  // fixtureSummary above) is itself fully healthy across all six default banded metrics
+  // (large/sprawling commits, test/prod co-change, uncovered production, p90 lines/files
+  // changed), with no directional concern either, so it exercises exactly this case with no
+  // overrides needed.
+  it('gives an affirmative path naming specific healthy signals, not the degenerate "no signal crossed" sentence, when every banded metric is healthy and there are no concerns at all', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/All signals are positive/);
+    expect(summary).not.toContain('No measured signal in this run crossed a warning or critical threshold.');
+    // Names specific signals, the way the concern branch already names its worst one via
+    // ledByPhrase -- not a generic reassurance with no content.
+    expect(summary).toContain('Large commits');
+    expect(summary).toContain('Sprawling commits');
+    expect(summary).toContain('Test/prod co-change');
+    expect(summary).toContain('Uncovered production');
+    expect(summary).toContain('Commit size, high end');
+    expect(summary).toContain('Files changed, high end');
+  });
+
+  // [guard] not a called-shot RED: this proves the concern branch (untouched by the
+  // affirmative-path change above) still names its worst finding when every banded metric is a
+  // concern, none good -- the third of the three required cases (all healthy, mixed, all
+  // concern). Expected to pass already under the pre-existing concern branch; included for
+  // explicit coverage of this case per the acceptance criteria, not because it was ever RED.
+  it('[guard] still flags and names the worst finding when every banded metric is a concern, none healthy', () => {
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let summary;
+    try {
+      const html = renderReportHtml(fixtureArgs({
+        large_commits_pct: '40.00', sprawling_commits_pct: '25.00',
+        test_coverage_rate: '5.00', uncovered_prod_rate: '50.00',
+        p90_lines_changed: 900, p90_files_changed: 20
+      }));
+      summary = summarySection(html);
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
+
+    expect(summary).not.toMatch(/All signals are positive/);
+    expect(summary).toMatch(/led by Large commits at 40/);
+    expect(summary).toMatch(/This run flags/);
+  });
+
+  // code-quality-metrics-nnla: the top summary used to restate the vendored/generated share a
+  // second time (after the masthead line removed above), and one of its own clauses was false
+  // -- "which reframes every count above" -- because every banded metric already excludes
+  // vendored/generated content before computing (large_commits_pct counts production lines,
+  // the line/file distributions read counted_* since PR #94, sprawling_commits_pct counts
+  // non-excluded files, test rates treat an excluded path as neither test nor production).
+  // There is nothing left above for a second discount to reframe. The fact now lives exactly
+  // once, in Analysis Scope, regardless of how large the share is or whether
+  // ANALYSIS_IGNORE_PATTERNS already excludes it.
+  it('never mentions the vendored/generated share in the top summary, however large it is; that fact lives only in Analysis Scope', () => {
     const html = renderReportHtml(fixtureArgs({
       vendored_generated_share: { patterns: ['**/deps/**'], files_count: 40, lines_count: 9000, lines_pct: '72.00' }
     }));
     const summary = summarySection(html);
 
-    expect(summary).toContain('72');
-    expect(summary).toMatch(/vendored|generated/);
-    expect(summary).toMatch(/Analysis Scope/);
-  });
-
-  // A percentage alone buries the notable fact: one or a handful of files can carry nearly
-  // all the vendored volume (measured: stride-nyc/73V, 3 files carrying 28,207 lines). The
-  // callout names the file and line counts, not only the share, so a reader sees the
-  // concentration directly instead of inferring it from a percentage.
-  it('names the vendored/generated file and line counts, not only the percentage, in the callout', () => {
-    const html = renderReportHtml(fixtureArgs({
-      vendored_generated_share: { patterns: ['**/vendor/**'], files_count: 3, lines_count: 28207, lines_pct: '63.99' }
-    }));
-    const summary = summarySection(html);
-
-    expect(summary).toContain('3');
-    expect(summary).toContain('28207');
-    expect(summary).toContain('63.99');
-  });
-
-  // [guard] proven by mutation: lowering VENDORED_SHARE_CALLOUT_THRESHOLD to 0 (so any nonzero
-  // share triggers the callout) failed this test, which found the callout text present for an
-  // 8% share it expects to be silent about -- reverted after confirming.
-  it('[guard] does not call out a vendored share below the callout threshold', () => {
-    const html = renderReportHtml(fixtureArgs({
-      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 2, lines_count: 100, lines_pct: '8.00' }
-    }));
-    const summary = summarySection(html);
-
     expect(summary).not.toMatch(/vendored|generated/);
+    expect(summary).not.toMatch(/reframes/);
+    expect(summary).not.toContain('72');
   });
 
   // code-quality-metrics coordination task (reframe): a directional trend with no calibrated
@@ -1919,14 +2000,18 @@ describe('renderReportHtml', () => {
     expect(occurrences).toBe(1);
   });
 
-  // code-quality-metrics-kprr: 73V's Analysis Scope section stated the identical 3 files /
-  // 28,207 lines / 63.99% twice -- once attributed to ANALYSIS_IGNORE_PATTERNS, once to the
-  // vendored/generated default patterns -- because the two facts happen to coincide in that
-  // run. They are genuinely different facts (a configured exclusion vs. a default-pattern
-  // match) in general, so this only merges them into one bullet when they actually describe
-  // the same files and lines; the next test below proves they still render separately when
-  // they differ.
-  it('states the exclusion and vendored-default facts once, not twice, when they describe the same files and lines', () => {
+  // code-quality-metrics-q8zp: the ANALYSIS_IGNORE_PATTERNS bullet and the
+  // vendored/generated-default bullet used to collapse into one merged bullet whenever their
+  // counts happened to coincide, and that merged bullet's own text embedded
+  // vendored.patterns -- CONFIG.DUPLICATE_IGNORE_PATTERNS, a duplication-detector setting --
+  // inside a sentence otherwise about ANALYSIS_IGNORE_PATTERNS and the commit-shape metrics.
+  // Demonstrated by accident: adding a duplication-only pattern to 73V's
+  // DUPLICATE_IGNORE_PATTERNS moved the callout from 3 files to 13 and changed the merged
+  // bullet's own printed pattern list, even though nothing about ANALYSIS_IGNORE_PATTERNS or
+  // the commit-shape metrics had changed. Each bullet now always names precisely what it
+  // measures and never merges, so this can no longer happen; the two facts render as two
+  // bullets, each independently correct, whether or not their counts happen to coincide.
+  it('always renders the ANALYSIS_IGNORE_PATTERNS exclusion and the vendored/generated default share as two separate bullets, even when their counts coincide', () => {
     const html = renderReportHtml(fixtureArgs({
       analysis_exclusions: {
         patterns: ['**/vendor/**'],
@@ -1944,53 +2029,61 @@ describe('renderReportHtml', () => {
     const scopeStart = html.indexOf('<section class="analysis-scope">');
     const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
 
-    const occurrences = (scope.match(/63\.99/g) || []).length;
-    expect(occurrences).toBe(1);
+    const bulletCount = (scope.match(/<li>/g) || []).length;
+    // At least 2 of the bullets in this section are these two facts (branch/provenance bullets
+    // may add more); asserting the exclusion phrase and the duplicate-detector phrase both
+    // appear as their own, separately-introduced bullets is the direct proof.
+    expect(bulletCount).toBeGreaterThanOrEqual(2);
+    expect(scope).toMatch(/excluded from the commit-shape metrics by ANALYSIS_IGNORE_PATTERNS/);
+    expect(scope).toMatch(/duplicate detector/);
   });
 
-  // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
-  // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
-  // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
-  // The counts above are already computed on the remaining lines; telling the reader they
-  // need a second discount is worse than saying nothing.
-  it('does not claim the vendored/generated share reframes counts above when ANALYSIS_IGNORE_PATTERNS already excluded that volume', () => {
-    const html = renderReportHtml(fixtureArgs({
-      analysis_exclusions: {
-        patterns: ['**/vendor/**'],
-        excluded_files_count: 3,
-        excluded_lines_count: 28207,
-        excluded_lines_pct: '63.99'
-      },
+  // code-quality-metrics-q8zp's core requirement: vendored_generated_share is computed from
+  // CONFIG.DUPLICATE_IGNORE_PATTERNS (the jscpd duplicate-detector's own always-on defaults),
+  // not CONFIG.ANALYSIS_IGNORE_PATTERNS (the commit-shape scoping config) -- a basis mismatch
+  // that let a duplication-only config change move a sentence framed as being about
+  // commit-shape counts. Fixed by rendering the ANALYSIS_IGNORE_PATTERNS bullet from
+  // summary.analysis_exclusions alone, with no reference to summary.vendored_generated_share
+  // at all, so nothing about the vendored/generated share's own value can reach that bullet's
+  // text. This proves it directly: the ANALYSIS_IGNORE_PATTERNS bullet is byte-for-byte
+  // identical whether vendored_generated_share reports 3 files (as if only
+  // ANALYSIS_IGNORE_PATTERNS were configured) or 13 files with a different pattern list (as if
+  // a duplication-only DUPLICATE_IGNORE_PATTERNS addition had been made), with
+  // analysis_exclusions held fixed across both renders.
+  it('never changes the ANALYSIS_IGNORE_PATTERNS commit-shape bullet when only the vendored/generated share (a DUPLICATE_IGNORE_PATTERNS-derived fact) changes', () => {
+    const fixedExclusions = {
+      patterns: ['**/vendor/**'],
+      excluded_files_count: 3,
+      excluded_lines_count: 28207,
+      excluded_lines_pct: '63.99'
+    };
+    const beforeHtml = renderReportHtml(fixtureArgs({
+      analysis_exclusions: fixedExclusions,
+      vendored_generated_share: { patterns: ['**/vendor/**'], files_count: 3, lines_count: 28207, lines_pct: '63.99' }
+    }));
+    const afterHtml = renderReportHtml(fixtureArgs({
+      analysis_exclusions: fixedExclusions,
+      // Simulates adding '**/terraform/environments/**' to DUPLICATE_IGNORE_PATTERNS: the
+      // vendored/generated share's own file count, line count, share, and pattern list all
+      // change, with analysis_exclusions completely untouched.
       vendored_generated_share: {
-        patterns: ['**/vendor/**'],
-        files_count: 3,
-        lines_count: 28207,
-        lines_pct: '63.99'
+        patterns: ['**/vendor/**', '**/terraform/environments/**'],
+        files_count: 13,
+        lines_count: 28239,
+        lines_pct: '64.07'
       }
     }));
-    const summary = summarySection(html);
 
-    expect(summary).not.toMatch(/reframes/);
-    expect(summary).not.toMatch(/vendored|generated/);
-  });
+    const extractCommitShapeBullet = html => {
+      const scopeStart = html.indexOf('<section class="analysis-scope">');
+      const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+      const bullets = scope.match(/<li>[^]*?<\/li>/g) || [];
+      const match = bullets.find(li => /excluded from the commit-shape metrics by ANALYSIS_IGNORE_PATTERNS/.test(li));
+      expect(match).toBeDefined();
+      return match;
+    };
 
-  // The case the original wording was right for, and must not regress: ANALYSIS_IGNORE_PATTERNS
-  // is empty, so the vendored/generated volume is still baked into every count above -- the
-  // callout stays exactly as before.
-  it('[guard] still calls out the vendored/generated share when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
-    const html = renderReportHtml(fixtureArgs({
-      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
-      vendored_generated_share: {
-        patterns: ['**/vendor/**'],
-        files_count: 3,
-        lines_count: 28207,
-        lines_pct: '63.99'
-      }
-    }));
-    const summary = summarySection(html);
-
-    expect(summary).toMatch(/reframes/);
-    expect(summary).toMatch(/vendored|generated/);
+    expect(extractCommitShapeBullet(beforeHtml)).toBe(extractCommitShapeBullet(afterHtml));
   });
 
   // Defect: "see Analysis Scope below" (inside the vendored clause) and "See Findings below
