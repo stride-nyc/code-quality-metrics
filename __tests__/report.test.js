@@ -1,7 +1,7 @@
 'use strict';
 
 const { THRESHOLDS } = require('../lib/thresholds');
-const { buildMetricCatalog, buildGaugeSvgParts, groupForMetricKey } = require('../lib/report');
+const { buildMetricCatalog, buildGaugeSvgParts, groupForMetricKey, hasVerdict } = require('../lib/report');
 
 function fullSummary(overrides) {
   return Object.assign({
@@ -708,6 +708,36 @@ describe('buildMetricCatalog metric groups (code-quality-metrics-yte)', () => {
       'net_additions_ratio_median',
       'avg_lines_changed'
     ]);
+  });
+});
+
+// code-quality-metrics-ponf: fallbackFindings (lib/report-template.js) needs to tell a
+// verdict-bearing tile (a real calibrated band, or a directional entry the growingAndAccelerating
+// rule escalated to 'warning') apart from a merely descriptive/informational one (message
+// quality, avg lines changed, an unmeasured tile, test_isolation_rate's own 'good'/'neutral'
+// status) so it can show a fair mix of good and warning results without also surfacing filler
+// that carries no real pass/fail call. This mirrors lib/narrative.js's own buildNarrativePayload
+// verdict: 'none' rule exactly, so the deterministic fallback and the model-facing payload agree
+// on which entries are verdict-bearing.
+describe('hasVerdict', () => {
+  it('is true for a banded (two-band) entry even when its status is good', () => {
+    const entry = { direction: 'higher-is-worse', status: 'good', tier: 'two-band' };
+    expect(hasVerdict(entry)).toBe(true);
+  });
+
+  it('is false for a purely informational entry whose status is neutral', () => {
+    const entry = { direction: 'informational', status: 'neutral' };
+    expect(hasVerdict(entry)).toBe(false);
+  });
+
+  it("is true for an informational entry escalated to warning (commit_size_trend/velocity_trend's growingAndAccelerating rule)", () => {
+    const entry = { direction: 'informational', status: 'warning' };
+    expect(hasVerdict(entry)).toBe(true);
+  });
+
+  it('is false for a special-direction entry (test_isolation_rate) even when its status is good', () => {
+    const entry = { direction: 'special', status: 'good' };
+    expect(hasVerdict(entry)).toBe(false);
   });
 });
 

@@ -25,13 +25,37 @@ function fixtureSummary(overrides) {
 }
 
 describe('fallbackFindings (shared deterministic helper)', () => {
-  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
-  // is null -- see lib/thresholds.js), so 40% -- above healthy (18), with no critical bound to
-  // exceed -- renders as a warning bullet, not a critical one.
-  test('is exported from lib/report-template and returns templated bullets for critical/warning entries', () => {
+  // code-quality-metrics-ponf: the 73V Findings section listed three warnings and nothing
+  // else, even though four other tiles on the same page were comfortably healthy -- a reader
+  // finished the section believing the repository had only problems. fallbackFindings must
+  // report both halves of a mixed run: large_commits_pct is two-band (LARGE_COMMITS_PCT.critical
+  // is null -- see lib/thresholds.js), so 40% -- above healthy (18) -- renders as a warning
+  // bullet, and every other banded tile in this fixture is healthy, so all of them must appear
+  // too, not be truncated away. test_isolation_rate, velocity_commits_per_day, commit_size_trend
+  // and velocity_trend (all 'neutral' here) and message_quality_pct/net_additions_ratio_median/
+  // avg_lines_changed (always informational, no verdict) must NOT appear: none of them carries a
+  // real pass/fail call (see hasVerdict, lib/report.js).
+  test('shows both the warning and every healthy banded entry for a mixed run, not warnings only', () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const bullets = fallbackFindings(catalog);
-    expect(bullets).toEqual(['Large commits: 40 (warning)']);
+    expect(bullets).toEqual([
+      'Large commits: 40 (warning)',
+      'Sprawling commits: 8 (good)',
+      'Uncovered production: 5 (good)',
+      'Test/prod co-change: 55 (good)',
+      'Commit size, high end: 150 (good)',
+      'Files changed, high end: 5 (good)'
+    ]);
+  });
+
+  // GUARD, not a called-shot RED: proves a genuinely healthy run (no warning at all) reports
+  // every healthy tile and no warning bullet, rather than the fair-mix fix accidentally
+  // requiring at least one concern to render anything.
+  test('shows every healthy banded entry and no warning bullet when nothing is a concern', () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const bullets = fallbackFindings(catalog);
+    expect(bullets.some(b => b.includes('(warning)') || b.includes('(critical)'))).toBe(false);
+    expect(bullets).toEqual(expect.arrayContaining(['Large commits: 15 (good)']));
   });
 });
 
@@ -88,7 +112,13 @@ describe('generateFindingsNarrative: client provided', () => {
     errorSpy.mockRestore();
   });
 
-  test('falls back to fallbackFindings, with a visible rejection notice, when the narrative fails validation', async () => {
+  // code-quality-metrics-zuee: the 73V report's Findings section opened with this exact
+  // rejection notice, quoting the model's full rejected paragraph, as the first thing a reader
+  // saw -- internal consistency-check plumbing rendered as though it were report content. The
+  // diagnostic still needs to exist somewhere for debugging, so it moves to console.error
+  // (stderr) rather than being dropped outright; only its presence in the rendered bullets is
+  // removed.
+  test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
       positive_findings: [],
@@ -96,15 +126,18 @@ describe('generateFindingsNarrative: client provided', () => {
       recommended_actions: []
     });
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result[0]).toMatch(/narrative rejected/i);
-    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy.mock.calls[0][0]).toMatch(/999/);
+    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result.some(item => /narrative rejected/i.test(item))).toBe(false);
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0][0]).toMatch(/999/);
 
     logSpy.mockRestore();
+    errorSpy.mockRestore();
   });
 
   // GUARD, not a called-shot RED: written after the try/catch already added
@@ -593,6 +626,31 @@ describe('validateNarrative', () => {
       { key: 'duplication_clones', label: 'Clone count', value: 24, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
     ];
     const bullets = ['Concern: Duplication density is 6.27%, above the healthy boundary of 2%, with 924 duplicated lines out of 14740 scanned and 24 separate clone blocks identified across the codebase.'];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // code-quality-metrics-zuee: measured against a real 73V run. Real rejected bullet: 'Concern:
+  // Copy-pasted code has accumulated to 4.1% of scanned production lines - 655 duplicated lines
+  // across 19 separate blocks out of 16,106 scanned - which sits above the benchmark's upper
+  // boundary of 1.5% ...'. This correctly cites duplication_density_pct's own value (4.1) and
+  // healthy boundary (1.5) -- it is genuinely about that scored metric -- but never uses its
+  // label "Duplication density" anywhere in the sentence, so the scoredLabels text-match above
+  // finds no match, and duplication_lines' own label ("Duplicated lines") matches instead as
+  // supporting detail ("655 duplicated lines"), producing a false rejection. Unlike the 6gu case
+  // above, naming the scored label is not the only way a bullet can prove it is about a scored
+  // metric: citing that metric's own value AND healthy/critical boundary together is at least as
+  // strong evidence, and is exactly what the model actually did here.
+  test('does not reject a Concern bullet that cites a scored metric\'s own value and healthy boundary, even when its label never appears and an unrelated informational label does', () => {
+    const payload = [
+      { key: 'duplication_density_pct', label: 'Duplication density', value: '4.1', direction: 'higher-is-worse', status: 'warning', healthyBoundary: '1.5', criticalBoundary: null },
+      { key: 'duplication_lines', label: 'Duplicated lines', value: '655 / 16106', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'duplication_clones', label: 'Clone count', value: 19, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'duplication_semantic_findings', label: 'Semantic duplicates', value: 6, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ["Concern: Copy-pasted code has accumulated to 4.1% of scanned production lines - 655 duplicated lines across 19 separate blocks out of 16106 scanned - which sits above the benchmark's upper boundary of 1.5% and signals architectural debt that tends to compound if not refactored; the 6 semantic duplicates suggest the duplication has already spread beyond text-identical repetition."];
 
     const result = validateNarrative(bullets, payload, []);
 
