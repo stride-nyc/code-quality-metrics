@@ -2429,3 +2429,66 @@ describe('collectLocalMetrics — history granularity population (code-quality-m
     expect(summary.history_granularity_detected).toBe('granular');
   });
 });
+
+// code-quality-metrics-7ccq: local-code-metrics.js dedupes analyzed commits by SHA only, which
+// does not catch a squash-merge duplicate -- the squash commit on the default branch and the
+// feature-branch commits it squashed are different SHAs carrying the same change, so both are
+// analyzed when the branch survives the merge. Fixture below models exactly that shape: two
+// still-existing branches, one carrying the squash-flavored commit (trailing "(#42)"), the
+// other carrying the un-suffixed original with the same net diff.
+describe('collectLocalMetrics — content-duplicate detection (code-quality-metrics-7ccq)', () => {
+  test('reports content_duplicate_group_count and content_duplicate_redundant_entries_count when two surviving branches carry the same change under different SHAs, without reducing total_commits', async () => {
+    const SHA_ORIGINAL = 'b'.repeat(40);
+    const SHA_SQUASH = 'a'.repeat(40);
+    const NUMSTAT = '10\t5\tsrc/app.js';
+
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x\n  feature/y',
+      `${SHA_SQUASH}|2024-01-15T10:00:00Z|Dev|feat: add widget (#42)`, // git log feature/x
+      `${SHA_ORIGINAL}|2024-01-14T10:00:00Z|Dev|feat: add widget`,     // git log feature/y
+      NUMSTAT, // numstat for SHA_ORIGINAL (older, analyzed first)
+      NUMSTAT  // numstat for SHA_SQUASH
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    // No silent correction (code-quality-metrics-7ccq's honest-fallback choice): both entries
+    // still count toward total_commits.
+    expect(summary.total_commits).toBe(2);
+    expect(summary.content_duplicate_group_count).toBe(1);
+    expect(summary.content_duplicate_redundant_entries_count).toBe(1);
+    expect(summary.content_duplicate_groups).toEqual([
+      { subject: 'feat: add widget', total_additions: 10, total_deletions: 5, shas: [SHA_ORIGINAL, SHA_SQUASH] }
+    ]);
+  });
+
+  // [guard] proves the detector reports zero, not merely absent/undefined, when every analyzed
+  // commit's content signature is unique -- a reader must be able to tell "checked, found none"
+  // apart from "field not implemented".
+  test('[guard] reports zero content-duplicate groups when no two analyzed commits share a content signature', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      '10\t5\tsrc/app.js'
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.content_duplicate_group_count).toBe(0);
+    expect(summary.content_duplicate_redundant_entries_count).toBe(0);
+    expect(summary.content_duplicate_groups).toEqual([]);
+  });
+});

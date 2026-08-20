@@ -25,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, findContentDuplicateGroups, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -694,6 +694,23 @@ async function collectLocalMetrics(options = {}) {
     return;
   }
 
+  // Content-duplicate detection (code-quality-metrics-7ccq): the existing same-SHA dedup above
+  // (uniqueCommits) does not catch a squash-merge duplicate, since the squash commit on the
+  // default branch and the feature-branch commits it squashed are different SHAs carrying the
+  // same change -- when the branch survives the merge, both remain reachable and both land in
+  // metrics. findContentDuplicateGroups (lib/git.js) is a floor, not an exact test: it will miss
+  // a multi-commit branch whose squash diff differs from the sum of its parts, and could in
+  // principle group two unrelated commits that coincide on subject and diff size. For both
+  // reasons this is report-only -- a detected group is surfaced as a count beside total_commits,
+  // the honest-fallback choice from code-quality-metrics-7ccq, never used to silently drop an
+  // entry from metrics or any downstream rate/distribution.
+  const contentDuplicateGroups = findContentDuplicateGroups(metrics);
+  const contentDuplicateRedundantEntriesCount = contentDuplicateGroups.reduce((sum, g) => sum + (g.shas.length - 1), 0);
+  if (contentDuplicateGroups.length > 0) {
+    console.log(`♻️  ${contentDuplicateGroups.length} content-duplicate group(s) detected: the same change reachable more than once in the analyzed sample (${contentDuplicateRedundantEntriesCount} redundant entr${contentDuplicateRedundantEntriesCount === 1 ? 'y' : 'ies'} among ${metrics.length} analyzed commits). See content_duplicate_groups in the summary.`);
+    console.log('');
+  }
+
   // Statistical distributions. timestamps is built from m.date, which is committer date
   // (code-quality-metrics-75 / mbiw) -- so the trend regression inside computeStatistics
   // orders commits, and analyzedSpanStart/End below reports a span, on the same clock
@@ -924,6 +941,16 @@ async function collectLocalMetrics(options = {}) {
     analysis_period_days: analysisDays,
     total_commits: metrics.length,
     filtered_from: uniqueCommits.length,
+    // Content-duplicate detection (code-quality-metrics-7ccq): how many groups of analyzed
+    // commits share a content signature (normalized subject, total_additions, total_deletions)
+    // despite different SHAs, and how many redundant entries that represents -- see
+    // findContentDuplicateGroups' own comment (lib/git.js) for the detection method and its
+    // known floor. Reported beside total_commits, not subtracted from it: a reader can see the
+    // sample's real shape without this toolkit silently correcting a number on a heuristic that
+    // can both under- and (in principle) over-detect.
+    content_duplicate_group_count: contentDuplicateGroups.length,
+    content_duplicate_redundant_entries_count: contentDuplicateRedundantEntriesCount,
+    content_duplicate_groups: contentDuplicateGroups,
     // Dependency/CI bot commits excluded from the window above (issue #62), counted and
     // reported rather than silently dropped: a window that is, say, 40 percent bot traffic is
     // itself a finding, and a reader needs to know the human denominator every other
