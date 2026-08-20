@@ -50,7 +50,7 @@ const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, committer: string, message: string, full_message: string, source_branch?: string }} CommitInfo
  * date is committer date (git %ci), not author date -- see fetchBranchCommits' own comment
  * (code-quality-metrics-75 / mbiw) for why: it matches --since's own filtering semantics.
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, counted_additions: number, counted_deletions: number, counted_files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -651,8 +651,15 @@ async function collectLocalMetrics(options = {}) {
   // (code-quality-metrics-75 / mbiw) -- so the trend regression inside computeStatistics
   // orders commits, and analyzedSpanStart/End below reports a span, on the same clock
   // --since itself filters by.
-  const lineSizes = metrics.map(m => m.total_additions + m.total_deletions);
-  const fileCounts = metrics.map(m => m.files_changed);
+  //
+  // Built from counted_additions/counted_deletions/counted_files_changed, not the raw
+  // total_additions/total_deletions/files_changed (GitHub #90): CLAUDE.md documents
+  // ANALYSIS_IGNORE_PATTERNS as excluding globs from "the line-count distributions", and the
+  // counted fields are the exclusion-aware siblings lib/git.js's analyzeCommit computes for
+  // exactly this (see that function's own comment). Equal to the raw fields, and so equal to
+  // every prior measurement, whenever nothing is excluded.
+  const lineSizes = metrics.map(m => m.counted_additions + m.counted_deletions);
+  const fileCounts = metrics.map(m => m.counted_files_changed);
   const timestamps = metrics.map(m => new Date(m.date).getTime());
   const lineStats = computeStatistics(lineSizes, timestamps);
   const fileStats = computeStatistics(fileCounts, timestamps);
@@ -817,7 +824,18 @@ async function collectLocalMetrics(options = {}) {
   // commit that does introduce a production file -- before checking whether the analyzed
   // window includes "the start of history". See lib/git.js's findEffectiveRootSha for the
   // full mechanism and its caveats.
-  const effectiveRootShas = rootCommitShas.map(findEffectiveRootSha);
+  const effectiveRootResults = rootCommitShas.map(findEffectiveRootSha);
+  const effectiveRootShas = effectiveRootResults.map(r => r.sha);
+  // True when the forward-walk query itself failed (GitHub #89) rather than genuinely finding
+  // no later production-bearing commit -- see findEffectiveRootSha's own comment. Folded into
+  // detectedLifecycle below the same way root_commit_detection_failed already is: a swallowed
+  // failure here previously read as a confident scaffold_root_detected: false, indistinguishable
+  // from a genuinely non-scaffold root.
+  const effectiveRootDetectionFailed = effectiveRootResults.some(r => r.failed);
+  if (effectiveRootDetectionFailed) {
+    console.log('⚠️ Unable to walk forward from a scaffold root commit; project_lifecycle will report as undetermined rather than established.');
+    console.log('');
+  }
   const scaffoldRootDetected = rootCommitShas.some((sha, i) => sha !== effectiveRootShas[i]);
 
   // See the rootCommitShas comment above: this is the actual structural check, run once the
@@ -827,13 +845,14 @@ async function collectLocalMetrics(options = {}) {
     analyzedShas: metrics.map(m => m.full_sha),
     rootShas: effectiveRootShas
   });
-  // 'undetermined' when the root-commit query itself failed: neither 'established' (which
-  // would silently assert brownfield bands apply, exactly the defect this guards against)
-  // nor 'initial-build' (which would assert a fact the failed query never confirmed).
-  // Distinct from both, and paired with root_commit_detection_failed below so the failure
-  // is visible in the written summary rather than reading as a confident verdict either way
-  // (code-quality-metrics-dqri).
-  const detectedLifecycle = rootCommitDetectionFailed
+  // 'undetermined' when the root-commit query, or the scaffold forward-walk query, itself
+  // failed: neither 'established' (which would silently assert brownfield bands apply, exactly
+  // the defect this guards against) nor 'initial-build' (which would assert a fact the failed
+  // query never confirmed). Distinct from both, and paired with root_commit_detection_failed /
+  // effective_root_detection_failed below so the failure is visible in the written summary
+  // rather than reading as a confident verdict either way (code-quality-metrics-dqri, GitHub
+  // #89).
+  const detectedLifecycle = (rootCommitDetectionFailed || effectiveRootDetectionFailed)
     ? 'undetermined'
     : (includesRepositoryRoot ? 'initial-build' : 'established');
 
@@ -904,6 +923,10 @@ async function collectLocalMetrics(options = {}) {
       // True when `git rev-list --max-parents=0 --all` itself failed rather than
       // succeeding with no roots -- see project_lifecycle's own comment above.
       root_commit_detection_failed: rootCommitDetectionFailed,
+      // True when the scaffold forward-walk query itself failed (GitHub #89) rather than
+      // genuinely finding no later production-bearing commit -- see findEffectiveRootSha's own
+      // comment for the mechanism.
+      effective_root_detection_failed: effectiveRootDetectionFailed,
       // True when at least one raw root commit introduced zero production files and was
       // replaced by a later effective root (code-quality-metrics-fex3, GitHub #71 part 2) --
       // see findEffectiveRootSha's own comment for the mechanism and its caveats.
@@ -921,8 +944,10 @@ async function collectLocalMetrics(options = {}) {
     test_coverage_rate,
     test_isolation_rate,
     uncovered_prod_rate,
-    avg_files_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.files_changed, 0) / metrics.length).toFixed(2) : "0.00",
-    avg_lines_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.total_additions + m.total_deletions, 0) / metrics.length).toFixed(2) : "0.00",
+    // Built from the counted (exclusion-aware) fields, matching lineSizes/fileCounts above
+    // (GitHub #90) -- see their own comment for why.
+    avg_files_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.counted_files_changed, 0) / metrics.length).toFixed(2) : "0.00",
+    avg_lines_changed: metrics.length > 0 ? (metrics.reduce((sum, m) => sum + m.counted_additions + m.counted_deletions, 0) / metrics.length).toFixed(2) : "0.00",
     p50_lines_changed: lineStats.p50,
     p90_lines_changed: lineStats.p90,
     p95_lines_changed: lineStats.p95,

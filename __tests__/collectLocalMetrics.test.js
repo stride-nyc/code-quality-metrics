@@ -716,6 +716,7 @@ describe('collectLocalMetrics — successful run', () => {
       window_includes_repository_root: false,
       repository_root_commit_count: 0,
       root_commit_detection_failed: false,
+      effective_root_detection_failed: false,
       scaffold_root_detected: false
     });
   });
@@ -747,6 +748,7 @@ describe('collectLocalMetrics — successful run', () => {
       window_includes_repository_root: false,
       repository_root_commit_count: 0,
       root_commit_detection_failed: true,
+      effective_root_detection_failed: false,
       scaffold_root_detected: false
     });
   });
@@ -796,6 +798,48 @@ describe('collectLocalMetrics — successful run', () => {
     const summary = JSON.parse(summaryCall[1]);
     expect(summary.project_lifecycle).toBe('initial-build');
     expect(summary.project_lifecycle_signals.scaffold_root_detected).toBe(true);
+  });
+
+  // GitHub #89: when the root commit is a scaffold and the forward-walk query itself fails
+  // (ENOBUFS on a large history, or any other git failure), that failure must not read as "no
+  // later production-bearing commit found" -- the same collapse root_commit_detection_failed
+  // above already guards against for the repository-root query. project_lifecycle must read
+  // 'undetermined', not a confident 'established', with the failure visible in
+  // project_lifecycle_signals.
+  test('records project_lifecycle as undetermined, not established, when the scaffold forward-walk query itself fails (GitHub #89)', async () => {
+    const ROOT_SHA = 'c'.repeat(40); // stands in for 73V's ec1026c4 (LICENSE + README only)
+
+    execSync.mockImplementation(command => {
+      if (typeof command !== 'string') return '';
+      if (command.includes('--merged')) return '';
+      if (command.includes('--merges')) return '';
+      if (command.includes('format:"%cn"')) return '';
+      if (command.includes('%P')) return 'p'.repeat(40);
+      if (command.includes('--max-parents=0')) return ROOT_SHA;
+      if (command.includes('--name-only')) {
+        if (command.includes(ROOT_SHA)) return 'LICENSE\nREADME.md';
+        if (command.includes(SHA)) return 'src/app.js\nsrc/app.test.js';
+        throw new Error(`unexpected sha in --name-only query: ${command}`);
+      }
+      if (command.includes('--reverse') && command.includes('%H')) {
+        throw new Error('ENOBUFS: stdout maxBuffer exceeded');
+      }
+      if (command.includes('rev-parse')) return FAKE_ROOT;
+      if (command.includes('remote get-url')) return FAKE_REMOTE;
+      if (command === 'git branch -a') return '  feature/x';
+      if (command.includes('git log --no-merges') && command.includes('feature/x')) {
+        return `${SHA}|2025-01-24T10:00:00Z|Dev|feat: add thing`;
+      }
+      if (command.includes('--numstat')) return NUMSTAT;
+      return '';
+    });
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.project_lifecycle).toBe('undetermined');
+    expect(summary.project_lifecycle_signals.effective_root_detection_failed).toBe(true);
   });
 
   // [guard] proves the scaffold walk-forward path does not fire, and existing behavior is
@@ -1655,6 +1699,69 @@ describe('collectLocalMetrics — analysis exclusions and vendored-default share
     expect(summary.analysis_exclusions.patterns).toEqual([]);
     expect(summary.analysis_exclusions.excluded_files_count).toBe(0);
     expect(summary.analysis_exclusions.excluded_lines_pct).toBe('0.00');
+  });
+
+  // GitHub #90: CLAUDE.md documents ANALYSIS_IGNORE_PATTERNS as excluding globs from "the
+  // line-count distributions", but until this fix those distributions (p50/p90/p95/avg lines
+  // changed, avg/p50/p90 files changed) were built directly from the whole-diff
+  // total_additions/total_deletions/files_changed and never moved when exclusions were
+  // configured. One analyzed commit: 500 lines in an excluded bin/ file (510 whole-diff
+  // total, 2 whole-diff files), 10 lines in one ordinary file. The distributions must reflect
+  // only the 10 counted lines / 1 counted file, not the whole-diff 510/2 -- while
+  // total_additions/total_deletions/files_changed (asserted via analysis_exclusions above)
+  // stay whole-diff.
+  test('computes the line-count distributions from the exclusion-aware counted fields, not the whole-diff totals', async () => {
+    const SHA = 'd'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `500\t0\tbin/Debug/App.dll\n10\t0\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.avg_lines_changed).toBe('10.00');
+    expect(summary.p50_lines_changed).toBe(10);
+    expect(summary.p90_lines_changed).toBe(10);
+    expect(summary.p95_lines_changed).toBe(10);
+    expect(summary.avg_files_changed).toBe('1.00');
+    expect(summary.p50_files_changed).toBe(1);
+    expect(summary.p90_files_changed).toBe(1);
+  });
+
+  // The other required direction (GitHub #90): with no ANALYSIS_IGNORE_PATTERNS configured,
+  // the distributions must be bit-for-bit identical to what the whole-diff totals alone would
+  // have produced -- nothing is excluded, so counted equals raw and nothing here changes.
+  test('leaves the line-count distributions unchanged from the whole-diff totals when no exclusions are configured', async () => {
+    const SHA = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `500\t0\tbin/Debug/App.dll\n10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.avg_lines_changed).toBe('510.00');
+    expect(summary.p50_lines_changed).toBe(510);
+    expect(summary.p90_lines_changed).toBe(510);
+    expect(summary.avg_files_changed).toBe('2.00');
+    expect(summary.p50_files_changed).toBe(2);
+    expect(summary.p90_files_changed).toBe(2);
   });
 
   // The higher-value half (code-quality-metrics-3b6): visible even when nothing is
