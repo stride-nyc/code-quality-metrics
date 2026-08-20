@@ -57,8 +57,17 @@ beforeEach(() => {
   claude.getAnthropicClient.mockResolvedValue(null);
 });
 
-describe('generateReportWithNarrative: no API key (called-shot, output must be unchanged)', () => {
-  it('produces HTML identical to generateReport when no anthropic client is available', async () => {
+// Updated for code-quality-metrics-49ch (not a called-shot RED on its own -- the fallback
+// notice itself is covered by lib/narrative.js's own test suite): generateFindingsNarrative's
+// no-client path now prepends a bullet stating plainly that the Findings section is the
+// deterministic fallback, not a narrative, so the two render paths are no longer byte-identical
+// by design -- a reader of generateReportWithNarrative's output must be able to tell it never
+// attempted (or could not complete) a narrative this run, which generateReport's own plain path
+// has no reason to state, since it never considers a client at all. This test now locks in the
+// weaker, still-meaningful invariant: the async path's HTML is the sync path's HTML plus exactly
+// that one extra Findings bullet, not an unrelated or wider divergence.
+describe('generateReportWithNarrative: no API key (fallback notice, not full identity)', () => {
+  it('produces the same HTML as generateReport, plus the fallback-notice bullet, when no anthropic client is available', async () => {
     const dir = makeTmpDir();
     writeFixtureInputs(dir);
 
@@ -68,8 +77,11 @@ describe('generateReportWithNarrative: no API key (called-shot, output must be u
     const asyncPath = await generateReportWithNarrative(dir);
     const asyncHtml = fs.readFileSync(asyncPath, 'utf8');
 
+    const noticeLine = '<li>Note: This Findings section is the deterministic fallback list, not an AI-generated narrative: no ANTHROPIC_API_KEY is configured for this run.</li>\n';
+
     expect(claude.getAnthropicClient).toHaveBeenCalledTimes(1);
     expect(asyncPath).toBe(syncPath);
-    expect(asyncHtml).toBe(syncHtml);
+    expect(asyncHtml).toContain(noticeLine);
+    expect(asyncHtml.replace(noticeLine, '')).toBe(syncHtml);
   });
 });

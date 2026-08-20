@@ -107,10 +107,22 @@ describe('fallbackFindings (shared deterministic helper)', () => {
 });
 
 describe('generateFindingsNarrative: no client (graceful degradation, no API key)', () => {
-  test('returns the same bullets as fallbackFindings when client is null', async () => {
+  // CALLED SHOT (code-quality-metrics-49ch): flight-info-spike's own report varied silently
+  // between two runs against byte-identical input, once rendering the deterministic fallback
+  // list and once the full AI-generated narrative, with nothing in the rendered report telling
+  // a reader which one they were looking at -- these five/six reports are read side by side, so
+  // a report that cannot say which path produced it is not comparable to itself. Every fallback
+  // path (this one included: no ANTHROPIC_API_KEY configured) now prepends a bullet stating
+  // plainly that the section below is the deterministic fallback, not a narrative.
+  // Predicted failure before implementing: the function returns fallbackFindings(catalog)
+  // unchanged today, so `expect(result[0]).toMatch(/deterministic fallback/i)` fails against
+  // that catalog's own first bullet (a "Label: value (status)" line, no such phrase in it).
+  test('states that the deterministic fallback list was used, not a narrative, when no client is available', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const result = await generateFindingsNarrative(null, catalog, []);
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result[0]).toMatch(/not.*narrative/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
   });
 });
 
@@ -142,7 +154,11 @@ describe('generateFindingsNarrative: client provided', () => {
     ]);
   });
 
-  test('falls back to fallbackFindings and logs a single line, not a stack trace, when the API call throws', async () => {
+  // Updated for code-quality-metrics-49ch's fallback notice (not a called-shot RED for the
+  // notice itself, that is covered by the "no client" test above): every fallback path now
+  // prepends a bullet stating the section is the deterministic fallback, so `result` gains
+  // that leading bullet -- a direct, predictable consequence, not a separate defect.
+  test('falls back to fallbackFindings (with the fallback notice) and logs a single line, not a stack trace, when the API call throws', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = { messages: { create: jest.fn().mockRejectedValue(new Error('rate limited')) } };
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -150,7 +166,8 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
     expect(logSpy.mock.calls[0][0]).toMatch(/rate limited/);
     expect(errorSpy).not.toHaveBeenCalled();
@@ -165,7 +182,14 @@ describe('generateFindingsNarrative: client provided', () => {
   // diagnostic still needs to exist somewhere for debugging, so it moves to console.error
   // (stderr) rather than being dropped outright; only its presence in the rendered bullets is
   // removed.
-  test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation', async () => {
+  //
+  // Updated for code-quality-metrics-49ch's retry AND fallback notice (not a called-shot RED
+  // for either here, both are covered by their own tests elsewhere in this file): this client
+  // returns the same invalid payload on every call, so it now fails validation on every one of
+  // CONFIG.NARRATIVE_MAX_ATTEMPTS attempts (errorSpy once per attempt, not once total), and the
+  // returned bullets now carry the leading fallback-notice bullet -- both direct, predictable
+  // consequences of those two changes landing in earlier commits, not a defect in this test.
+  test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation on every attempt', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
       positive_findings: [],
@@ -177,13 +201,79 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(result.some(item => /narrative rejected/i.test(item))).toBe(false);
+    expect(result.some(item => /999/.test(item))).toBe(false);
     expect(logSpy).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
     expect(errorSpy.mock.calls[0][0]).toMatch(/999/);
 
     logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  // CALLED SHOT (code-quality-metrics-49ch): diagnosed against flight-info-spike's own
+  // reported symptom -- one batch run silently rendered the deterministic fallback, an
+  // immediate rerun against byte-identical input rendered the full narrative. Measured
+  // directly: 42 live calls to the real Anthropic API against this project's own,
+  // byte-identical catalog produced 8 validation rejections, 6 of them false positives from
+  // the same presence-check gap narrowed in the prior commit -- but that fix cannot cover
+  // every future phrasing the model might choose (a bare "more than N" with no "roughly" hedge
+  // is deliberately still rejected, per that commit's own guard test), so a genuinely good
+  // narrative can still be discarded by a single unlucky generation. A retry gives the model a
+  // second, independently-phrased attempt before falling back to the templated list, rather
+  // than losing the whole narrative to one rejected phrasing.
+  // Predicted failure before implementing: generateFindingsNarrative calls
+  // client.messages.create only once today and returns fallbackFindings(catalog) as soon as
+  // that one attempt fails validation, so mockCreate is called once, not twice, and result
+  // equals fallbackFindings(catalog), not the second (valid) response's bullets --
+  // `expect(mockCreate).toHaveBeenCalledTimes(2)` fails with "Received number of calls: 1".
+  test('retries once after a validation rejection, and returns the narrative from a subsequent successful attempt', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const invalidPayload = { positive_findings: [], concerns: ['Large commits sit at 999%, which is critical.'], recommended_actions: [] };
+    const validPayload = {
+      positive_findings: ['Test coverage sits at 55, comfortably healthy.'],
+      concerns: ['Large commits are at 40, which is critical.'],
+      recommended_actions: []
+    };
+    const mockCreate = jest.fn()
+      .mockResolvedValueOnce({ content: [{ type: 'text', text: JSON.stringify(invalidPayload) }] })
+      .mockResolvedValueOnce({ content: [{ type: 'text', text: JSON.stringify(validPayload) }] });
+    const client = { messages: { create: mockCreate } };
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(result).toEqual([
+      'Positive: Test coverage sits at 55, comfortably healthy.',
+      'Concern: Large commits are at 40, which is critical.'
+    ]);
+
+    errorSpy.mockRestore();
+  });
+
+  // GUARD, not a called-shot RED: written immediately after the retry above landed, to prove
+  // the retry is bounded, not unbounded -- a narrative that fails validation on every attempt
+  // must still fall back, rather than looping forever against a catalog shape the model can
+  // never satisfy.
+  test('falls back to fallbackFindings when validation fails on every attempt, after retrying the configured number of times', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const client = makeClient({
+      positive_findings: [],
+      concerns: ['Large commits sit at 999%, which is critical.'],
+      recommended_actions: []
+    });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
+    expect(client.messages.create).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
+    expect(errorSpy).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
+
     errorSpy.mockRestore();
   });
 
@@ -202,7 +292,8 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();
@@ -232,10 +323,42 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();
+  });
+
+  // CALLED SHOT (code-quality-metrics-0jqs): a real dotnetdependencytracer run had zero metrics
+  // in warning or critical status (every scored entry in fixtureSummary()'s default fixture is
+  // healthy, matching that shape) and 8 Positive bullets, but the model still wrote a "concerns"
+  // entry stating there were no concerns, which flattenNarrative unconditionally labeled
+  // "Concern:" -- the report's one Concern bullet announced there were no concerns. Nothing in
+  // validateNarrative catches this: the bullet cites no fabricated number and names no
+  // informational label, so it passes every existing check and reaches the reader mislabeled.
+  // The fix is a bullet in "concerns" can never be a real concern when the catalog itself has
+  // no scored entry in warning/critical status, so it is relabeled "Note" instead of "Concern"
+  // for that case -- the sentence still reaches the reader, just not under a label that
+  // contradicts its own content.
+  // Predicted failure before implementing: flattenNarrative always labels a "concerns" entry
+  // "Concern", so the second element of `result` is
+  // 'Concern: No metric in this catalog is currently in warning or critical status.', not the
+  // expected 'Note: ...' -- toEqual fails on that element.
+  test('labels a "no concerns" bullet Note, not Concern, when every scored metric in the catalog is healthy', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const client = makeClient({
+      positive_findings: ['Test coverage sits at 55, comfortably healthy.'],
+      concerns: ['No metric in this catalog is currently in warning or critical status.'],
+      recommended_actions: []
+    });
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(result).toEqual([
+      'Positive: Test coverage sits at 55, comfortably healthy.',
+      'Note: No metric in this catalog is currently in warning or critical status.'
+    ]);
   });
 });
 
@@ -1045,6 +1168,59 @@ describe('validateNarrative', () => {
     const result = validateNarrative(bullets, payload, []);
 
     expect(result.valid).toBe(true);
+  });
+
+  // CALLED SHOT (code-quality-metrics-49ch): top7's own exemption above only matches the
+  // literal phrase "exceeds roughly" (third-person singular). Measured directly by generating
+  // the real Findings narrative repeatedly (42 live calls against this project's own,
+  // byte-identical catalog) to diagnose why flight-info-spike silently rendered the
+  // deterministic fallback on one run and the full narrative on an immediate identical rerun:
+  // 6 of 42 calls were rejected by this exact presence check, and 3 of those 6 used "exceed
+  // roughly" (bare form, no "s") rather than "exceeds roughly" -- a verb-agreement variant
+  // top7's narrow regex does not recognize, even though the sentence is proposing the exact
+  // same kind of new ceiling top7 already carved out an exemption for. Predicted failure
+  // before implementing: expect(result.valid).toBe(true) fails with Received: false, reason
+  // matching cites "300", which does not appear in the metric catalog or top-commit payload
+  // (the real rejected text, verbatim from one of the 42 calls).
+  test('accepts a Recommended action bullet proposing a new ceiling with "exceed roughly" (bare form), not only "exceeds roughly" (code-quality-metrics-49ch)', () => {
+    const bullets = ['Recommended action: Break apart commits that are likely to exceed roughly 300 production lines before they are pushed.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // CALLED SHOT (code-quality-metrics-49ch): same 42-call diagnosis run as above. One
+  // rejected bullet proposed its new ceiling as "more than roughly 200" rather than "exceeds
+  // roughly 200" -- a different lead-in phrase carrying the same meaning (a proposed
+  // approximate ceiling, signaled by "roughly", not a citation of an existing catalog value).
+  // Predicted failure before implementing: expect(result.valid).toBe(true) fails with
+  // Received: false, reason matching cites "200" ... (the real rejected text, verbatim).
+  test('accepts a Recommended action bullet proposing a new ceiling with "more than roughly N", not only "exceeds roughly N" (code-quality-metrics-49ch)', () => {
+    const bullets = ['Recommended action: Set a team norm that any commit touching more than roughly 200 production lines should be split before it is opened for review.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // GUARD, not a called-shot RED: the same 42-call diagnosis also produced rejections on a
+  // BARE "more than N" / "exceed N" with no "roughly" hedge at all (e.g. "each added more than
+  // 200 production lines", "each exceed 400 production lines"). This is deliberately NOT
+  // exempted alongside the two fixes above: "roughly" is the only signal distinguishing a
+  // proposed approximate ceiling from a real citation of an existing catalog number written
+  // without a qualifier, and dropping that requirement would let a genuinely mislabeled
+  // citation (e.g. "large commits exceed 45 percent" quoting a real catalog value as though it
+  // were a new proposal) through unchecked. The harder, unbounded space of bare comparative
+  // phrasing is addressed by generateFindingsNarrative's retry instead (see narrative.test.js's
+  // retry tests), not by trying to enumerate every phrasing here.
+  test('still rejects a fabricated number introduced by a bare "more than N" with no "roughly" hedge (code-quality-metrics-49ch)', () => {
+    const bullets = ['Recommended action: Three of the ten largest recent commits each added more than 200 production lines in a single change.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/cites "200"/);
   });
 
   // REGRESSION GUARD (code-quality-metrics-top7): the same five-repo regeneration produced
