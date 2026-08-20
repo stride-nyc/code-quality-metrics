@@ -1374,6 +1374,24 @@ describe('renderReportHtml', () => {
     expect(summary).not.toMatch(/vendored|generated/);
   });
 
+  // code-quality-metrics coordination task (reframe): a directional trend with no calibrated
+  // threshold (commit_size_trend/velocity_trend, concern 0.5 when triggered) must never
+  // outrank a metric scored against a real, derived band (concern -1 for two-band, or the
+  // computed formula for three-band) in the "led by" clause, even though the trend's raw
+  // concern value sorts higher in buildMetricCatalog's own concern-descending sort. Evidence
+  // strength, not sort position, decides who leads.
+  it('leads with a banded concern over an unbanded directional trend, even when the trend sorts first by raw concern', () => {
+    const html = renderReportHtml(fixtureArgs({
+      uncovered_prod_rate: '15.00',
+      commit_size_trend: 'growing',
+      velocity_trend: 'accelerating'
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/led by Uncovered production/);
+    expect(summary).not.toMatch(/led by Commit size trend/);
+  });
+
   // The anchor mechanism a file:// page actually uses is fragment-to-id matching: the browser
   // finds the element whose id exactly equals the URL fragment. This is what would break if the
   // href and the id text drifted apart (e.g. a rename on one side only) even though "the markup
