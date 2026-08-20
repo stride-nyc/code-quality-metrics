@@ -17,4 +17,19 @@ describe('getExpectedCommitCount', () => {
 
     expect(result).toBe(228);
   });
+
+  // Needed for the --max-commits unbounded safety pre-flight check (local-code-metrics.js),
+  // which must count a ref's whole reachable history when no --since boundary was requested.
+  test('counts total ref history with no --since clause when sinceStr is not given', () => {
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd.includes('--since')) throw new Error(`should not include --since: ${cmd}`);
+      if (cmd.includes('main')) return '400000';
+      throw new Error(`unexpected command: ${cmd}`);
+    });
+
+    const result = getExpectedCommitCount(['main']);
+
+    expect(result).toBe(400000);
+  });
 });
