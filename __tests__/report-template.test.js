@@ -1653,6 +1653,35 @@ describe('renderReportHtml', () => {
     expect(occurrences).toBe(1);
   });
 
+  // code-quality-metrics-kprr: 73V's Analysis Scope section stated the identical 3 files /
+  // 28,207 lines / 63.99% twice -- once attributed to ANALYSIS_IGNORE_PATTERNS, once to the
+  // vendored/generated default patterns -- because the two facts happen to coincide in that
+  // run. They are genuinely different facts (a configured exclusion vs. a default-pattern
+  // match) in general, so this only merges them into one bullet when they actually describe
+  // the same files and lines; the next test below proves they still render separately when
+  // they differ.
+  it('states the exclusion and vendored-default facts once, not twice, when they describe the same files and lines', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    const occurrences = (scope.match(/63\.99/g) || []).length;
+    expect(occurrences).toBe(1);
+  });
+
   // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
   // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
   // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
