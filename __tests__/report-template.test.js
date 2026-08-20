@@ -224,6 +224,40 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/widened/i);
   });
 
+  // code-quality-metrics-2l1x: 73V's report was generated 2026-08-20 and analyzed 2026-05-27
+  // to 2026-06-12, described only as "HEAD-anchored: newest commits, no date filter
+  // requested" -- true, but silent about the fact that the newest analyzed commit is over two
+  // months old, because the window is drawn from stale unmerged branches. A reader assumes
+  // recency unless the gap itself is stated.
+  it('states the gap between the newest analyzed commit and the report date when the window is stale', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_date: '2026-08-20T00:00:00.000Z',
+      analyzed_span_start: '2026-05-27',
+      analyzed_span_end: '2026-06-12',
+      window_requested_since: null,
+      window_widened: false
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toContain('69 days');
+  });
+
+  // [guard] not a called-shot RED: the threshold guard (STALE_WINDOW_GAP_DAYS) was written in
+  // the same pass as the gap statement above, so this pins down the "recent enough, say
+  // nothing" side of that same conditional rather than driving new production code on its own.
+  it('[guard] does not state a staleness gap when the newest analyzed commit is recent', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_date: '2026-08-20T00:00:00.000Z',
+      analyzed_span_start: '2026-08-10',
+      analyzed_span_end: '2026-08-18',
+      window_requested_since: null,
+      window_widened: false
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).not.toContain('masthead-staleness');
+  });
+
   // code-quality-metrics-aoo state 1 (4 of 5 repositories analysed: 73V, remote_retro,
   // daloopa, dotnetdependencytracer): workflow_type feature_branch settles the unit
   // structurally regardless of what the raw detector guessed, so the line must state the
