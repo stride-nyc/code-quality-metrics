@@ -918,6 +918,22 @@ describe('renderReportHtml', () => {
     expect(messageQualityCard.toLowerCase()).toContain('no healthy/critical band');
   });
 
+  // code-quality-metrics coordination task: measured on 73V's "Large commits" tile, the card
+  // rendered ~15 words on what the metric is, ~3 stating the band, and ~110 words of
+  // qualifiers (chip, tiering, band-provenance, literature aside) -- roughly 6:1 against the
+  // reader, and never stated the plain fact a reader actually wants: 26 against a band of 48
+  // is comfortably inside range. This is that missing sentence: a plain-language comparison
+  // of the value to its own healthy bar, independent of and in addition to the qualifier-heavy
+  // describeThreshold text.
+  it('states in plain language what the value means against its healthy bar, for a two-band, higher-is-worse metric scored good', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '15.00' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('class="metric-meaning"');
+    expect(largeCommitsCard).toContain('15, comfortably inside the 18 bar.');
+  });
+
   it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
     // test_coverage_rate is two-band. A gauge asserting a red zone it cannot
     // support would overstate what the data shows, so it must render only two
