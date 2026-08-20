@@ -1362,6 +1362,21 @@ describe('renderReportHtml', () => {
     expect(summary).toMatch(/Analysis Scope/);
   });
 
+  // A percentage alone buries the notable fact: one or a handful of files can carry nearly
+  // all the vendored volume (measured: stride-nyc/73V, 3 files carrying 28,207 lines). The
+  // callout names the file and line counts, not only the share, so a reader sees the
+  // concentration directly instead of inferring it from a percentage.
+  it('names the vendored/generated file and line counts, not only the percentage, in the callout', () => {
+    const html = renderReportHtml(fixtureArgs({
+      vendored_generated_share: { patterns: ['**/vendor/**'], files_count: 3, lines_count: 28207, lines_pct: '63.99' }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toContain('3');
+    expect(summary).toContain('28207');
+    expect(summary).toContain('63.99');
+  });
+
   // [guard] proven by mutation: lowering VENDORED_SHARE_CALLOUT_THRESHOLD to 0 (so any nonzero
   // share triggers the callout) failed this test, which found the callout text present for an
   // 8% share it expects to be silent about -- reverted after confirming.
