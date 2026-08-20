@@ -156,6 +156,39 @@ fixture:
 Anything a repository holds that you did not create is evidence until proven otherwise. Do not
 delete untracked files there to tidy up, and back them up before any run that could overwrite them.
 
+**Never `rm` with a glob inside a repository you are analyzing.** An agent cleaning up after its
+own run used `rm -f backup-*.json` and destroyed two pre-existing untracked files that happened to
+match. Delete by exact path, only files you created.
+
+## Reusable Operator Instructions
+
+Two procedures are written up as standalone briefs. Point an agent at the file rather than
+restating the procedure, and do not paraphrase them into a shorter brief: both encode failure
+modes that are not obvious, and both end in a human review gate that a paraphrase tends to drop.
+
+| File | Use when |
+|---|---|
+| `codemetrics-config-instruction.md` | determining what a repository vendors or generates, and writing its `.codemetrics.json` |
+| `scrub-report-instruction.md` | preparing a generated HTML report to be viewed outside the client context |
+
+**`codemetrics-config-instruction.md`** exists because the two ignore keys behave differently in a
+way that has caught every configuration written so far: `DUPLICATE_IGNORE_PATTERNS` unions onto
+eleven built-in vendored patterns, `ANALYSIS_IGNORE_PATTERNS` unions onto nothing. A config setting
+only the first leaves build output counted in every size-shaped metric. It also covers what to
+leave alone (test fixtures, migrations, expected-output files) and the `lifecycle` key.
+
+**`scrub-report-instruction.md`** exists because a generated report carries far more identifying
+material than it appears to. A measured example leaked author names, a client brand name inside a
+commit subject, ticket identifiers and a file tree that named the client's business domain. The
+brief derives its sensitive-string list from the target repository rather than guessing, and
+verifies against that list. It scrubs the HTML only, deliberately; the JSON files beside it are
+left untouched and still carry everything.
+
+Both briefs end by requiring a human to read the agent's summary before the output is used or
+shared. That gate is not optional and is not satisfied by the agent asserting the work looks
+correct. Automated scrubbing catches strings, not meaning; an exclusion list changes what every
+number means.
+
 ## Analysis Window and Branch Spread (code-quality-metrics-g10, code-quality-metrics-8sq)
 
 With no `--since`/`--days`, the default window is HEAD-anchored, not anchored on today: the
