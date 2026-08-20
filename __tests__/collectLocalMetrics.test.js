@@ -2246,3 +2246,48 @@ describe('collectLocalMetrics — --max-commits override', () => {
     expect(summary.max_commits_override).toBe('unbounded');
   });
 });
+
+describe('collectLocalMetrics — history granularity population (code-quality-metrics-66oo)', () => {
+  test('computes history_granularity_signals.pr_reference_share over the analyzed commit population, not the pre-slice candidate pool', async () => {
+    // Four candidate commits are fetched for the branch, oldest to newest. The two
+    // oldest carry a trailing PR reference; the two newest do not. --max-commits 2
+    // keeps only the two newest (commit_c, commit_d) for analysis -- neither of
+    // which references a PR -- while the two PR-referenced commits (commit_a,
+    // commit_b) are fetched as candidates but never analyzed.
+    //
+    // Reproduces code-quality-metrics-66oo: the 73V run reported a PR-reference
+    // share (4.82%) computed over the 1246-commit pre-slice candidate pool
+    // (filtered_from), while 21 of the 50 commits actually analyzed (42%)
+    // carried a visible reference -- a population mismatch between what the
+    // detector counts and what the report's "analyzed commit subjects" sentence
+    // (and the Flight Log) describes.
+    const SHA_A = 'a'.repeat(40);
+    const SHA_B = 'b'.repeat(40);
+    const SHA_C = 'c'.repeat(40);
+    const SHA_D = 'd'.repeat(40);
+    const gitLog = [
+      `${SHA_A}|2024-01-01T10:00:00Z|Dev|feat: a (#100)`,
+      `${SHA_B}|2024-01-02T10:00:00Z|Dev|feat: b (#101)`,
+      `${SHA_C}|2024-01-03T10:00:00Z|Dev|feat: c`,
+      `${SHA_D}|2024-01-04T10:00:00Z|Dev|feat: d`
+    ].join('\x1e');
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      gitLog,
+      `1\t0\tsrc/c.js`,  // git show numstat for commit_c (analyzed first: oldest of the kept two)
+      `1\t0\tsrc/d.js`   // git show numstat for commit_d
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 2 });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.total_commits).toBe(2);
+    expect(summary.history_granularity_signals.pr_reference_share).toBe(0);
+    expect(summary.history_granularity_detected).toBe('granular');
+  });
+});

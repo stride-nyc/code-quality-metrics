@@ -523,15 +523,20 @@ async function collectLocalMetrics(options = {}) {
   // boundary would starve detection of merge/committer signal that the actual analyzed window
   // does contain. In HEAD-anchored mode (effectiveSinceStr null from the start) these are
   // unbounded too, matching fetchBranchCommits' own null-means-no-date-filter contract.
+  //
+  // The `commits` population passed to detectHistoryGranularity below is deferred until
+  // commitsToAnalyze exists (code-quality-metrics-66oo): merge/committer signals are fetched
+  // here because historyRefs/effectiveSinceStr are already in scope, but the PR-reference share
+  // itself must be computed over the same commits the rest of the report calls "analyzed" --
+  // the ones that survive bot-filtering and the MAX_COMMITS slice into commitsToAnalyze, not
+  // uniqueCommits (the full pre-slice candidate pool across every branch, which can be an order
+  // of magnitude larger; measured on 73V: 1246 candidates against 50 actually analyzed).
   const historyRefs = branchesToAnalyze.join(' ');
   const historySinceArg = effectiveSinceStr ? `--since="${effectiveSinceStr}" ` : '';
   const mergeLog = runGitCommand(`git log --merges ${historySinceArg}--pretty=format:"%H" ${historyRefs}`);
   const mergeCommitCount = mergeLog ? mergeLog.split('\n').filter(Boolean).length : 0;
   const committerLog = runGitCommand(`git log --no-merges ${historySinceArg}--pretty=format:"%cn" ${historyRefs}`);
   const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
-  const detectedGranularity = detectHistoryGranularity({ commits: uniqueCommits, committerNames, mergeCommitCount });
-  const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
-  const historyGranularity = options.history ?? detectedForWithholding;
 
   // Project lifecycle (code-quality-metrics-31w): purely structural, no tuned number. Every
   // reference window this toolkit's bands were calibrated on measures maintenance-era work on
@@ -606,6 +611,17 @@ async function collectLocalMetrics(options = {}) {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   console.log(`🔬 Analyzing ${commitsToAnalyze.length} commits in detail...`);
   console.log('');
+
+  // History granularity detection itself (code-quality-metrics-66oo): commitsToAnalyze, not
+  // uniqueCommits, so pr_reference_share describes the same population the report's Flight Log
+  // and "analyzed commit subjects" sentence describe. merge_commit_count and committerNames
+  // above stay window-scoped rather than analyzed-set-scoped: a true merge commit cannot appear
+  // in commitsToAnalyze at all (fetchBranchCommits strips them with --no-merges), so restricting
+  // that signal to the analyzed set would make it read zero unconditionally and lose the very
+  // evidence-for-granular signal it exists to carry.
+  const detectedGranularity = detectHistoryGranularity({ commits: commitsToAnalyze, committerNames, mergeCommitCount });
+  const detectedForWithholding = resolveHistoryGranularityForWithholding(detectedGranularity, workflowType);
+  const historyGranularity = options.history ?? detectedForWithholding;
 
   /** @type {CommitMetric[]} */
   const metrics = [];
