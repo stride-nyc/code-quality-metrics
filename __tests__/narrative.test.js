@@ -237,6 +237,37 @@ describe('generateFindingsNarrative: client provided', () => {
 
     logSpy.mockRestore();
   });
+
+  // CALLED SHOT (code-quality-metrics-0jqs): a real dotnetdependencytracer run had zero metrics
+  // in warning or critical status (every scored entry in fixtureSummary()'s default fixture is
+  // healthy, matching that shape) and 8 Positive bullets, but the model still wrote a "concerns"
+  // entry stating there were no concerns, which flattenNarrative unconditionally labeled
+  // "Concern:" -- the report's one Concern bullet announced there were no concerns. Nothing in
+  // validateNarrative catches this: the bullet cites no fabricated number and names no
+  // informational label, so it passes every existing check and reaches the reader mislabeled.
+  // The fix is a bullet in "concerns" can never be a real concern when the catalog itself has
+  // no scored entry in warning/critical status, so it is relabeled "Note" instead of "Concern"
+  // for that case -- the sentence still reaches the reader, just not under a label that
+  // contradicts its own content.
+  // Predicted failure before implementing: flattenNarrative always labels a "concerns" entry
+  // "Concern", so the second element of `result` is
+  // 'Concern: No metric in this catalog is currently in warning or critical status.', not the
+  // expected 'Note: ...' -- toEqual fails on that element.
+  test('labels a "no concerns" bullet Note, not Concern, when every scored metric in the catalog is healthy', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const client = makeClient({
+      positive_findings: ['Test coverage sits at 55, comfortably healthy.'],
+      concerns: ['No metric in this catalog is currently in warning or critical status.'],
+      recommended_actions: []
+    });
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(result).toEqual([
+      'Positive: Test coverage sits at 55, comfortably healthy.',
+      'Note: No metric in this catalog is currently in warning or critical status.'
+    ]);
+  });
 });
 
 describe('describeBandProvenance', () => {
