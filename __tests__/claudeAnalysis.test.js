@@ -171,13 +171,22 @@ describe('analyzeWithClaude', () => {
 // ---------------------------------------------------------------------------
 
 describe('selectClaudeCommits', () => {
+  // counted_additions/counted_deletions default to mirror total_additions/total_deletions
+  // (the "nothing excluded" case) unless a test overrides them explicitly to model a commit
+  // with excluded volume -- mirrors lib/git.js's analyzeCommit, where counted_* equals total_*
+  // whenever ANALYSIS_IGNORE_PATTERNS matched nothing.
   function makeMetric(overrides) {
-    return {
+    const merged = {
       sha: 'abc123',
       large_commit: false,
       total_additions: 10,
       total_deletions: 10,
       ...overrides
+    };
+    return {
+      counted_additions: merged.total_additions,
+      counted_deletions: merged.total_deletions,
+      ...merged
     };
   }
 
@@ -214,6 +223,27 @@ describe('selectClaudeCommits', () => {
     ];
     const result = selectClaudeCommits(metrics);
     expect(result[0].sha).toBe('large');
+  });
+
+  // code-quality-metrics-ce9m: the additions-ratio filter must be judged on counted_additions/
+  // counted_deletions (exclusion-scoped), not total_additions/total_deletions (whole-diff).
+  // Measured case (73V, commit cc7c77aa): 14,679 total changed lines, 14,410 of them excluded
+  // terraform, leaving 216 real production lines. This fixture models the same shape: a huge
+  // whole-diff ratio (14410 : 1) that would clear AI_RISK_ADDITIONS_RATIO on totals alone, but
+  // a counted ratio (48 : 20 = 2.4) that does not clear it.
+  test('does not select a commit whose additions-to-deletions ratio only clears AI_RISK_ADDITIONS_RATIO on excluded whole-diff volume', () => {
+    const metrics = [
+      makeMetric({
+        sha: 'vendor-sync',
+        large_commit: true,
+        total_additions: 14410,
+        total_deletions: 1,
+        counted_additions: 48,
+        counted_deletions: 20
+      }),
+    ];
+    const result = selectClaudeCommits(metrics);
+    expect(result).toHaveLength(0);
   });
 });
 
