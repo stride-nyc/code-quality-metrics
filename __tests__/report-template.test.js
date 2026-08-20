@@ -292,18 +292,20 @@ describe('renderReportHtml', () => {
     expect(html).toContain('squashed');
   });
 
-  // code-quality-metrics-31w: flight-info-spike, a three-week greenfield spike, is currently
-  // graded against bands calibrated on maintenance-era windows of decades-old codebases and
-  // comes out labelled legacy-bottleneck. Withholding four-of-six change-size tiles plus
-  // duplication leaves most of a group as ungraded numbers; the masthead has to say plainly
-  // what the report is still for in that state, rather than leaving a reader to infer it from a
-  // screen of ungraded tiles.
-  it('states plainly, in the masthead, that the report shows shape and trend rather than a grade when project_lifecycle is initial-build', () => {
+  // code-quality-metrics-31w, updated by the code-quality-metrics coordination task:
+  // flight-info-spike, a three-week greenfield spike, used to be graded against bands
+  // calibrated on maintenance-era windows of decades-old codebases and came out labelled
+  // legacy-bottleneck; those tiles are now scored against a much thinner (n=2)
+  // greenfield-modern band instead of being withheld. The masthead has to say plainly which
+  // band produced those verdicts, rather than leaving a reader to assume every tile came from
+  // the same twelve-repository benchmark the rest of the page uses.
+  it('states plainly, in the masthead, that change-size and duplication tiles are scored against the thinner greenfield-modern band when project_lifecycle is initial-build', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
     const masthead = mastheadSection(html);
 
     expect(masthead).toMatch(/initial build/);
-    expect(masthead).toMatch(/shape and trend/);
+    expect(masthead).toMatch(/greenfield-modern/i);
+    expect(masthead).toMatch(/n\s*=\s*2/i);
   });
 
   // [guard] an established repository's masthead must not carry the initial-build sentence at
@@ -835,6 +837,50 @@ describe('renderReportHtml', () => {
     expect(coverageCard).toBeDefined();
     expect(coverageCard).not.toMatch(/critical (above|below) \d/);
     expect(coverageCard.toLowerCase()).toContain('no critical bound');
+  });
+
+  // code-quality-metrics coordination task: a substituted greenfield-modern verdict must not
+  // render identically to a brownfield one -- n=2 is a much weaker claim than the brownfield
+  // bands' n=12, and a card that looked the same either way would mislead a reader into
+  // trusting both equally.
+  it('names the greenfield-modern band and its thinner evidence on a card substituted under project_lifecycle: initial-build', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+    const testCoverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
+
+    expect(largeCommitsCard).toBeDefined();
+    expect(largeCommitsCard.toLowerCase()).toContain('greenfield-modern');
+    expect(largeCommitsCard).toMatch(/n\s*=\s*2/);
+
+    // test_coverage_rate is deliberately not substituted (see lib/report.js's
+    // GREENFIELD_SUBSTITUTED_KEYS comment) -- its card must not claim a greenfield-modern
+    // provenance it does not have.
+    expect(testCoverageCard).toBeDefined();
+    expect(testCoverageCard.toLowerCase()).not.toContain('greenfield-modern');
+  });
+
+  // A prose sentence buried below the gauge is easy to skim past; a substituted verdict also
+  // needs a marker a reader's eye catches without reading the threshold sentence at all, the
+  // same reason status already gets both a border color and a text chip rather than relying on
+  // one or the other.
+  it('renders a visible band chip -- not just a threshold sentence -- on a card scored against a substituted band', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+    const testCoverageCard = cards.find(card => card.includes('>Test/prod co-change</p>'));
+
+    expect(largeCommitsCard).toMatch(/data-band="greenfield-modern"/);
+    expect(largeCommitsCard).toContain('class="band-chip"');
+    expect(testCoverageCard).not.toMatch(/data-band=/);
+    expect(testCoverageCard).not.toContain('class="band-chip"');
+  });
+
+  // [guard] an established repository never substitutes any band, so no card anywhere on the
+  // page should claim greenfield-modern provenance.
+  it('[guard] never mentions greenfield-modern on any card when project_lifecycle is established', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'established' }));
+    expect(html.toLowerCase()).not.toContain('greenfield-modern');
   });
 
   // code-quality-metrics-a9z, code-quality-metrics-6ti: both bands are dropped entirely
