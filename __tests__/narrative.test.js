@@ -48,6 +48,27 @@ describe('NARRATIVE_SYSTEM_PROMPT', () => {
   test('instructs the model to keep a finding and its methodology caveat in separate sentences', () => {
     expect(NARRATIVE_SYSTEM_PROMPT).toMatch(/separate sentence/i);
   });
+
+  // CALLED SHOT (code-quality-metrics-rub1): rule 1's own worked example is exclusively
+  // negative ("About a third of commits are too large to review line by line"), and its
+  // closing sentence names only one outcome of the pattern it teaches: "A reader scanning ten
+  // bullets should learn what is wrong before they read ten metric names." The instruction
+  // itself ("Start each sentence with what is actually true") already generalizes to a positive
+  // finding, but the only illustration given, and the sentence stating the payoff, both model
+  // only the negative case -- exactly the bias the top summary itself had (rub1's main
+  // complaint), one level down, in the prose the model is taught to produce for the
+  // "Positive findings" group this same prompt asks for a few lines later. A model with no
+  // positive-finding example to pattern-match against is more likely to write a positive
+  // bullet that leads with the metric name after all.
+  // Predicted failure before implementing: the closing sentence reads "should learn what is
+  // wrong before they read ten metric names," with no clause covering a positive finding, and
+  // rule 1's worked example is exclusively negative, so `toMatch(/land tests alongside/i)`
+  // (the positive worked example this fix adds) fails with "Received: <the full prompt text,
+  // no match>".
+  test('instructs the model to lead a positive finding with its consequence too, not only a concern, and shows a worked example of one', () => {
+    expect(NARRATIVE_SYSTEM_PROMPT).toMatch(/land tests alongside/i);
+    expect(NARRATIVE_SYSTEM_PROMPT).not.toMatch(/should learn what is wrong before/i);
+  });
 });
 
 describe('fallbackFindings (shared deterministic helper)', () => {
