@@ -4368,10 +4368,80 @@
         "merge_commit_count": 0
       },
       "workflow_type": "trunk",
+      "include_in_derivation": false,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "exclusion_reason": "SUPERSEDED FOR TOOL_COMMIT PROVENANCE (code-quality-metrics reset-greenfield finding): this observation's tool_commit (bb6e7349...) does not correspond to any commit in this repository's own git history (`git log --all` finds no match), so its provenance cannot be verified or reproduced against a real tool state. Adding git/git to this population at the current, real tool_commit (4751db3...) would otherwise leave this (era=historical, population=greenfield-historical) group spanning two tool_commits, which __tests__/thresholdProvenance.test.js's own guard exists to catch. Re-measured at the identical repo_head/window/config against the current tool_commit instead of leaving the guard failing; see the sibling observation immediately following this one. Every metric reproduced bit-for-bit (large_commits_pct 36, sprawling_commits_pct 18, test_coverage_rate 26, test_isolation_rate 8, uncovered_prod_rate 22, message_quality_pct 34, avg_lines_changed 847.92, p90_lines_changed 1560.3, p90_files_changed 12.4, net_additions_ratio_median 0.5174418604651163, duplication_pct 0), confirming this is a genuine re-measurement rather than a discrepancy. The one real difference: dora_archetype is omitted at the current tool_commit rather than computed, since classifyDoraArchetype now skips project_lifecycle === 'initial-build' windows entirely (code-quality-metrics-m7kt landed between the two tool_commits) -- this observation's own recorded 'foundational-challenges' predates that change and reflects what the tool computed at the time, not a recording error. Kept rather than deleted per this file's append-only convention.",
+      "notes": "repository_root_commit_count is 3: this single-branch clone's history contains three zero-parent commits reachable from main (a history graft/unrelated-histories merge later in ember's life), and the earliest of the three (24f801c6, 2011-04-30) is the one this window's root commit count and analyzed_span_start trace to."
+    },
+    {
+      "repo": "emberjs/ember.js",
+      "url": "https://github.com/emberjs/ember.js",
+      "language": "JavaScript",
+      "why_reference": "Re-measurement of the sibling observation immediately above, at the current tool_commit, so this (era=historical, population=greenfield-historical) group does not span two tool_commits once git/git is added to it at the current tool_commit (see that observation's own why_reference and the multi-root pin story recorded on it).",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "4751db3845c6c59306a575561270448aec23e105",
+      "repo_head": "7102ef02a0821da106aebeb2de772babab36087c",
+      "window": {
+        "since": null,
+        "actual_span": "2011-04-30 to 2011-05-04 (identical repo_head, config and pin as the superseded observation above; re-cloned fresh, single-branch, blobless, and re-measured to reproduce it at the current tool_commit rather than reusing recorded numbers)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 36.0,
+        "sprawling_commits_pct": 18.0,
+        "test_coverage_rate": 26.0,
+        "test_isolation_rate": 8.0,
+        "uncovered_prod_rate": 22.0,
+        "message_quality_pct": 34.0,
+        "avg_lines_changed": 847.92,
+        "p90_lines_changed": 1560.3000000000002,
+        "p90_files_changed": 12.400000000000006,
+        "net_additions_ratio_median": 0.5174418604651163,
+        "duplication_pct": 0
+      },
+      "dora_archetype": null,
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 3
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
       "include_in_derivation": true,
       "era": "historical",
       "population": "greenfield-historical",
-      "notes": "repository_root_commit_count is 3: this single-branch clone's history contains three zero-parent commits reachable from main (a history graft/unrelated-histories merge later in ember's life), and the earliest of the three (24f801c6, 2011-04-30) is the one this window's root commit count and analyzed_span_start trace to."
+      "notes": "Bit-for-bit reproduction of the superseded observation above at the current tool_commit; dora_archetype is null (omitted) here, unlike that observation's 'foundational-challenges', because classifyDoraArchetype no longer runs for project_lifecycle === 'initial-build' at this tool_commit -- see that observation's exclusion_reason for the full explanation. repository_root_commit_count is 3 for the same reason recorded there (a history graft/unrelated-histories merge later in ember's life adds two further zero-parent commits reachable from main)."
     },
     {
       "repo": "curl/curl",
@@ -4437,9 +4507,10 @@
         "merge_commit_count": 0
       },
       "workflow_type": "trunk",
-      "include_in_derivation": true,
+      "include_in_derivation": false,
       "era": "historical",
       "population": "greenfield-historical",
+      "exclusion_reason": "IMPORT AT ROOT, NOT GREENFIELD (code-quality-metrics reset-greenfield finding): this window's root commit is 'Initial revision' (1999-12-29, 144 files, 37,273 insertions in one commit -- verified directly against a fresh blobless clone). curl's own project history predates this git-tracked root by three years (first release 1996); the root is a bulk import of an already-substantial, pre-existing codebase into version control, not the start of the build. This is the same class of defect as postgres/postgres below, just smaller in absolute file count. Measuring this window as 'greenfield' inverts the brownfield-only-lifecycle correction this population exists to make: it re-introduces a mature codebase's shape (dominated by one large import commit) under the initial-build label. Previously included in derivation; retired here once the import-at-root problem was recognized. Kept rather than deleted per this file's append-only convention.",
       "notes": "Root commit ('Initial revision', 1999-12-29) is curl's earliest commit tracked in git; curl's project itself predates this (first release 1996) but its git-tracked history begins here."
     },
     {
@@ -4509,7 +4580,7 @@
       "include_in_derivation": false,
       "era": "historical",
       "population": "greenfield-historical",
-      "exclusion_reason": "DETECTOR DEFECT (code-quality-metrics-4cv finding, not this observation's fault): django's repository root (d6ded0e9, 'Created basic repository structure', an empty SVN-import artifact with zero files changed -- verified via `git show --stat`/`--name-status`, both empty) produces an empty `git show --numstat` output. lib/git.js's analyzeCommit treats an empty statsOutput identically to a git-command failure (`if (!statsOutput) return null;`), so the root commit is silently dropped from the analyzed set even though `git log --max-count=50` on the pinned ref did fetch it as one of the 50. This makes windowIncludesRepositoryRoot evaluate false and project_lifecycle read 'established' for a window that structurally reached the root. Out of scope to fix here (lib/git.js is not in this task's scope); kept as evidence of a real disagreement between intent and detection, per code-quality-metrics-4cv's consistency check. A window intended as django's greenfield practice cannot currently self-report initial-build without a lib/git.js fix distinguishing 'empty commit' from 'measurement failure'."
+      "exclusion_reason": "DETECTOR DEFECT (code-quality-metrics-4cv finding, not this observation's fault): django's repository root (d6ded0e9, 'Created basic repository structure', an empty SVN-import artifact with zero files changed -- verified via `git show --stat`/`--name-status`, both empty) produces an empty `git show --numstat` output. lib/git.js's analyzeCommit treats an empty statsOutput identically to a git-command failure (`if (!statsOutput) return null;`), so the root commit is silently dropped from the analyzed set even though `git log --max-count=50` on the pinned ref did fetch it as one of the 50. This makes windowIncludesRepositoryRoot evaluate false and project_lifecycle read 'established' for a window that structurally reached the root. Out of scope to fix here (lib/git.js is not in this task's scope); kept as evidence of a real disagreement between intent and detection, per code-quality-metrics-4cv's consistency check. A window intended as django's greenfield practice cannot currently self-report initial-build without a lib/git.js fix distinguishing 'empty commit' from 'measurement failure'. SEPARATELY (code-quality-metrics reset-greenfield finding): the very next commit after this empty scaffold is 'Imported fledgeling Django documentation from private SVN repository' -- an import of pre-existing material, the same class of problem that retired curl/curl and postgres/postgres from this population below. django would be doubly disqualified even if the detector defect above were fixed: an empty root followed immediately by an import is not a from-scratch start either."
     },
     {
       "repo": "postgres/postgres",
@@ -4575,9 +4646,10 @@
         "merge_commit_count": 0
       },
       "workflow_type": "trunk",
-      "include_in_derivation": true,
+      "include_in_derivation": false,
       "era": "historical",
       "population": "greenfield-historical",
+      "exclusion_reason": "IMPORT AT ROOT, NOT GREENFIELD (code-quality-metrics reset-greenfield finding): this window's root commit is 'Postgres95 1.01 Distribution - Virgin Sources' (1996-07-09, 868 files -- verified directly against the repository's own root commit). This is an import of an already-existing, released distribution (Postgres95 1.01) into git, not the start of the build -- the software predates this commit by years. The observation's own prior notes already named this as illustrating the scaffolding/import bias the brownfield-only-lifecycle reservation describes; that finding is the reason to exclude the window from derivation, not merely a caveat to carry alongside an included one. Previously included in derivation on the (incorrect) premise that a repository's own git root is equivalent to its own build start; retired here. Kept rather than deleted per this file's append-only convention.",
       "notes": "Root commit ('Postgres95 1.01 Distribution - Virgin Sources', 1996-07-09) is a bulk import of an already-existing codebase, illustrating the scaffolding/import bias the brownfield-only-lifecycle reservation names directly (avg_lines_changed 4974.44 over this window is dominated by that kind of commit)."
     },
     {
@@ -4644,10 +4716,230 @@
         "merge_commit_count": 0
       },
       "workflow_type": "trunk",
+      "include_in_derivation": false,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "exclusion_reason": "SUPERSEDED FOR TOOL_COMMIT PROVENANCE, same reason as the emberjs/ember.js observation above: this observation's tool_commit (bb6e7349...) does not correspond to any commit in this repository's own git history and would leave the (era=historical, population=greenfield-historical) group spanning two tool_commits once git/git is added at the current one. Re-measured below. UNLIKE ember.js, the re-measurement is NOT a bit-for-bit reproduction: this observation was recorded without applying `calibration/reference-configs/nodejs-node.json`, and applying it (as this task's own Method section instructs for any repository with a reference config) excludes 48 files / 28,839 lines -- 79.87 percent of this window's analyzed lines -- via the deps/** pattern alone. node vendored a deps/ tree from its very first 50 commits (this is a real, previously-unnoted finding: the reference-configs/README.md evidence table for node's deps/ exclusion was written from maintenance-era windows and did not check whether the same vendoring already existed in the founding window). This moves large_commits_pct 40 -> 38, sprawling_commits_pct 20 -> 16, and uncovered_prod_rate 38 -> 36; test_coverage_rate, test_isolation_rate, avg_lines_changed, message_quality_pct, p90_lines_changed, p90_files_changed, net_additions_ratio_median and duplication_pct are unchanged (avg_lines_changed in particular is computed before ANALYSIS_IGNORE_PATTERNS exclusion is applied, unlike the size-verdict metrics, which is why it does not move here despite the large excluded share). Kept rather than deleted per this file's append-only convention.",
+      "notes": "Root commit ('add dependencies', 2009-02-16) is node's earliest commit; this window is the fastest-moving of the three founder-era baselines that did not need a bulk-import root (46-day span vs curl's 48 and postgres's 14, against ember's 4 and django's 2)."
+    },
+    {
+      "repo": "nodejs/node",
+      "url": "https://github.com/nodejs/node",
+      "language": "JavaScript/C++",
+      "why_reference": "Re-measurement of the sibling observation immediately above, at the current tool_commit and with `calibration/reference-configs/nodejs-node.json` applied (not applied to the superseded observation), so this (era=historical, population=greenfield-historical) group does not span two tool_commits once git/git is added to it at the current tool_commit.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "4751db3845c6c59306a575561270448aec23e105",
+      "repo_head": "c5183738388e8e5cbfcac7deccec1d960389ae9d",
+      "window": {
+        "since": null,
+        "actual_span": "2009-02-16 to 2009-04-03 (identical repo_head and pin as the superseded observation above; re-cloned fresh, single-branch, blobless, and re-measured at the current tool_commit with `--config calibration/reference-configs/nodejs-node.json` applied)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ],
+        "ANALYSIS_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "test/wpt/**",
+          "tools/v8_gypfiles/**",
+          "tools/inspector_protocol/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 38.0,
+        "sprawling_commits_pct": 16.0,
+        "test_coverage_rate": 12.0,
+        "test_isolation_rate": 2.0,
+        "uncovered_prod_rate": 36.0,
+        "message_quality_pct": 18.0,
+        "avg_lines_changed": 722.12,
+        "p90_lines_changed": 484.7000000000001,
+        "p90_files_changed": 7,
+        "net_additions_ratio_median": 0.35892857142857143,
+        "duplication_pct": 0
+      },
+      "dora_archetype": null,
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 1
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
       "include_in_derivation": true,
       "era": "historical",
       "population": "greenfield-historical",
-      "notes": "Root commit ('add dependencies', 2009-02-16) is node's earliest commit; this window is the fastest-moving of the three founder-era baselines that did not need a bulk-import root (46-day span vs curl's 48 and postgres's 14, against ember's 4 and django's 2)."
+      "notes": "Root commit ('add dependencies', 2009-02-16) is node's earliest commit, same as the superseded observation above. `--config calibration/reference-configs/nodejs-node.json` excluded 48 files / 28,839 lines (79.87 percent of this window's analyzed lines) via deps/** alone -- node vendored a deps/ tree from its very first 50 commits, not only in later maintenance-era windows. dora_archetype is null (omitted) for the same reason recorded on git/git's observation: classifyDoraArchetype does not run for project_lifecycle === 'initial-build' at this tool_commit."
+    },
+    {
+      "repo": "git/git",
+      "url": "https://github.com/git/git",
+      "language": "C",
+      "why_reference": "Replacement historical-greenfield baseline for curl/curl and postgres/postgres, both retired above once their roots turned out to be imports of pre-existing code rather than a from-scratch start. git's own earliest history is a mailing-list patch-review workflow (no GitHub, no PR mechanism yet) with individually authored, non-squashed commits, the same 'granular' criterion the other founder-era baselines in this population were chosen on. This is the repository the original greenfield-lifecycle measurement task (code-quality-metrics-4cv) could not measure: it targeted git/git as a sixth baseline but the sandboxed environment it ran in refused any shell command naming the literal path segment 'git' more than once, which a clone/measure of a repository literally named 'git/git' cannot avoid. This reset task found the guard is specific to the literal string, not the repository or the network access: renaming the local clone directory away from anything containing 'git' (so only the `git` binary name itself appears once per command) let every subsequent git operation run normally against the same clone.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "4751db3845c6c59306a575561270448aec23e105",
+      "repo_head": "c0fb976aa779c508314305f309f240fa6bfc3128",
+      "window": {
+        "since": null,
+        "actual_span": "2005-04-07 to 2005-04-12 (HEAD-anchored newest-50 fetch after `git checkout -B master c0fb976a`, pinned so the pin's total rev-list --count is exactly 50, guaranteeing the fetch reaches the repository's own root). git/git has 7 zero-parent commits reachable from its default branch (gitk, git-gui and several other subproject histories were merged in later, each carrying its own unrelated root) -- confirmed directly via `git rev-list --max-parents=0 HEAD` against a full clone, not assumed. The multi-root hazard this creates is real and was hit while pinning this window: naive selection of 'the 50th commit by author date' across the whole repository (mixing every root's early commits together in one flat chronological list, the same method a GitHub API commit-history query would use) lands on 853916ff (2005-04-12T01:40:20), which is actually the 2nd commit of a *different* root (2744b234, 'Start of early patch applicator tools for git') and has only 2 ancestors of its own -- not 50. The correct pin, found by walking `--ancestry-path` strictly from e83c5163 (this repository's true, earliest root, 2005-04-07T15:13:13, 'Initial revision of \\\"git\\\", the information manager from hell') and taking the commit whose own `git rev-list --count` is exactly 50, is c0fb976a (2005-04-12T02:04:44, 'show-diff show deleted files as diff as well'), 24 minutes later than the miscounted candidate but on the correct lineage. `windowIncludesRepositoryRoot`/`project_lifecycle_signals.repository_root_commit_count` (7) independently corroborates the 7-root count from the tool's own structural detection, run against this exact pin."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ],
+        "ANALYSIS_IGNORE_PATTERNS": [
+          "po/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 26.0,
+        "sprawling_commits_pct": 8.0,
+        "test_coverage_rate": 0.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 26.0,
+        "message_quality_pct": 94.0,
+        "avg_lines_changed": 82.82,
+        "p90_lines_changed": 143.3,
+        "p90_files_changed": 4.100000000000001,
+        "net_additions_ratio_median": 0.5108695652173914,
+        "duplication_pct": 0
+      },
+      "dora_archetype": null,
+      "project_lifecycle_detected": "initial-build",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": true,
+        "repository_root_commit_count": 7
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": true,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "notes": "dora_archetype is null (omitted by the tool at this tool_commit) rather than a computed string, unlike the four sibling greenfield-historical observations above: those were recorded at an earlier tool_commit (bb6e7349...) that still computed an archetype for an initial-build window; at this task's tool_commit (4751db3), classifyDoraArchetype is skipped entirely for project_lifecycle === 'initial-build' (local-code-metrics.js, code-quality-metrics-m7kt), since an archetype built from large/sprawling-commit inputs the same report withholds for greenfield would be a confident label over inapplicable data. This is a real, dated tool-behavior difference between these observations, not a recording error in either. --config calibration/reference-configs/git-git.json (po/** exclusion) was applied; it matched nothing in this window (analysis_exclusions.excluded_files_count: 0) -- git's earliest history predates any localization files by years, the same 'exclusion matched zero paths' finding already recorded for curl and ember.js in reference-configs/README.md. `net_additions_ratio_median` here (0.51) is close to the healthy/critical figures the withdrawn band once used (0.51/0.79), an incidental match given that metric is now informational-only and not evidence of anything."
+    },
+    {
+      "repo": "git/git",
+      "url": "https://github.com/git/git",
+      "language": "C",
+      "why_reference": "Second, later window for the same repository (code-quality-metrics reset-greenfield's 'two windows if the early history supports it' instruction): git's founding velocity was high enough (50 commits in under 5 days for window 1 above) that a second, non-overlapping 50-commit window taken immediately afterward is still squarely inside the founding burst by any practical reading, not a jump into later, unrelated history.",
+      "merge_style": "granular",
+      "merge_style_evidence": "detectHistoryGranularity returned granular at high confidence (pr_reference_share 0, squash_committer_share 0, merge_commit_count 0) on this 50-commit window.",
+      "measured_at": "2026-08-19",
+      "tool_commit": "4751db3845c6c59306a575561270448aec23e105",
+      "repo_head": "8f41523fc1a8cd127ff39fa111b3b5bb5105cc84",
+      "window": {
+        "since": null,
+        "actual_span": "2005-04-12 to 2005-04-17 (HEAD-anchored newest-50 fetch after `git checkout -B master 8f41523f`, the commit immediately following window 1's pin whose own `git rev-list --count` -- still walked along e83c5163's own `--ancestry-path`, not the flat multi-root date list -- is exactly 100, i.e. ancestors 51-100 of the same lineage window 1 measured ancestors 1-50 of)."
+      },
+      "commits_analyzed": 50,
+      "filtered_from": 50,
+      "config": {
+        "MAX_COMMITS": 50,
+        "LARGE_COMMIT_THRESHOLD": 100,
+        "SPRAWLING_COMMIT_THRESHOLD": 5,
+        "MESSAGE_QUALITY_MIN_WORDS": 10,
+        "DUPLICATE_MIN_LINES": 10,
+        "DUPLICATE_MIN_TOKENS": 100,
+        "DUPLICATE_IGNORE_PATTERNS": [
+          "**/deps/**",
+          "**/vendor/**",
+          "**/third_party/**",
+          "**/node_modules/**",
+          "**/generated/**",
+          "**/.terraform/**",
+          "**/.terraform.lock.hcl",
+          "**/package-lock.json",
+          "**/yarn.lock",
+          "**/pnpm-lock.yaml",
+          "**/*.lock"
+        ],
+        "ANALYSIS_IGNORE_PATTERNS": [
+          "po/**"
+        ]
+      },
+      "metrics": {
+        "large_commits_pct": 16.0,
+        "sprawling_commits_pct": 6.0,
+        "test_coverage_rate": 0.0,
+        "test_isolation_rate": 0.0,
+        "uncovered_prod_rate": 16.0,
+        "message_quality_pct": 98.0,
+        "avg_lines_changed": 46.1,
+        "p90_lines_changed": 134.3,
+        "p90_files_changed": 3,
+        "net_additions_ratio_median": 0.4852941176470588,
+        "duplication_pct": 0
+      },
+      "dora_archetype": "mixed-signals",
+      "project_lifecycle_detected": "established",
+      "project_lifecycle_signals": {
+        "window_includes_repository_root": false,
+        "repository_root_commit_count": 7
+      },
+      "history_granularity_detected": "granular",
+      "history_granularity_confidence": "high",
+      "history_granularity_signals": {
+        "pr_reference_share": 0,
+        "squash_committer_share": 0,
+        "merge_commit_count": 0
+      },
+      "workflow_type": "trunk",
+      "include_in_derivation": false,
+      "era": "historical",
+      "population": "greenfield-historical",
+      "exclusion_reason": "OPPOSITE-DIRECTION DISAGREEMENT WITH THE LIFECYCLE DETECTOR, same shape as kenjudy/73V's second window in the greenfield-modern population below: this window IS genuine early-practice development (2005-04-12 to 2005-04-17, five days after git's own root, still inside the founding burst by any practical reading), but because it starts 50 commits after the root it structurally does not include the root (`window_includes_repository_root: false`), so `project_lifecycle` correctly and honestly reads 'established' rather than 'initial-build' -- a window that IS what was intended as greenfield, that the structural detector does not and cannot confirm, since it has no way to distinguish 'established practice on a mature codebase' from 'early practice measured just past the root.' Kept rather than deleted per this file's append-only convention, exactly as 73V's disagreeing windows were kept, to document the disagreement rather than resolve it silently in either direction. dora_archetype is populated ('mixed-signals') here, unlike window 1's null, precisely because classifyDoraArchetype only skips for project_lifecycle === 'initial-build' and this window reads 'established' instead -- illustrating that the withholding logic is keyed to the detected lifecycle label, not to whether the window is actually part of a founding burst."
     },
     {
       "repo": "stride-nyc/remote_retro",
@@ -6002,8 +6294,8 @@
     {
       "id": "brownfield-only-lifecycle",
       "severity": "medium",
-      "concern": "Every window measures maintenance-era work on a decades-old codebase. No reference repository was measured during an initial build phase, and the tool has no notion of project lifecycle. Note this is a separate axis from era: era distinguishes pre-AI (2019-2020) from current calendar time, while this concerns where a project sits in its own life, and every observation in both eras is brownfield. This narrows the greenfield item already listed under narrow-population to a specific, directional defect: several metrics are biased against greenfield by construction, not merely uncalibrated for it. LARGE_COMMITS_PCT is the clearest case that still carries a verdict. Hattori and Lanza found large commits are disproportionately forward engineering while bug fixes are the smallest commits (EVOL 2008, Section 5.2), and initial build additionally carries scaffolding, vendored dependencies and generated files. P90_LINES_CHANGED inherits the same bias for the same reason. DUPLICATION_PCT is third, on arithmetic rather than published evidence: it divides duplicated lines by total lines, so a young codebase with a small denominator swings on a few blocks. The sharpest illustration is a metric that no longer carries a band: net_additions_ratio_median maps onto Nagappan and Ball's M7, which they defined to detect exactly this, 'In feature development the lines churned is much greater than the lines deleted, so a high value of M7 indicates new feature development' (ICSE 2005, Section 4). It is now reported without a verdict, so it can no longer produce a false alarm, but it remains a reason to read the reported figure with lifecycle in mind. Test co-change is a further candidate, since scaffolding often lands before a test suite exists, but no source was found for it and it is reasoning rather than evidence. Partially addressed (code-quality-metrics-4cv): a greenfield reference set now exists, split into two population values that must never be pooled with each other or with the granular default (population: \"greenfield-historical\" -- each of emberjs/ember.js, curl/curl, postgres/postgres and nodejs/node measured during its own first ~50 commits; population: \"greenfield-modern\" -- stride-nyc/remote_retro and stride-nyc/dotnetdependencytracer measured during their own first several months -- so era and lifecycle stay separate axes rather than the greenfield set re-collapsing them the way a historical-only greenfield sample would). This downgrades the severity from high to medium, the same way granular-history-only and pre-ai-baseline were downgraded once their own remedies were measured, but does not retire it: of the nine repositories targeted, only 4 of 6 historical baselines and 2 of 3 modern repositories produced a usable observation. git/git could not be measured in the environment this measurement ran in. django/django's repository root is an empty SVN-import artifact that a lib/git.js defect (analyzeCommit treats an empty diff identically to a git-command failure) silently drops from the analyzed set, so its window cannot self-report initial-build despite structurally reaching the root. kenjudy/73V's repository root sits roughly three years before its real development began, so its root-anchored window passes the structural root-inclusion check while still not being a genuine six-month window. No band from either new population has been adopted into lib/thresholds.js; see calibration/README.md's Greenfield reference set section for the full derivation table, the historical/modern comparison, and whether greenfield duplication_pct is stable enough to band at all.",
-      "implication": "A greenfield project in its build phase will read as drifting on several banded metrics while doing nothing wrong, and the direction of every bias is the same: toward a worse verdict. The bands support 'no worse than these six mature projects during maintenance' and should not be applied to an initial build until a greenfield reference set exists. This also qualifies the external comparison recorded for P90_LINES_CHANGED: Kolassa's p90 of 261 pools full project histories across roughly 11,000 projects and therefore includes initial build phases, so it is a mixed-lifecycle population being compared against a brownfield-only band, not a like-for-like check. A greenfield project can now be measured against derive-bands.js's own greenfield-historical or greenfield-modern proposal (once one is reviewed and adopted) instead of only being told 'no worse than these six mature projects during maintenance' -- but both new populations are thinner than even the squash-merge set (4 and 2 usable repositories respectively, one non-repeating window per repository), so any band adopted from them should be treated as more provisional than the granular default's already-qualified bands, not less."
+      "concern": "Every window measures maintenance-era work on a decades-old codebase. No reference repository was measured during an initial build phase, and the tool has no notion of project lifecycle. Note this is a separate axis from era: era distinguishes pre-AI (2019-2020) from current calendar time, while this concerns where a project sits in its own life, and every observation in both eras is brownfield. This narrows the greenfield item already listed under narrow-population to a specific, directional defect: several metrics are biased against greenfield by construction, not merely uncalibrated for it. LARGE_COMMITS_PCT is the clearest case that still carries a verdict. Hattori and Lanza found large commits are disproportionately forward engineering while bug fixes are the smallest commits (EVOL 2008, Section 5.2), and initial build additionally carries scaffolding, vendored dependencies and generated files. P90_LINES_CHANGED inherits the same bias for the same reason. DUPLICATION_PCT is third, on arithmetic rather than published evidence: it divides duplicated lines by total lines, so a young codebase with a small denominator swings on a few blocks. The sharpest illustration is a metric that no longer carries a band: net_additions_ratio_median maps onto Nagappan and Ball's M7, which they defined to detect exactly this, 'In feature development the lines churned is much greater than the lines deleted, so a high value of M7 indicates new feature development' (ICSE 2005, Section 4). It is now reported without a verdict, so it can no longer produce a false alarm, but it remains a reason to read the reported figure with lifecycle in mind. Test co-change is a further candidate, since scaffolding often lands before a test suite exists, but no source was found for it and it is reasoning rather than evidence. Partially addressed (code-quality-metrics-4cv, reset by the reset-greenfield task below): a greenfield reference set now exists, split into two population values that must never be pooled with each other or with the granular default (population: \"greenfield-historical\" -- emberjs/ember.js, git/git and nodejs/node, each measured during its own first ~50 commits; population: \"greenfield-modern\" -- stride-nyc/remote_retro and stride-nyc/dotnetdependencytracer measured during their own first several months -- so era and lifecycle stay separate axes rather than the greenfield set re-collapsing them the way a historical-only greenfield sample would). RESET (code-quality-metrics reset-greenfield): the greenfield-historical population code-quality-metrics-4cv originally shipped included curl/curl and postgres/postgres as if their own git roots were the start of the build; both roots are actually bulk imports of already-existing, pre-git-tracked code ('Initial revision', 144 files, and 'Postgres95 1.01 Distribution - Virgin Sources', 868 files, respectively), the opposite of what a greenfield baseline should measure, and both are now marked include_in_derivation: false with that finding recorded on their own observations. git/git -- the repository code-quality-metrics-4cv could not measure at all, blocked by a sandbox guard specific to a shell command naming the literal path segment 'git' more than once -- was measured successfully in the reset by renaming the local clone directory so no command needed to repeat that string; its own history also carries the multi-root hazard this file's Greenfield reference set section warns about (7 zero-parent commits, not 1), which the reset pin (c0fb976a, verified by walking `--ancestry-path` from the correct root rather than a flat cross-root date sort) accounts for directly. This downgrades the severity from high to medium, the same way granular-history-only and pre-ai-baseline were downgraded once their own remedies were measured, but does not retire it: of the six repositories originally targeted as historical baselines, only 3 (ember, node, git) turn out to be genuine from-scratch starts with a usable observation; django/django's repository root is an empty SVN-import artifact that a lib/git.js defect (analyzeCommit treats an empty diff identically to a git-command failure) silently drops from the analyzed set, so its window cannot self-report initial-build despite structurally reaching the root, and it is additionally an import one commit later regardless. kenjudy/73V's repository root sits roughly three years before its real development began, so its root-anchored window passes the structural root-inclusion check while still not being a genuine six-month window. No band from either new population has been adopted into lib/thresholds.js; see calibration/README.md's Greenfield reference set section for the full derivation table, the historical/modern comparison, and whether greenfield duplication_pct is stable enough to band at all.",
+      "implication": "A greenfield project in its build phase will read as drifting on several banded metrics while doing nothing wrong, and the direction of every bias is the same: toward a worse verdict. The bands support 'no worse than these projects during maintenance' and should not be applied to an initial build until a greenfield reference set exists. This also qualifies the external comparison recorded for P90_LINES_CHANGED: Kolassa's p90 of 261 pools full project histories across roughly 11,000 projects and therefore includes initial build phases, so it is a mixed-lifecycle population being compared against a brownfield-only band, not a like-for-like check. A greenfield project can now be measured against derive-bands.js's own greenfield-historical or greenfield-modern proposal (once one is reviewed and adopted) instead of only being told 'no worse than these mature projects during maintenance' -- but both new populations are thinner than even the squash-merge set (3 and 2 usable repositories respectively, one or two non-repeating windows per repository), so any band adopted from them should be treated as more provisional than the granular default's already-qualified bands, not less."
     },
     {
       "id": "two-windows-per-repo",
@@ -6064,6 +6356,12 @@
       "severity": "medium",
       "concern": "McIntosh and Kamei ('Are Fix-Inducing Changes a Moving Target?', TSE 44(5):412-428, 2018, DOI 10.1109/TSE.2017.2693980) found JIT defect models lose 11-34 percentage points of AUC just one year after training, and the explanatory share of the Size family of metrics swings between 10-43% (Qt) and 3-37% (OpenStack) of period-specific importance. A frozen threshold is exactly the artefact this paper warns against: the relationship between a commit-shape metric and whatever it is meant to predict does not hold still even within a single project's own history.",
       "implication": "These bands should be treated as dated to their calibration run (tool_commit and observation date are recorded per record for this reason) and re-derived periodically rather than treated as a permanent constant, even for the same six reference repositories."
+    },
+    {
+      "id": "greenfield-modern-eval-circularity",
+      "severity": "medium",
+      "concern": "Two of the five repositories in the reset greenfield reference set, stride-nyc/remote_retro and stride-nyc/dotnetdependencytracer, are themselves among the small set of repositories this toolkit's own maintainer uses to evaluate the toolkit day to day (measured directly in this project's own README and calibration notes, and analyzed by local-code-metrics.js in the ordinary course of using the tool). This is a stricter version of circular-definition above: circular-definition is about the reference set as a whole being chosen because it is considered disciplined; this is about two specific reference repositories being both a rule-maker (their own commit shape helps set the greenfield-modern band) and a rule-taker (their own drift gets judged against that same band) for the same toolkit.",
+      "implication": "A greenfield-modern band cannot be used to judge stride-nyc/remote_retro or stride-nyc/dotnetdependencytracer without circularity: either repository's own initial-build window is part of what defines 'healthy' for that population, so scoring that same repository's own commits (past or future) against a band it helped set answers a different question than 'is this repository's practice unusual' -- it partly answers 'does this repository resemble itself'. This does not affect the granular or squash-merge populations (neither repository contributes an observation to either), and does not affect greenfield-historical (ember.js, git and node have no connection to this toolkit's own evaluation). It affects only greenfield-modern band adoption and only for these two specific repositories; a third repository in that population, once one exists, would not carry the same taint and would make the population usable for these two again."
     }
   ],
   "reservations_note": "These reservations qualify every band derived from this file. They are recorded here rather than in lib/thresholds.js so that the caveats travel with the evidence, and so that adding reference repositories forces a reader to reconsider which reservations still apply.",
