@@ -1903,20 +1903,30 @@ describe('renderReportHtml', () => {
   // (large/sprawling commits, test/prod co-change, uncovered production, p90 lines/files
   // changed), with no directional concern either, so it exercises exactly this case with no
   // overrides needed.
-  it('gives an affirmative path naming specific healthy signals, not the degenerate "no signal crossed" sentence, when every banded metric is healthy and there are no concerns at all', () => {
+  //
+  // code-quality-metrics-11ib: this used to name all six signals, one clause per metric --
+  // honest but unbounded, and the brief that fixed the mixed-run branch's own asymmetry (naming
+  // only 2) flagged this as the same scaling problem waiting to happen with a seventh or eighth
+  // banded metric. Re-pointed at the same describeStrongestHealthySignals(bandedGoodEntries, 2)
+  // selection the mixed branch now uses, for one consistent rule across both branches rather
+  // than one enumerating everything and the other naming a fixed few. The total (6) is still
+  // stated, so a reader knows how much evidence exists even though only the top 2 are named.
+  it('gives an affirmative path naming its top 2 healthy signals and the total count, not the degenerate "no signal crossed" sentence, when every banded metric is healthy and there are no concerns at all', () => {
     const html = renderReportHtml(fixtureArgs());
     const summary = summarySection(html);
 
     expect(summary).toMatch(/All signals are positive/);
     expect(summary).not.toContain('No measured signal in this run crossed a warning or critical threshold.');
-    // Names specific signals, the way the concern branch already names its worst one via
-    // ledByPhrase -- not a generic reassurance with no content.
-    expect(summary).toContain('Large commits');
-    expect(summary).toContain('Sprawling commits');
+    // States the total (6 metrics measured healthy this run)...
+    expect(summary).toMatch(/6 metrics/);
+    // ...and names its top 2 by margin (furthest inside their own band), not a generic
+    // reassurance with no content: Test/prod co-change (55 against a >=23 bar, the furthest
+    // margin) and Sprawling commits (8 against an <=18 bar, second furthest).
     expect(summary).toContain('Test/prod co-change');
-    expect(summary).toContain('Uncovered production');
-    expect(summary).toContain('Commit size, high end');
-    expect(summary).toContain('Files changed, high end');
+    expect(summary).toContain('Sprawling commits');
+    // Large commits (15 against an <=18 bar) has the smallest margin of the six and is not one
+    // of the top 2 -- proving this names a selected few, not still all six by coincidence.
+    expect(summary).not.toContain('Large commits');
   });
 
   // [guard] not a called-shot RED: this proves the concern branch (untouched by the
