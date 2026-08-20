@@ -14,6 +14,47 @@ conventions for what it vendors and where it puts generated output. A single lis
 either miss node's `deps/` tree or wrongly exclude a directory another project uses for
 source.
 
+## The standard is equivalent evaluation, not equal config files
+
+Two repositories are comparably measured when **each has its own vendored and generated
+content excluded**. They are not comparably measured because they were run with the same
+pattern list.
+
+This is the opposite of the intuition, and the intuition is wrong in a way that is easy to
+act on. Handing every repository an identical config feels like controlling a variable. It
+is not: what it actually holds constant is the *filter*, while leaving the *thing being
+measured* to vary by whatever each project happens to commit.
+
+Measured, across four founding windows run at bare tool defaults:
+
+| repo | share of analyzed lines that were vendored or generated |
+|---|---|
+| nodejs/node | 79.87% (`deps/**`, vendored from the first commit) |
+| denoland/deno | 43.67%, almost all from one commit adding `yarn.lock` |
+| ziglang/zig | 0.00% |
+| sveltejs/svelte | to be determined per repo |
+
+Under one shared config those three numbers are scored against one band. Node's window is
+four fifths dependency source. Deno's `large_commits_pct` of 28 counts a 3,535-line lockfile
+commit that `large_commit` flagged as if it were development. Zig's window contains no
+vendored content at all. The band cannot mean the same thing for all three, and the fact that
+the config file was identical is what disguises it.
+
+So the requirement is:
+
+- **Every reference repository gets its own config**, derived from what that repository
+  actually commits in the window being measured.
+- **A repository with nothing to exclude gets an explicit empty array**, not an absent config.
+  "We looked and found nothing" and "nobody looked" are different claims, and only the first
+  is auditable. curl and ember carry empty lists for this reason.
+- **Derive from the window, not from the language.** What matters is what lands lines in the
+  analyzed commits, not what exists in the tree or what a project of that type usually has.
+  A directory that never changes costs nothing.
+
+The same rule applies to any repository this toolkit is pointed at, not only to reference
+repositories: a target measured without exclusions is not comparable to a band derived from
+references measured with them. That asymmetry is the subject of issue #69.
+
 ## Why these paths and not others
 
 Every entry below traces to a window `observations.json` had to exclude, or to a tracked
