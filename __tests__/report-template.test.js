@@ -884,6 +884,43 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('2 of 4');
   });
 
+  // code-quality-metrics-ai6y: 73V's report stated "Branches considered (4 of 51 contributed
+  // a commit to the analyzed sample)" and then listed all 51 names in one run-on paragraph
+  // with no indication which 4 they were -- unusable as rendered, and the branch names
+  // themselves (ticket ids, vendor names, feature intent) are the leakiest content on the
+  // page. summary.analyzed_branch_commit_counts already holds the per-branch analyzed commit
+  // counts, so the contributing branches can be listed by name and count directly.
+  it('lists contributing branches with their analyzed commit counts when analyzed_branch_commit_counts is present', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2,
+      analyzed_branch_commit_counts: { main: 30, 'feature/foo': 20 }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('main (30)');
+    expect(scope).toContain('feature/foo (20)');
+  });
+
+  // code-quality-metrics-ai6y: the non-contributing remainder (release/9, stale/old here) must
+  // never be enumerated by name once analyzed_branch_commit_counts is available to identify the
+  // contributing set -- that is the leak this fix exists to close, not merely a display
+  // annoyance. Summarized by count instead.
+  it('summarizes non-contributing branches by count instead of naming them when analyzed_branch_commit_counts is present', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2,
+      analyzed_branch_commit_counts: { main: 30, 'feature/foo': 20 }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).not.toContain('release/9');
+    expect(scope).not.toContain('stale/old');
+    expect(scope).toContain('2 other branches');
+  });
+
   // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
   // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
   // Analysis Scope as provenance, so the audit trail survives even though the masthead no
