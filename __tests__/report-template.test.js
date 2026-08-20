@@ -94,6 +94,17 @@ function mastheadSection(html) {
   return html.slice(start, end);
 }
 
+// Scopes an assertion to a single metric card by its visible label text, so a span/threshold
+// assertion meant for one specific tile (e.g. "Commit size trend") cannot pass because the same
+// text happens to appear on an unrelated tile elsewhere on the page.
+function metricCard(html, label) {
+  const labelIndex = html.indexOf(`>${label}<`);
+  expect(labelIndex).toBeGreaterThanOrEqual(0);
+  const start = html.lastIndexOf('<article', labelIndex);
+  const end = html.indexOf('</article>', labelIndex) + '</article>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -256,6 +267,29 @@ describe('renderReportHtml', () => {
     const masthead = mastheadSection(html);
 
     expect(masthead).not.toContain('masthead-staleness');
+  });
+
+  // code-quality-metrics-2l1x: the same short window backing a stale masthead also backs
+  // "commit size trend: growing (warning)" and "velocity trend: accelerating (warning)" with
+  // no span or magnitude stated on either tile. Measured live: 73V's commit_size_trend flipped
+  // from "growing" to "shrinking" once PR #94 stopped vendored commits from distorting it --
+  // exactly why a trend verdict with no visible span is not actionable on its own.
+  it('states the analyzed span behind the commit size and velocity trend tiles', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2026-05-27',
+      analyzed_span_end: '2026-06-12',
+      commit_size_trend: 'shrinking',
+      velocity_trend: 'stable'
+    }));
+
+    const sizeCard = metricCard(html, 'Commit size trend');
+    expect(sizeCard).toContain('2026-05-27');
+    expect(sizeCard).toContain('2026-06-12');
+    expect(sizeCard).toContain('17 days');
+
+    const velocityCard = metricCard(html, 'Velocity trend');
+    expect(velocityCard).toContain('2026-05-27');
+    expect(velocityCard).toContain('17 days');
   });
 
   // code-quality-metrics-aoo state 1 (4 of 5 repositories analysed: 73V, remote_retro,
