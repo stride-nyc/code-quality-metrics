@@ -1362,6 +1362,21 @@ describe('renderReportHtml', () => {
     expect(summary).toMatch(/Analysis Scope/);
   });
 
+  // A percentage alone buries the notable fact: one or a handful of files can carry nearly
+  // all the vendored volume (measured: stride-nyc/73V, 3 files carrying 28,207 lines). The
+  // callout names the file and line counts, not only the share, so a reader sees the
+  // concentration directly instead of inferring it from a percentage.
+  it('names the vendored/generated file and line counts, not only the percentage, in the callout', () => {
+    const html = renderReportHtml(fixtureArgs({
+      vendored_generated_share: { patterns: ['**/vendor/**'], files_count: 3, lines_count: 28207, lines_pct: '63.99' }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toContain('3');
+    expect(summary).toContain('28207');
+    expect(summary).toContain('63.99');
+  });
+
   // [guard] proven by mutation: lowering VENDORED_SHARE_CALLOUT_THRESHOLD to 0 (so any nonzero
   // share triggers the callout) failed this test, which found the callout text present for an
   // 8% share it expects to be silent about -- reverted after confirming.
@@ -1372,6 +1387,108 @@ describe('renderReportHtml', () => {
     const summary = summarySection(html);
 
     expect(summary).not.toMatch(/vendored|generated/);
+  });
+
+  // code-quality-metrics coordination task (reframe): a directional trend with no calibrated
+  // threshold (commit_size_trend/velocity_trend, concern 0.5 when triggered) must never
+  // outrank a metric scored against a real, derived band (concern -1 for two-band, or the
+  // computed formula for three-band) in the "led by" clause, even though the trend's raw
+  // concern value sorts higher in buildMetricCatalog's own concern-descending sort. Evidence
+  // strength, not sort position, decides who leads.
+  it('leads with a banded concern over an unbanded directional trend, even when the trend sorts first by raw concern', () => {
+    const html = renderReportHtml(fixtureArgs({
+      uncovered_prod_rate: '15.00',
+      commit_size_trend: 'growing',
+      velocity_trend: 'accelerating'
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/led by Uncovered production/);
+    expect(summary).not.toMatch(/led by Commit size trend/);
+  });
+
+  // Coordination-task reframe: a run where most banded metrics are healthy and only one is
+  // flagged reads as a fundamentally sound codebase with one thing to watch, not a troubled
+  // one -- opening with the single worst reading, as the old wording always did, inverts
+  // that. The summary must characterize the whole (healthy) before naming the exception.
+  it('characterizes the whole as healthy before naming the concern, when more banded metrics are good than are flagged', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    const healthyIndex = summary.indexOf('healthy');
+    const ledByIndex = summary.indexOf('led by');
+    expect(healthyIndex).toBeGreaterThanOrEqual(0);
+    expect(ledByIndex).toBeGreaterThan(healthyIndex);
+  });
+
+  // Measured on stride-nyc/73V's real run: the healthy-first branch repeated "against a
+  // calibrated threshold" once for the whole and once for the exception ("Most metrics
+  // scored against a calibrated threshold in this run are healthy. It still flags 2 warning
+  // signals against a calibrated threshold, led by..."), which reads as a stutter rather than
+  // two facts. The phrase should appear at most once in this branch.
+  it('does not repeat "against a calibrated threshold" when characterizing the whole as healthy', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    const occurrences = (summary.match(/against a calibrated threshold/g) || []).length;
+    expect(occurrences).toBe(1);
+  });
+
+  // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
+  // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
+  // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
+  // The counts above are already computed on the remaining lines; telling the reader they
+  // need a second discount is worse than saying nothing.
+  it('does not claim the vendored/generated share reframes counts above when ANALYSIS_IGNORE_PATTERNS already excluded that volume', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/reframes/);
+    expect(summary).not.toMatch(/vendored|generated/);
+  });
+
+  // The case the original wording was right for, and must not regress: ANALYSIS_IGNORE_PATTERNS
+  // is empty, so the vendored/generated volume is still baked into every count above -- the
+  // callout stays exactly as before.
+  it('[guard] still calls out the vendored/generated share when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/reframes/);
+    expect(summary).toMatch(/vendored|generated/);
+  });
+
+  // Defect: "see Analysis Scope below" (inside the vendored clause) and "See Findings below
+  // for the full picture" are two pointers in one paragraph, and "for the full picture" names
+  // no fact the reader does not already have -- it just restates that there is more below,
+  // which the link itself already says. Cut the empty phrase; the link to Findings stays.
+  it('points to Findings without the informationless "for the full picture" phrase', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/for the full picture/);
+    expect(summary).toMatch(/See <a href="#findings">Findings<\/a> below\./);
   });
 
   // The anchor mechanism a file:// page actually uses is fragment-to-id matching: the browser
