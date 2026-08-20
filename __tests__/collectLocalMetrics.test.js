@@ -1622,8 +1622,10 @@ describe('collectLocalMetrics — repo-local .codemetrics.json override (code-qu
     const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
     const summary = JSON.parse(summaryCall[1]);
 
-    expect(summary.config_sources.overrides.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/bin/**']);
-    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/bin/**']);
+    // Unions onto the default's one seeded entry ('**/.codemetrics/**', code-quality-metrics-w3wn),
+    // not just the repo's own pattern -- the same union behavior every other class A key follows.
+    expect(summary.config_sources.overrides.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/.codemetrics/**', '**/bin/**']);
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/.codemetrics/**', '**/bin/**']);
   });
 
   // GUARD: proves resolveConfigOverrides is re-applied to CONFIG fresh on every
@@ -1770,7 +1772,9 @@ describe('collectLocalMetrics — analysis exclusions and vendored-default share
     const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
     const summary = JSON.parse(summaryCall[1]);
 
-    expect(summary.analysis_exclusions.patterns).toEqual([]);
+    // The default now seeds one entry (code-quality-metrics-w3wn), but src/app.js does not
+    // match it, so excluded volume is still zero.
+    expect(summary.analysis_exclusions.patterns).toEqual(['**/.codemetrics/**']);
     expect(summary.analysis_exclusions.excluded_files_count).toBe(0);
     expect(summary.analysis_exclusions.excluded_lines_pct).toBe('0.00');
   });

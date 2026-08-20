@@ -412,7 +412,10 @@ describe('analyzeCommit', () => {
   // configured nothing, using CONFIG.DUPLICATE_IGNORE_PATTERNS's existing non-empty
   // defaults (deps/, vendor/, third_party/, ...), independent of ANALYSIS_IGNORE_PATTERNS.
   test('reports vendored_default_files_count and line counts for paths matching the existing vendored/generated defaults, even when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
-    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual([]);
+    // code-quality-metrics-w3wn: the default now seeds one entry (the tool's own
+    // .codemetrics/ output directory), so "not configured" here means "the repo added
+    // nothing of its own," not "the array is literally empty."
+    expect(CONFIG.ANALYSIS_IGNORE_PATTERNS).toEqual(['**/.codemetrics/**']);
     mockNumstat([
       numstatLine(300, 50, 'vendor/lib.js'),
       numstatLine(10, 2, 'src/app.js')
