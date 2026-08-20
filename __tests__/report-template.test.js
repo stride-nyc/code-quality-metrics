@@ -94,6 +94,17 @@ function mastheadSection(html) {
   return html.slice(start, end);
 }
 
+// Scopes an assertion to a single metric card by its visible label text, so a span/threshold
+// assertion meant for one specific tile (e.g. "Commit size trend") cannot pass because the same
+// text happens to appear on an unrelated tile elsewhere on the page.
+function metricCard(html, label) {
+  const labelIndex = html.indexOf(`>${label}<`);
+  expect(labelIndex).toBeGreaterThanOrEqual(0);
+  const start = html.lastIndexOf('<article', labelIndex);
+  const end = html.indexOf('</article>', labelIndex) + '</article>'.length;
+  return html.slice(start, end);
+}
+
 describe('renderReportHtml', () => {
   it('renders a complete HTML document from doctype to closing html tag', () => {
     const html = renderReportHtml(fixtureArgs());
@@ -115,6 +126,20 @@ describe('renderReportHtml', () => {
     expect(masthead).toContain('feature_branch');
     expect(masthead).toContain('42');
     expect(masthead).toContain('30');
+  });
+
+  // code-quality-metrics-kprr: local_metrics_summary.json records filtered_from (the fetched
+  // history before the MAX_COMMITS cap narrowed it down to total_commits), but the report never
+  // mentioned it -- a reader had no way to tell "50 commits analyzed" apart from "50 out of
+  // 1246 fetched." Surfaced right where the sample size is already described.
+  it('surfaces filtered_from next to the analyzed commit count in the masthead when it narrows the sample', () => {
+    const html = renderReportHtml(fixtureArgs({
+      total_commits: 50,
+      filtered_from: 1246
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toContain('1246');
   });
 
   // code-quality-metrics-g39: a reader on a many-branch repository (measured: remote_retro,
@@ -177,6 +202,25 @@ describe('renderReportHtml', () => {
     expect(html).toContain('across 7 branch');
   });
 
+  // code-quality-metrics-kprr: 73V's report excluded 63.99% of changed lines across 3 files,
+  // and that fact only ever appeared in the last section of the page (Analysis Scope), printed
+  // twice. Two thirds of the analyzed diff going unmeasured is a masthead fact, not something a
+  // reader only finds by scrolling to the very end.
+  it('states the excluded share in the masthead when ANALYSIS_IGNORE_PATTERNS excludes a large share of changed lines', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      }
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toContain('63.99');
+    expect(masthead).toContain('excluded');
+  });
+
   it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
     const html = renderReportHtml(fixtureArgs({
       analyzed_span_start: '2026-07-30',
@@ -189,6 +233,63 @@ describe('renderReportHtml', () => {
     expect(html).toContain('2026-08-05');
     expect(html).toContain('2020-01-01');
     expect(html).toMatch(/widened/i);
+  });
+
+  // code-quality-metrics-2l1x: 73V's report was generated 2026-08-20 and analyzed 2026-05-27
+  // to 2026-06-12, described only as "HEAD-anchored: newest commits, no date filter
+  // requested" -- true, but silent about the fact that the newest analyzed commit is over two
+  // months old, because the window is drawn from stale unmerged branches. A reader assumes
+  // recency unless the gap itself is stated.
+  it('states the gap between the newest analyzed commit and the report date when the window is stale', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_date: '2026-08-20T00:00:00.000Z',
+      analyzed_span_start: '2026-05-27',
+      analyzed_span_end: '2026-06-12',
+      window_requested_since: null,
+      window_widened: false
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toContain('69 days');
+  });
+
+  // [guard] not a called-shot RED: the threshold guard (STALE_WINDOW_GAP_DAYS) was written in
+  // the same pass as the gap statement above, so this pins down the "recent enough, say
+  // nothing" side of that same conditional rather than driving new production code on its own.
+  it('[guard] does not state a staleness gap when the newest analyzed commit is recent', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_date: '2026-08-20T00:00:00.000Z',
+      analyzed_span_start: '2026-08-10',
+      analyzed_span_end: '2026-08-18',
+      window_requested_since: null,
+      window_widened: false
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).not.toContain('masthead-staleness');
+  });
+
+  // code-quality-metrics-2l1x: the same short window backing a stale masthead also backs
+  // "commit size trend: growing (warning)" and "velocity trend: accelerating (warning)" with
+  // no span or magnitude stated on either tile. Measured live: 73V's commit_size_trend flipped
+  // from "growing" to "shrinking" once PR #94 stopped vendored commits from distorting it --
+  // exactly why a trend verdict with no visible span is not actionable on its own.
+  it('states the analyzed span behind the commit size and velocity trend tiles', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analyzed_span_start: '2026-05-27',
+      analyzed_span_end: '2026-06-12',
+      commit_size_trend: 'shrinking',
+      velocity_trend: 'stable'
+    }));
+
+    const sizeCard = metricCard(html, 'Commit size trend');
+    expect(sizeCard).toContain('2026-05-27');
+    expect(sizeCard).toContain('2026-06-12');
+    expect(sizeCard).toContain('17 days');
+
+    const velocityCard = metricCard(html, 'Velocity trend');
+    expect(velocityCard).toContain('2026-05-27');
+    expect(velocityCard).toContain('17 days');
   });
 
   // code-quality-metrics-aoo state 1 (4 of 5 repositories analysed: 73V, remote_retro,
@@ -488,6 +589,20 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
+  // code-quality-metrics-wo8q: the Team archetype section spent roughly 110 words across two
+  // paragraphs (one disclaiming DORA, one explaining the suppression) to display no content at
+  // all when the archetype is suppressed. The DORA disclaimer only earns its place when there
+  // is a real archetype verdict to disclaim about; a suppressed run collapses to one sentence.
+  it('collapses the Team archetype section to a single sentence when suppressed, dropping the DORA disclaimer paragraph', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed', dora_archetype: undefined }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).not.toContain('archetype-disclaimer');
+    const text = section.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    expect(text.split('.').filter(Boolean).length).toBeLessThanOrEqual(1);
+  });
+
   // code-quality-metrics-m7kt: measured live in flight-info-spike, a greenfield window. Its
   // large_commits_pct (48.89) and sprawling_commits_pct (42.22) entries are withheld by
   // buildMetricCatalog for project_lifecycle: initial-build (WITHHELD_WHEN_GREENFIELD_KEYS),
@@ -552,6 +667,31 @@ describe('renderReportHtml', () => {
     expect(section).toMatch(/greenfield-modern/i);
   });
 
+  // code-quality-metrics-wo8q: the project's writing standard is no em-dashes in any form,
+  // including the double-hyphen pause -- use commas, colons, semicolons or parentheses
+  // instead. project_lifecycle: 'initial-build' triggers both remaining template-rendered
+  // sources of this pattern at once: describeThreshold's band-provenance sentence (a
+  // substituted tile) and the archetype section's greenfield-suppression sentence.
+  it('contains no double-hyphen parenthetical pauses anywhere in the rendered report', () => {
+    const html = renderReportHtml(fixtureArgs({
+      project_lifecycle: 'initial-build',
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+
+    expect(html).not.toMatch(/ -- /);
+  });
+
   it('renders every entry in the catalog, not a filtered subset, in fixed-group order with concern order preserved inside each group', () => {
     // code-quality-metrics-yte: the page groups tiles under fixed headings, so the catalog's
     // own concern-descending order no longer holds across the whole page -- only within a
@@ -571,6 +711,22 @@ describe('renderReportHtml', () => {
     const indices = expectedOrder.map(entry => html.indexOf(entry.label));
     const sortedIndices = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sortedIndices);
+  });
+
+  // code-quality-metrics-wo8q: test_coverage_rate, test_isolation_rate and uncovered_prod_rate
+  // (lib/metric-descriptions.js) all carry the identical DORA footnote beginning "Automated
+  // testing is not one of the seven capabilities...", and all three sit under the "Test
+  // practice" heading (METRIC_GROUP_BY_KEY, lib/report.js). Rendered per-tile, the same
+  // sentence appeared verbatim three times in one section; it should read once.
+  it('states a repeated DORA footnote once per section instead of once per tile', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const headingStart = html.indexOf('<h2 class="metric-category-heading">Test practice</h2>');
+    expect(headingStart).toBeGreaterThanOrEqual(0);
+    const nextHeadingIndex = html.indexOf('<h2 class="metric-category-heading">', headingStart + 1);
+    const section = html.slice(headingStart, nextHeadingIndex > -1 ? nextHeadingIndex : html.length);
+
+    const occurrences = (section.match(/Automated testing is not one of the seven capabilities/g) || []).length;
+    expect(occurrences).toBe(1);
   });
 
   // message_quality_pct dropped out of the gauge set (code-quality-metrics-6ti): a gauge
@@ -783,6 +939,43 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('2 of 4');
   });
 
+  // code-quality-metrics-ai6y: 73V's report stated "Branches considered (4 of 51 contributed
+  // a commit to the analyzed sample)" and then listed all 51 names in one run-on paragraph
+  // with no indication which 4 they were -- unusable as rendered, and the branch names
+  // themselves (ticket ids, vendor names, feature intent) are the leakiest content on the
+  // page. summary.analyzed_branch_commit_counts already holds the per-branch analyzed commit
+  // counts, so the contributing branches can be listed by name and count directly.
+  it('lists contributing branches with their analyzed commit counts when analyzed_branch_commit_counts is present', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2,
+      analyzed_branch_commit_counts: { main: 30, 'feature/foo': 20 }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('main (30)');
+    expect(scope).toContain('feature/foo (20)');
+  });
+
+  // code-quality-metrics-ai6y: the non-contributing remainder (release/9, stale/old here) must
+  // never be enumerated by name once analyzed_branch_commit_counts is available to identify the
+  // contributing set -- that is the leak this fix exists to close, not merely a display
+  // annoyance. Summarized by count instead.
+  it('summarizes non-contributing branches by count instead of naming them when analyzed_branch_commit_counts is present', () => {
+    const html = renderReportHtml(fixtureArgs({
+      branches_analyzed: ['main', 'feature/foo', 'release/9', 'stale/old'],
+      branches_with_analyzed_commits: 2,
+      analyzed_branch_commit_counts: { main: 30, 'feature/foo': 20 }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).not.toContain('release/9');
+    expect(scope).not.toContain('stale/old');
+    expect(scope).toContain('2 other branches');
+  });
+
   // code-quality-metrics-aoo: the masthead history line states only the resolved fact (state
   // 1), with no room left for the raw guess it overrode. That guess is not lost -- it moves to
   // Analysis Scope as provenance, so the audit trail survives even though the masthead no
@@ -803,6 +996,28 @@ describe('renderReportHtml', () => {
     expect(scope).toContain('Detection guessed');
     expect(scope).toContain('squashed pull requests');
     expect(scope).toContain('unmerged branches');
+  });
+
+  // carried from code-quality-metrics-66oo: the rendered sentence stated a percentage
+  // ("4.82% of analyzed commit subjects reference a pull request") without naming what
+  // population it was a share of, even though the true share of the actual analyzed
+  // population was 42% -- a reader had no denominator to sanity-check the number against.
+  // signals.sample_size (lib/git.js's detectHistoryGranularity) now records the exact
+  // denominator; this asserts the rendered sentence names it.
+  it('names the denominator behind the pull-request-reference share in the discarded-detection provenance line', () => {
+    const html = renderReportHtml(fixtureArgs({
+      workflow_type: 'feature_branch',
+      history_granularity: 'granular',
+      history_granularity_detected: 'squashed',
+      history_granularity_confidence: 'low',
+      history_granularity_signals: { pr_reference_share: 0.42, squash_committer_share: 0, merge_commit_count: 0, sample_size: 50 },
+      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
+      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 0, lines_count: 0, lines_pct: '0.00' }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    expect(scope).toContain('42% of the 50 analyzed commit subjects');
   });
 
   // code-quality-metrics-g39 changed what "nothing to show" means: Analysis Scope now also
@@ -1631,6 +1846,35 @@ describe('renderReportHtml', () => {
     const summary = summarySection(html);
 
     const occurrences = (summary.match(/against a calibrated threshold/g) || []).length;
+    expect(occurrences).toBe(1);
+  });
+
+  // code-quality-metrics-kprr: 73V's Analysis Scope section stated the identical 3 files /
+  // 28,207 lines / 63.99% twice -- once attributed to ANALYSIS_IGNORE_PATTERNS, once to the
+  // vendored/generated default patterns -- because the two facts happen to coincide in that
+  // run. They are genuinely different facts (a configured exclusion vs. a default-pattern
+  // match) in general, so this only merges them into one bullet when they actually describe
+  // the same files and lines; the next test below proves they still render separately when
+  // they differ.
+  it('states the exclusion and vendored-default facts once, not twice, when they describe the same files and lines', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      },
+      vendored_generated_share: {
+        patterns: ['**/vendor/**'],
+        files_count: 3,
+        lines_count: 28207,
+        lines_pct: '63.99'
+      }
+    }));
+    const scopeStart = html.indexOf('<section class="analysis-scope">');
+    const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+
+    const occurrences = (scope.match(/63\.99/g) || []).length;
     expect(occurrences).toBe(1);
   });
 
