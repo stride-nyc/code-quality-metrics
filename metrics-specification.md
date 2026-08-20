@@ -131,6 +131,31 @@ numbers describe pull request shape instead of working habits. Screening rejecte
 prettier, vuejs/core, TypeScript, angular, webpack, babel, react, svelte, jest, express,
 python/cpython, apache/kafka and kubernetes on that basis, not on quality.
 
+### Greenfield-modern reference set
+
+`THRESHOLDS.GREENFIELD_MODERN` (`lib/thresholds.js`) is a second, separately named band set,
+adopted from `derive-bands.js --population greenfield-modern` -- not pooled with, and not a
+substitute for, the six-repository bands above. Every observation above measures maintenance-era
+work on a decades-old codebase; every observation behind `GREENFIELD_MODERN` instead measures a
+project's own first several months (`calibration/observations.json`'s `brownfield-only-lifecycle`
+reservation). See "Project Lifecycle and Change-Size Withholding" below for why that distinction
+matters and how a report uses this band set.
+
+This population has two usable repositories -- `stride-nyc/remote_retro` and
+`stride-nyc/dotnetdependencytracer` -- against the six behind the bands above, so every number in
+it is a considerably weaker claim: n = 2 rather than n = 12. It also carries a circularity the
+six-repository set does not: both repositories are members of the five-repository set this
+toolkit's own maintainer uses to evaluate the tool day to day
+(`greenfield-modern-eval-circularity`, `calibration/observations.json`), so a verdict this band
+produces for either of those two repositories specifically answers "does this repository resemble
+itself" rather than "is this repository's practice unusual". GitHub #84 tracks growing this
+population past two repositories. `greenfield-historical` (`emberjs/ember.js`, `nodejs/node`,
+`git/git`, each measured during its own earliest commits) remains unadopted: those repositories
+began between 1996 and 2011, so their first commits are also an old-tooling-era sample, and
+banding today's initial builds against them would re-collapse the era/lifecycle confound this
+reservation exists to keep separate -- see `calibration/README.md`'s "Two sub-populations, not
+one".
+
 ### What limits this
 
 Thirteen reservations are recorded alongside the observations in

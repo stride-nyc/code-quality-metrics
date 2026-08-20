@@ -35,6 +35,12 @@ const { THRESHOLDS } = require('../lib/thresholds');
 // classifyDoraArchetype() in lib/metrics.js now reads LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT,
 // TEST_COVERAGE_RATE and UNCOVERED_PROD_RATE above directly, so there is nothing left for a
 // DORA_ARCHETYPE key to hold: duplicating a value here is exactly what let it go stale.
+//
+// GREENFIELD_MODERN is a new, second, separately named band set (adopting
+// code-quality-metrics-4cv's greenfield-modern reference population, n = 2): its own bands are
+// derived from a project's own first several months, not maintenance-era work, and must never
+// be pooled into the flat keys above. See lib/thresholds.js's own comment at that key for the
+// full derivation and its n = 2 / eval-circularity limitation.
 describe('THRESHOLDS', () => {
   it('exports the calibrated numeric bands', () => {
     expect(THRESHOLDS).toEqual({
@@ -46,7 +52,16 @@ describe('THRESHOLDS', () => {
       AI_BATCH_SHARE: { additionsRatio: 3, share: 0.3 },
       P90_LINES_CHANGED: { healthy: 250, critical: null },
       P90_FILES_CHANGED: { healthy: 8.5, critical: null },
-      DUPLICATION_PCT: { healthy: 2, critical: null }
+      DUPLICATION_PCT: { healthy: 2, critical: null },
+      GREENFIELD_MODERN: {
+        LARGE_COMMITS_PCT: { healthy: 48, critical: null },
+        SPRAWLING_COMMITS_PCT: { healthy: 43, critical: null },
+        TEST_COVERAGE_RATE: { healthy: 23, critical: null },
+        UNCOVERED_PROD_RATE: { healthy: 12, critical: null },
+        P90_LINES_CHANGED: { healthy: 1020, critical: 1060 },
+        P90_FILES_CHANGED: { healthy: 11, critical: null },
+        DUPLICATION_PCT: { healthy: 1.5, critical: null }
+      }
     });
   });
 });

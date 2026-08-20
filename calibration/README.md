@@ -131,11 +131,17 @@ its own follow-up measurement pass:
   This is a real remedy, which is why the severity dropped, but a thinner one than
   either prior remedy: 3 and 2 usable repositories respectively (one or two
   non-repeating windows each), against the squash-merge set's five and the granular
-  set's six, and no band from either new population has been adopted into
-  `lib/thresholds.js`. The historical population was reset once (see "Greenfield
-  reference set"): two of its original four repositories turned out to be imports
-  of pre-existing code at their own root rather than genuine from-scratch starts,
-  and were replaced by measuring git/git instead.
+  set's six. `greenfield-modern`'s bands are now adopted, as `THRESHOLDS.GREENFIELD_MODERN`
+  in `lib/thresholds.js` -- a second, separately named set, not pooled with or substituted
+  for the brownfield bands above it in that file. `greenfield-historical` remains
+  unadopted: this reference set's own repositories (ember.js, node, git) are decades-old
+  codebases measured during their earliest commits, not a genuinely modern initial build,
+  so its bands describe an old-tooling-era start rather than today's practice (see "Two
+  sub-populations, not one" above) -- adopting it would re-collapse the exact era/lifecycle
+  confound this reservation exists to keep separate. The historical population was reset
+  once (see "Greenfield reference set"): two of its original four repositories turned out
+  to be imports of pre-existing code at their own root rather than genuine from-scratch
+  starts, and were replaced by measuring git/git instead.
 
 ## Eras
 

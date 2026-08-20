@@ -80,6 +80,65 @@ describe('threshold provenance', () => {
   });
 });
 
+/**
+ * Re-derive every band for a named non-granular population (e.g. 'greenfield-modern'),
+ * the same way deriveBandsFromObservations() does for the granular default above, but
+ * without filtering by era: neither greenfield population has more than one era recorded
+ * (code-quality-metrics-4cv), so an era filter here would just be a no-op with an extra
+ * knob to keep in sync.
+ * @param {string} population
+ * @returns {Record<string, object>}
+ */
+function deriveBandsForPopulation(population) {
+  const selected = selectByPopulation(observationData.observations, population);
+  const usable = selected.filter(o => o.include_in_derivation);
+
+  /** @type {Record<string, Array<{repo: string, value: number}>>} */
+  const byMetric = {};
+  for (const observation of usable) {
+    for (const [metric, value] of Object.entries(observation.metrics)) {
+      if (typeof value !== 'number' || Number.isNaN(value)) continue;
+      (byMetric[metric] ||= []).push({ repo: observation.repo, value });
+    }
+  }
+
+  const bands = {};
+  for (const [metric, values] of Object.entries(byMetric)) {
+    bands[metric] = deriveBand(metric, values);
+  }
+  return bands;
+}
+
+// GREENFIELD_MODERN (lib/thresholds.js) is a second, separately named band set -- adopted
+// via `derive-bands.js --population greenfield-modern`, per calibration/README.md's
+// "Greenfield reference set" section -- and must never be pooled with the granular default
+// the gate above checks. This mirrors that gate's shape exactly, scoped to the
+// greenfield-modern population instead.
+describe('threshold provenance (greenfield-modern population)', () => {
+  const derived = deriveBandsForPopulation('greenfield-modern');
+
+  test('every derived band for the greenfield-modern population matches what THRESHOLDS.GREENFIELD_MODERN holds', () => {
+    /** @type {Record<string, {healthy: number|null, critical: number|null}>} */
+    const held = {};
+    /** @type {Record<string, {healthy: number|null, critical: number|null}>} */
+    const expected = {};
+
+    for (const [metric, band] of Object.entries(derived)) {
+      if (INFORMATIONAL.includes(metric)) continue;
+      if (band.tier === 'informational') continue;
+      const key = thresholdKeyFor(metric);
+      // A metric derive-bands.js bands for this population but THRESHOLDS.GREENFIELD_MODERN
+      // does not hold is reported here too: absence is as much a drift as a wrong value.
+      held[key] = THRESHOLDS.GREENFIELD_MODERN && THRESHOLDS.GREENFIELD_MODERN[key]
+        ? { healthy: THRESHOLDS.GREENFIELD_MODERN[key].healthy, critical: THRESHOLDS.GREENFIELD_MODERN[key].critical ?? null }
+        : undefined;
+      expected[key] = { healthy: band.healthy, critical: band.critical ?? null };
+    }
+
+    expect(held).toEqual(expected);
+  });
+});
+
 // Settings that change a measured metric's value, so an observation taken at a
 // different setting is not comparable to one taken at the current setting and
 // must not feed a band. TEST_FILE_PATTERNS is deliberately absent: it is an
