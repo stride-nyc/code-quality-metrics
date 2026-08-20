@@ -216,7 +216,10 @@ describe('selectClaudeCommits', () => {
     expect(selectClaudeCommits(metrics)).toHaveLength(0);
   });
 
-  test('sorts by total churn descending before capping', () => {
+  // counted_additions/counted_deletions mirror total_additions/total_deletions here (nothing
+  // excluded), so this covers the no-exclusion case; the vendor-sync test below covers the
+  // case where counted and total churn diverge and rank differently.
+  test('sorts by counted churn descending before capping', () => {
     const metrics = [
       makeMetric({ sha: 'small', large_commit: true, total_additions: 150, total_deletions: 10 }),
       makeMetric({ sha: 'large', large_commit: true, total_additions: 900, total_deletions: 10 }),
@@ -244,6 +247,34 @@ describe('selectClaudeCommits', () => {
     ];
     const result = selectClaudeCommits(metrics);
     expect(result).toHaveLength(0);
+  });
+
+  // code-quality-metrics-ce9m: ranking must use counted churn (exclusion-scoped), not
+  // total churn (whole-diff), so a vendored sync does not outrank genuine development and
+  // consume the AI_ANALYSIS_MAX_COMMITS budget. 'vendor-sync' has a much larger whole-diff
+  // total (14,679) than 'real-work' (310), but a much smaller counted churn (216 vs 310):
+  // 'real-work' should rank first.
+  test('ranks candidates by counted churn, not whole-diff total churn, so a vendored sync does not outrank a smaller-total but larger-counted genuine commit', () => {
+    const metrics = [
+      makeMetric({
+        sha: 'vendor-sync',
+        large_commit: true,
+        total_additions: 14410,
+        total_deletions: 269,
+        counted_additions: 200,
+        counted_deletions: 16
+      }),
+      makeMetric({
+        sha: 'real-work',
+        large_commit: true,
+        total_additions: 300,
+        total_deletions: 10,
+        counted_additions: 300,
+        counted_deletions: 10
+      }),
+    ];
+    const result = selectClaudeCommits(metrics);
+    expect(result[0].sha).toBe('real-work');
   });
 });
 
