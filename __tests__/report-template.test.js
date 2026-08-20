@@ -881,6 +881,29 @@ describe('renderReportHtml', () => {
     expect(testCoverageCard.toLowerCase()).not.toContain('greenfield-modern');
   });
 
+  // code-quality-metrics coordination task: the sample size behind the greenfield-modern band
+  // (n=2) used to repeat on the chip of every substituted tile and again in that tile's own
+  // threshold sentence -- the same over-exposure problem the lifecycle-line rewrite fixes at
+  // the page level, just per-tile. The reader should be able to find it once (the group-level
+  // note near "Change size and scope"), not on every tile, and not at all in the chip.
+  it('[guard] does not state the reference-band sample size on the chip or in the per-tile threshold sentence, now that it lives once in the group-level note', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+
+    const chipStart = largeCommitsCard.indexOf('class="band-chip"');
+    const chipEnd = largeCommitsCard.indexOf('</span>', chipStart);
+    const chip = largeCommitsCard.slice(chipStart, chipEnd);
+    expect(chip).not.toMatch(/n\s*=/i);
+
+    const detailsStart = largeCommitsCard.indexOf('<details class="metric-methodology">');
+    const thresholdStart = largeCommitsCard.indexOf('class="metric-threshold"', detailsStart);
+    const thresholdEnd = largeCommitsCard.indexOf('</p>', thresholdStart);
+    const thresholdSentence = largeCommitsCard.slice(thresholdStart, thresholdEnd);
+    expect(thresholdSentence).not.toMatch(/n\s*=/i);
+    expect(thresholdSentence).toContain('greenfield-modern');
+  });
+
   // A prose sentence buried below the gauge is easy to skim past; a substituted verdict also
   // needs a marker a reader's eye catches without reading the threshold sentence at all, the
   // same reason status already gets both a border color and a text chip rather than relying on
