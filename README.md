@@ -292,6 +292,19 @@ settings (`DUPLICATE_MIN_LINES` 10, `DUPLICATE_MIN_TOKENS` 100): only one refere
 sits near the extreme, so no critical line is corroborated. A duplication band is comparable only
 at the detector settings it was derived at.
 
+### Greenfield-modern bands
+
+`lib/thresholds.js` also holds `GREENFIELD_MODERN`, a second, separately named band set derived
+from a two-repository population (`stride-nyc/remote_retro`, `stride-nyc/dotnetdependencytracer`,
+each measured during its own first several months) rather than the six mature, decades-old
+codebases above. It is not pooled with, and does not replace, the bands above. n = 2 is a
+considerably thinner sample than the n = 12 behind the rest of this table, and both supporting
+repositories are also part of this toolkit's own evaluation set, so a verdict scored against this
+band for either of those two repositories specifically is weaker evidence than the same verdict
+would be for anyone else (see `calibration/README.md`'s "Greenfield reference set" section and
+GitHub #84). See `metrics-specification.md`'s "Project Lifecycle and Change-Size Withholding"
+section for how and when a report uses it.
+
 ## DORA Archetype Classification
 
 The summary includes a `dora_archetype` field classifying the repository into one of four
