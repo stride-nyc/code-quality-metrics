@@ -1200,6 +1200,16 @@ plainly, in the block itself, that the four-way grouping is this toolkit's own i
 something DORA publishes from commit data. The classification is still computed exactly as
 described above; only its report weight and wording changed.
 
+**The rendered report also states legacy-bottleneck/foundational-challenges' unreachability
+explicitly, on a `mixed-signals` result.** Without this, a reader had no way to tell a genuine
+no-match apart from a structurally unreachable one -- which today is every `mixed-signals`
+result, since both critical bounds are null (see above). `describeArchetypeBody`
+(`lib/report-template.js`) appends a clause via `archetypeUnreachableNote`, naming which of the
+two archetypes is affected and why, read live from `THRESHOLDS` rather than stated as a fact
+about today's numbers: the clause is empty, and the rendering byte-identical to before, whenever
+both critical bounds are present, so it appears or disappears automatically with whichever bound
+a future re-measurement actually removes or restores.
+
 **Limitation**: This classification is based on a 30-day window of at most 50 commits. It is a directional signal, not a definitive assessment. Teams near archetype boundaries should look at individual metric thresholds, not just the archetype label.
 
 ---
