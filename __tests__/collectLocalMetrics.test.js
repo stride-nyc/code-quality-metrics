@@ -85,6 +85,12 @@ function mockExecSequence(...values) {
     // alone), so this does not also swallow the project-lifecycle root-commit query above,
     // which is also a `rev-list` call but carries no `--count`.
     if (typeof command === 'string' && command.includes('rev-list') && command.includes('--count')) return '';
+    // Tests predating repository_newest_commit_date (code-quality-metrics-bb29) supply no
+    // value for the newest-commit-across-refs query (`git log <refs> -1 --pretty=format:%cs`).
+    // Answer it out of band too, defaulting to '' (findNewestCommitDate reads this as "no
+    // answer" and returns null), so it never consumes a positional value meant for a call that
+    // follows it.
+    if (typeof command === 'string' && command.includes('format:%cs')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -114,6 +120,12 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     if (typeof command === 'string' && command.includes('rev-list') && command.includes('--count')) return '';
+    // Tests predating repository_newest_commit_date (code-quality-metrics-bb29) supply no
+    // value for the newest-commit-across-refs query (`git log <refs> -1 --pretty=format:%cs`).
+    // Answer it out of band too, defaulting to '' (findNewestCommitDate reads this as "no
+    // answer" and returns null), so it never consumes a positional value meant for a call that
+    // follows it.
+    if (typeof command === 'string' && command.includes('format:%cs')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -139,6 +151,12 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     // never fires and every prior test's positional values still line up.
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
+    // Tests predating repository_newest_commit_date (code-quality-metrics-bb29) supply no
+    // value for the newest-commit-across-refs query (`git log <refs> -1 --pretty=format:%cs`).
+    // Answer it out of band too, defaulting to '' (findNewestCommitDate reads this as "no
+    // answer" and returns null), so it never consumes a positional value meant for a call that
+    // follows it.
+    if (typeof command === 'string' && command.includes('format:%cs')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -163,6 +181,12 @@ function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
     // (code-quality-metrics-fex3).
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
+    // Tests predating repository_newest_commit_date (code-quality-metrics-bb29) supply no
+    // value for the newest-commit-across-refs query (`git log <refs> -1 --pretty=format:%cs`).
+    // Answer it out of band too, defaulting to '' (findNewestCommitDate reads this as "no
+    // answer" and returns null), so it never consumes a positional value meant for a call that
+    // follows it.
+    if (typeof command === 'string' && command.includes('format:%cs')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -187,6 +211,12 @@ function mockExecSequenceWithRootCommitFailure(...values) {
     }
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
+    // Tests predating repository_newest_commit_date (code-quality-metrics-bb29) supply no
+    // value for the newest-commit-across-refs query (`git log <refs> -1 --pretty=format:%cs`).
+    // Answer it out of band too, defaulting to '' (findNewestCommitDate reads this as "no
+    // answer" and returns null), so it never consumes a positional value meant for a call that
+    // follows it.
+    if (typeof command === 'string' && command.includes('format:%cs')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -1397,8 +1427,12 @@ describe('collectLocalMetrics — duplicate detection', () => {
     // The history-granularity merge-commit count query (`git log --merges ...`) is a
     // deliberate exception: its whole purpose is to count the true merges --no-merges
     // strips from every other git log call, so it is excluded from this assertion rather
-    // than failing it.
-    const analysisLogCalls = logCalls.filter(c => !String(c).includes('--merges '));
+    // than failing it. The repository-newest-commit-across-refs query
+    // (code-quality-metrics-bb29, `git log <refs> -1 --pretty=format:%cs`) is a second
+    // deliberate exception for the same reason: it deliberately asks about every commit
+    // reachable from these refs, including a true merge, since the question is "what is the
+    // newest commit that exists here" rather than one scoped to non-merge commits.
+    const analysisLogCalls = logCalls.filter(c => !String(c).includes('--merges ') && !String(c).includes('format:%cs'));
     expect(analysisLogCalls.length).toBeGreaterThan(0);
     analysisLogCalls.forEach(c => expect(c).toMatch(/--no-merges/));
   });
@@ -1978,6 +2012,41 @@ describe('collectLocalMetrics — HEAD-anchored window (code-quality-metrics-g10
     expect(summary.window_requested_since).toBe('2020-01-01');
     expect(summary.analyzed_span_start).toBe('2026-07-30');
     expect(summary.analyzed_span_end).toBe('2026-08-05');
+  });
+});
+
+describe('collectLocalMetrics — repository newest commit date (code-quality-metrics-bb29)', () => {
+  test('reports repository_newest_commit_date in the summary, read from the newest commit across the analyzed refs', async () => {
+    const SHA = 'a'.repeat(40);
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd.includes('rev-parse --show-toplevel')) return FAKE_ROOT;
+      if (cmd.includes('remote get-url')) return FAKE_REMOTE;
+      if (cmd === 'git branch -a') return '  feature/x';
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('format:"%cn"')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40);
+      if (cmd.includes('--max-parents=0')) return '';
+      if (cmd.includes('rev-list') && cmd.includes('--count')) return '';
+      // The query under test: the repository's own newest commit across the analyzed refs,
+      // independent of the analyzed window itself (1 day newer than the analyzed commit
+      // below, matching the measured dotnetdependencytracer shape cited in
+      // code-quality-metrics-bb29).
+      if (cmd.includes('format:%cs')) return '2025-11-19';
+      if (cmd.includes('%H|%ci')) return `${SHA}|2025-11-18T10:00:00Z|Dev|feat: add thing`;
+      if (cmd.includes('--numstat')) return '10\t5\tsrc/app.js';
+      return '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    expect(summaryCall).toBeDefined();
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.repository_newest_commit_date).toBe('2025-11-19');
   });
 });
 
