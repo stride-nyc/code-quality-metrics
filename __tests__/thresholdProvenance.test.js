@@ -139,6 +139,29 @@ describe('threshold provenance (greenfield-modern population)', () => {
   });
 });
 
+// code-quality-metrics-96jv: THRESHOLDS.GREENFIELD_MODERN.TEST_COVERAGE_RATE and
+// .UNCOVERED_PROD_RATE are recorded for provenance (calibration/derive-bands.js emits a value
+// for both regardless of whether anything consumes it) but are deliberately never wired into
+// GREENFIELD_SUBSTITUTED_KEYS (lib/report.js) -- see that map's own comment for the rationale,
+// which is stated once there and cross-referenced here rather than repeated. At n=6 these two
+// bands are far more permissive than the brownfield bands test/prod co-change discipline is
+// meant to keep scoring against (test_coverage_rate healthy 6 vs. brownfield 23,
+// uncovered_prod_rate healthy 22 vs. brownfield 10), so a future change that adds either key
+// here, believing the band already exists and is vetted because it carries a derivation
+// comment in lib/thresholds.js, would silently start scoring test discipline against a much
+// more permissive floor on every initial-build window. This gate fails loudly on that change
+// instead.
+describe('greenfield substitution provenance', () => {
+  const { GREENFIELD_SUBSTITUTED_KEYS } = require('../lib/report');
+
+  test('GREENFIELD_SUBSTITUTED_KEYS never maps test_coverage_rate or uncovered_prod_rate to the greenfield-modern band', () => {
+    expect(GREENFIELD_SUBSTITUTED_KEYS.test_coverage_rate).toBeUndefined();
+    expect(GREENFIELD_SUBSTITUTED_KEYS.uncovered_prod_rate).toBeUndefined();
+    expect(Object.values(GREENFIELD_SUBSTITUTED_KEYS)).not.toContain('TEST_COVERAGE_RATE');
+    expect(Object.values(GREENFIELD_SUBSTITUTED_KEYS)).not.toContain('UNCOVERED_PROD_RATE');
+  });
+});
+
 // Settings that change a measured metric's value, so an observation taken at a
 // different setting is not comparable to one taken at the current setting and
 // must not feed a band. TEST_FILE_PATTERNS is deliberately absent: it is an
