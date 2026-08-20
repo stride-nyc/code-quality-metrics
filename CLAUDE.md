@@ -14,10 +14,25 @@ Key insight: Local analysis reveals 10x higher drift rates than remote analysis 
 # Analyze the local repository (outputs JSON files + console report)
 node local-code-metrics.js
 
+# Render local_drift_report.html from those JSON files
+npm run report   # node generate-drift-report.js
+
 # Manually trigger GitHub Actions workflows
 gh workflow run code-metrics.yml
 gh workflow run pr-metrics.yml
 ```
+
+**`local-code-metrics.js` writes `local_commit_metrics.json` and
+`local_metrics_summary.json`; `generate-drift-report.js` reads them back in a separate,
+later command.** Nothing re-collects automatically before rendering, so re-running `npm run
+report` against a JSON pair from an older analysis run is a normal, expected operation, not a
+mistake. It also means those two files are the read/write boundary between the two commands,
+and disk data crossing it is untrusted: `generate-drift-report.js`'s `readReportInputs`
+validates that every commit record in `local_commit_metrics.json` still carries the fields
+the current code expects (`counted_additions`/`counted_deletions`, added by PR #94) and
+throws, naming the missing field and telling the operator to re-run
+`local-code-metrics.js`, rather than rendering a report ranked on stale or absent data
+(code-quality-metrics-2byz).
 
 ### Analysis Window
 

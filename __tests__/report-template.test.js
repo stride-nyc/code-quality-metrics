@@ -48,8 +48,8 @@ function fixtureSummary(overrides) {
 
 function fixtureMetrics() {
   return [
-    { sha: 'aaa11111', full_sha: 'aaa11111111111111111111111111111111111', date: '2026-08-01T00:00:00.000Z', author: 'Alice', message: 'feat: add widget', total_additions: 200, total_deletions: 50, files_changed: 4 },
-    { sha: 'bbb22222', full_sha: 'bbb22222222222222222222222222222222222', date: '2026-08-02T00:00:00.000Z', author: 'Bob', message: 'fix: bug', total_additions: 10, total_deletions: 5, files_changed: 1 }
+    { sha: 'aaa11111', full_sha: 'aaa11111111111111111111111111111111111', date: '2026-08-01T00:00:00.000Z', author: 'Alice', message: 'feat: add widget', total_additions: 200, total_deletions: 50, files_changed: 4, counted_additions: 200, counted_deletions: 50 },
+    { sha: 'bbb22222', full_sha: 'bbb22222222222222222222222222222222222', date: '2026-08-02T00:00:00.000Z', author: 'Bob', message: 'fix: bug', total_additions: 10, total_deletions: 5, files_changed: 1, counted_additions: 10, counted_deletions: 5 }
   ];
 }
 
