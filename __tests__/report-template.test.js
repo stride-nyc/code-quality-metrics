@@ -934,6 +934,59 @@ describe('renderReportHtml', () => {
     expect(largeCommitsCard).toContain('15, comfortably inside the 18 bar.');
   });
 
+  it('states in plain language what the value means against its healthy bar, for a two-band, higher-is-worse metric scored warning', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '25.00' }));
+    const cards = html.split('<article class="metric-card"');
+    const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('class="metric-meaning"');
+    expect(largeCommitsCard).toContain('25, over the 18 bar.');
+  });
+
+  it('states in plain language what the value means against its healthy bar, for a two-band, higher-is-better metric', () => {
+    // test_coverage_rate is higher-is-better, two-band (healthy: 23). Default fixture value
+    // 55 is good (>= 23); a lowered value crosses to warning.
+    const goodHtml = renderReportHtml(fixtureArgs({ test_coverage_rate: '55.00' }));
+    const goodCard = goodHtml.split('<article class="metric-card"').find(card => card.includes('>Test/prod co-change</p>'));
+    expect(goodCard).toContain('55, at or above the 23 bar.');
+
+    const warningHtml = renderReportHtml(fixtureArgs({ test_coverage_rate: '10.00' }));
+    const warningCard = warningHtml.split('<article class="metric-card"').find(card => card.includes('>Test/prod co-change</p>'));
+    expect(warningCard).toContain('10, under the 23 bar.');
+  });
+
+  // large_commits_pct is two-band under the current calibration, so a three-band critical
+  // meaning can only be demonstrated against a synthetic, restored critical bound (same
+  // technique the existing "renders a threshold description" test above already uses).
+  it('states in plain language what the value means against its critical line, for a three-band metric scored critical', () => {
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let html;
+    try {
+      html = renderReportHtml(fixtureArgs({ large_commits_pct: '40.00' }));
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('40, well past the 30 critical line.');
+  });
+
+  // The meaning line depends on a real band to compare against. Entries with a
+  // descriptiveNote (band withdrawn -- net_additions_ratio_median, message_quality_pct) or no
+  // boundary at all (velocity, a purely informational entry) have neither, so there is no
+  // plain-language comparison to make; adding one would fabricate a bar that does not exist.
+  it('[guard] omits the meaning line for entries with no real band to compare against', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const cards = html.split('<article class="metric-card"');
+
+    const netAdditionsCard = cards.find(card => card.includes('>Net-new ratio (median)</p>'));
+    expect(netAdditionsCard).not.toContain('class="metric-meaning"');
+
+    const velocityCard = cards.find(card => card.includes('>Velocity</p>'));
+    expect(velocityCard).not.toContain('class="metric-meaning"');
+  });
+
   it('renders a two-band gauge with only good/warning color bands, never a critical (red) arc', () => {
     // test_coverage_rate is two-band. A gauge asserting a red zone it cannot
     // support would overstate what the data shows, so it must render only two
