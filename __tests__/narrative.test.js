@@ -599,6 +599,31 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(true);
   });
 
+  // code-quality-metrics-zuee: measured against a real 73V run. Real rejected bullet: 'Concern:
+  // Copy-pasted code has accumulated to 4.1% of scanned production lines - 655 duplicated lines
+  // across 19 separate blocks out of 16,106 scanned - which sits above the benchmark's upper
+  // boundary of 1.5% ...'. This correctly cites duplication_density_pct's own value (4.1) and
+  // healthy boundary (1.5) -- it is genuinely about that scored metric -- but never uses its
+  // label "Duplication density" anywhere in the sentence, so the scoredLabels text-match above
+  // finds no match, and duplication_lines' own label ("Duplicated lines") matches instead as
+  // supporting detail ("655 duplicated lines"), producing a false rejection. Unlike the 6gu case
+  // above, naming the scored label is not the only way a bullet can prove it is about a scored
+  // metric: citing that metric's own value AND healthy/critical boundary together is at least as
+  // strong evidence, and is exactly what the model actually did here.
+  test('does not reject a Concern bullet that cites a scored metric\'s own value and healthy boundary, even when its label never appears and an unrelated informational label does', () => {
+    const payload = [
+      { key: 'duplication_density_pct', label: 'Duplication density', value: '4.1', direction: 'higher-is-worse', status: 'warning', healthyBoundary: '1.5', criticalBoundary: null },
+      { key: 'duplication_lines', label: 'Duplicated lines', value: '655 / 16106', direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'duplication_clones', label: 'Clone count', value: 19, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' },
+      { key: 'duplication_semantic_findings', label: 'Semantic duplicates', value: 6, direction: 'informational', status: 'neutral', healthyBoundary: null, criticalBoundary: null, verdict: 'none' }
+    ];
+    const bullets = ["Concern: Copy-pasted code has accumulated to 4.1% of scanned production lines - 655 duplicated lines across 19 separate blocks out of 16106 scanned - which sits above the benchmark's upper boundary of 1.5% and signals architectural debt that tends to compound if not refactored; the 6 semantic duplicates suggest the duplication has already spread beyond text-identical repetition."];
+
+    const result = validateNarrative(bullets, payload, []);
+
+    expect(result.valid).toBe(true);
+  });
+
   // code-quality-metrics-38h: found in the same session. Real generated bullet: '...with 924
   // duplicated lines out of 14,803 scanned...'. The payload's duplication_lines value is the
   // composite string "924 / 14803" (no thousands separator). NUMBER_PATTERN requires a digit run
