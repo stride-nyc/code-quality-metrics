@@ -75,14 +75,16 @@ function mockExecSequence(...values) {
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
     // Tests predating the window reproducibility guard (code-quality-metrics-tde9) supply
-    // no value for the independent `git rev-list --count --since=...` cross-check. Answer it
-    // out of band too, defaulting to empty (getExpectedCommitCount treats an unparseable
-    // count as 0, which reads as "unknown" and never triggers the mismatch warning) so it
-    // never consumes a positional value meant for the numstat call that follows it. Matched
-    // on `rev-list` together with `--since` (not `rev-list` alone), so this does not also
-    // swallow the project-lifecycle root-commit query above, which is also a `rev-list` call
-    // but carries no `--since`.
-    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--since')) return '';
+    // no value for the independent `git rev-list --count [--since=...]` cross-check (used both
+    // by that guard's dated-window comparison and by the --max-commits unbounded safety
+    // pre-flight check, which omits --since entirely for a HEAD-anchored run). Answer it out of
+    // band too, defaulting to empty (getExpectedCommitCount treats an unparseable count as 0,
+    // which reads as "unknown"/"under the safety limit" and never triggers a mismatch warning
+    // or the safety-limit error) so it never consumes a positional value meant for the numstat
+    // call that follows it. Matched on `rev-list` together with `--count` (not `rev-list`
+    // alone), so this does not also swallow the project-lifecycle root-commit query above,
+    // which is also a `rev-list` call but carries no `--count`.
+    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--count')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -111,7 +113,7 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // never fires and every prior test's positional values still line up.
     if (typeof command === 'string' && command.includes('--name-only')) return 'src/app.js';
     if (typeof command === 'string' && command.includes('--reverse') && command.includes('%H')) return '';
-    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--since')) return '';
+    if (typeof command === 'string' && command.includes('rev-list') && command.includes('--count')) return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -1933,6 +1935,12 @@ describe('collectLocalMetrics — --max-commits override', () => {
       .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
     expect(branchLogCommand).toBeDefined();
     expect(branchLogCommand).not.toMatch(/--max-count=/);
+
+    // Also confirms the safety pre-flight rev-list call did not shift a positional value onto
+    // this git log call: the real commit was parsed, not the pre-flight's own mocked output.
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.total_commits).toBe(1);
   });
 
   test('raises the final analyzed-commit cap above the default MAX_COMMITS when combined with --since', async () => {
@@ -2047,5 +2055,28 @@ describe('collectLocalMetrics — --max-commits override', () => {
     const summary = JSON.parse(summaryCall[1]);
     expect(summary.total_commits).toBe(3);
     expect(summary.window_widened).toBe(true);
+  });
+
+  // GitHub #89: an unbounded git log fetch over a very large history can throw ENOBUFS, an
+  // error runGitCommand's own catch swallows into an empty result -- reading as "zero commits
+  // found" rather than surfacing the real problem. The safety pre-flight must stop the run
+  // before that fetch is ever attempted, not after.
+  test('throws a loud error before fetching the full log when an unbounded run would exceed the safety limit', async () => {
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd === 'git rev-parse --show-toplevel') return FAKE_ROOT;
+      if (cmd === 'git remote get-url origin') return FAKE_REMOTE;
+      if (cmd === 'git branch -a') return '  feature/x';
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('rev-list') && cmd.includes('--count')) return String(CONFIG.MAX_COMMITS_SAFETY_LIMIT + 1);
+      throw new Error(`unexpected command reached after the safety check should have stopped the run: ${cmd}`);
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await expect(collectLocalMetrics({ maxCommits: 'unbounded' }))
+      .rejects.toThrow(new RegExp(String(CONFIG.MAX_COMMITS_SAFETY_LIMIT)));
+
+    const fullFetchAttempted = execSync.mock.calls.some(call => String(call[0]).includes('--pretty=format'));
+    expect(fullFetchAttempted).toBe(false);
   });
 });

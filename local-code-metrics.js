@@ -400,6 +400,24 @@ async function collectLocalMetrics(options = {}) {
     : `🔍 Looking for the newest ${CONFIG.MAX_COMMITS} commits (HEAD-anchored, no date filter)`);
   console.log('');
 
+  // Safety ceiling for the --max-commits unbounded sentinel (GitHub #89, CONFIG.MAX_COMMITS_
+  // SAFETY_LIMIT's own comment in lib/config.js): removing the cap entirely can attempt a git
+  // log fetch over a very large history, which can throw ENOBUFS -- an error runGitCommand's
+  // own catch swallows into an empty result, reading as "zero commits found" rather than
+  // surfacing the real problem. A cheap `rev-list --count` pre-flight (never fetches full log
+  // content, so it cannot hit the same failure) checks the actual size before committing to
+  // that fetch; exceeding the limit throws loudly here, before any branch is fetched at all.
+  // Only checked for 'unbounded': a bounded numeric --max-commits is the operator's own
+  // explicit, self-limiting request (effectiveMaxCommits's own comment above).
+  if (options.maxCommits === 'unbounded') {
+    const expectedCommitCount = getExpectedCommitCount(branchesToAnalyze, sinceStr);
+    if (expectedCommitCount > CONFIG.MAX_COMMITS_SAFETY_LIMIT) {
+      throw new Error(
+        `--max-commits unbounded would analyze approximately ${expectedCommitCount} commits, over the safety limit of ${CONFIG.MAX_COMMITS_SAFETY_LIMIT}. Narrow the window with --since/--days, or pass a bounded --max-commits <n> instead.`
+      );
+    }
+  }
+
   // Collect commits from all feature branches
   /** @type {CommitInfo[]} */
   const allCommits = [];
