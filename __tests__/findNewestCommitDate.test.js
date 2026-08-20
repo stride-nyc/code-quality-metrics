@@ -23,4 +23,12 @@ describe('findNewestCommitDate (code-quality-metrics-bb29)', () => {
 
     expect(result).toBe('2025-11-19');
   });
+
+  test('returns null (not an empty string) when the git command finds no commit across the given refs', () => {
+    execSync.mockReturnValue('');
+
+    const result = findNewestCommitDate(['orphan-branch']);
+
+    expect(result).toBeNull();
+  });
 });
