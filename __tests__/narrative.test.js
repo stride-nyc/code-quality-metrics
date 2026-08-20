@@ -1078,6 +1078,59 @@ describe('validateNarrative', () => {
     expect(result.valid).toBe(true);
   });
 
+  // CALLED SHOT (code-quality-metrics-49ch): top7's own exemption above only matches the
+  // literal phrase "exceeds roughly" (third-person singular). Measured directly by generating
+  // the real Findings narrative repeatedly (42 live calls against this project's own,
+  // byte-identical catalog) to diagnose why flight-info-spike silently rendered the
+  // deterministic fallback on one run and the full narrative on an immediate identical rerun:
+  // 6 of 42 calls were rejected by this exact presence check, and 3 of those 6 used "exceed
+  // roughly" (bare form, no "s") rather than "exceeds roughly" -- a verb-agreement variant
+  // top7's narrow regex does not recognize, even though the sentence is proposing the exact
+  // same kind of new ceiling top7 already carved out an exemption for. Predicted failure
+  // before implementing: expect(result.valid).toBe(true) fails with Received: false, reason
+  // matching cites "300", which does not appear in the metric catalog or top-commit payload
+  // (the real rejected text, verbatim from one of the 42 calls).
+  test('accepts a Recommended action bullet proposing a new ceiling with "exceed roughly" (bare form), not only "exceeds roughly" (code-quality-metrics-49ch)', () => {
+    const bullets = ['Recommended action: Break apart commits that are likely to exceed roughly 300 production lines before they are pushed.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // CALLED SHOT (code-quality-metrics-49ch): same 42-call diagnosis run as above. One
+  // rejected bullet proposed its new ceiling as "more than roughly 200" rather than "exceeds
+  // roughly 200" -- a different lead-in phrase carrying the same meaning (a proposed
+  // approximate ceiling, signaled by "roughly", not a citation of an existing catalog value).
+  // Predicted failure before implementing: expect(result.valid).toBe(true) fails with
+  // Received: false, reason matching cites "200" ... (the real rejected text, verbatim).
+  test('accepts a Recommended action bullet proposing a new ceiling with "more than roughly N", not only "exceeds roughly N" (code-quality-metrics-49ch)', () => {
+    const bullets = ['Recommended action: Set a team norm that any commit touching more than roughly 200 production lines should be split before it is opened for review.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
+  });
+
+  // GUARD, not a called-shot RED: the same 42-call diagnosis also produced rejections on a
+  // BARE "more than N" / "exceed N" with no "roughly" hedge at all (e.g. "each added more than
+  // 200 production lines", "each exceed 400 production lines"). This is deliberately NOT
+  // exempted alongside the two fixes above: "roughly" is the only signal distinguishing a
+  // proposed approximate ceiling from a real citation of an existing catalog number written
+  // without a qualifier, and dropping that requirement would let a genuinely mislabeled
+  // citation (e.g. "large commits exceed 45 percent" quoting a real catalog value as though it
+  // were a new proposal) through unchecked. The harder, unbounded space of bare comparative
+  // phrasing is addressed by generateFindingsNarrative's retry instead (see narrative.test.js's
+  // retry tests), not by trying to enumerate every phrasing here.
+  test('still rejects a fabricated number introduced by a bare "more than N" with no "roughly" hedge (code-quality-metrics-49ch)', () => {
+    const bullets = ['Recommended action: Three of the ten largest recent commits each added more than 200 production lines in a single change.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/cites "200"/);
+  });
+
   // REGRESSION GUARD (code-quality-metrics-top7): the same five-repo regeneration produced
   // two rejections that were CORRECT and must stay rejected, so a fix aimed at the two false
   // positives above cannot be tuned by loosening this check in general. daloopa presented
