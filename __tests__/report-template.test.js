@@ -796,6 +796,8 @@ describe('renderReportHtml', () => {
       message: `commit number ${i}`,
       total_additions: i,
       total_deletions: 0,
+      counted_additions: i,
+      counted_deletions: 0,
       files_changed: 1
     }));
     const args = fixtureArgs();
@@ -807,6 +809,65 @@ describe('renderReportHtml', () => {
     expect(html).toContain('commit number 2');
     expect(html).not.toContain('commit number 1<');
     expect(html).not.toContain('commit number 0<');
+  });
+
+  // Measured on 73V (code-quality-metrics-cqdb): a commit whose total_additions/total_deletions
+  // is almost entirely ANALYSIS_IGNORE_PATTERNS-excluded content rendered as a bare line count
+  // indistinguishable from a genuine 14,000-line commit. lib/git.js:179/:219 document that
+  // total_additions/total_deletions/files_changed must stay whole-diff so a reader can still
+  // reconcile the Flight Log against `git log` -- so the fix is not to change that basis, but to
+  // make the excluded share visible on the same row. This also guards the basis itself: a later
+  // change that quietly swapped the whole-diff total for counted_additions + counted_deletions
+  // would still fail the first assertion below.
+  it('shows the excluded share alongside the whole-diff total when a row is mostly excluded', () => {
+    const mostlyExcluded = {
+      sha: 'cc7c77aa',
+      full_sha: 'cc7c77aafull',
+      date: '2026-08-01T00:00:00.000Z',
+      author: 'Dev',
+      message: 'settings fix using FDAC',
+      total_additions: 14679,
+      total_deletions: 0,
+      counted_additions: 216,
+      counted_deletions: 0,
+      excluded_additions: 14410,
+      excluded_deletions: 0,
+      files_changed: 3
+    };
+    const args = fixtureArgs();
+    args.metrics = [mostlyExcluded];
+    const html = renderReportHtml(args);
+
+    // The whole-diff total is still the number a reader can check against `git log`.
+    expect(html).toContain('14679');
+    // The excluded share is visible on the same row, so the total is not mistaken for
+    // genuine production change.
+    expect(html).toContain('98.17% excluded');
+  });
+
+  // Guard: an ordinary row with nothing excluded must not carry a redundant "0.00% excluded"
+  // suffix on every single row of the table.
+  it('does not show an excluded-share suffix on a row with nothing excluded', () => {
+    const clean = {
+      sha: 'clean0001',
+      full_sha: 'clean0001full',
+      date: '2026-08-01T00:00:00.000Z',
+      author: 'Dev',
+      message: 'ordinary commit',
+      total_additions: 40,
+      total_deletions: 10,
+      counted_additions: 40,
+      counted_deletions: 10,
+      excluded_additions: 0,
+      excluded_deletions: 0,
+      files_changed: 2
+    };
+    const args = fixtureArgs();
+    args.metrics = [clean];
+    const html = renderReportHtml(args);
+
+    expect(html).toContain('50');
+    expect(html).not.toContain('excluded');
   });
 
   it('renders findings bullets from an array of strings when findings is provided', () => {

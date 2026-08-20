@@ -59,5 +59,23 @@ describe('METRIC_DESCRIPTIONS', () => {
     }
   });
 
+  // code-quality-metrics-wo8q: these two dora footnotes were two-word fragments ("Small
+  // batches.", "Feeds the same small batches picture.") doing no work, unlike the substantial
+  // DORA connections other tiles in the same "Change size and scope" group carry (e.g.
+  // large_commits_pct's "Working in small batches is one of the practices DORA ties most
+  // directly to healthy delivery.", or sprawling_commits_pct's specific citation of the 7.2%
+  // instability figure). Each must now be a real sentence, not the removed fragment.
+  it("p90_files_changed's dora footnote is a real sentence, not the removed 'Small batches.' fragment", () => {
+    const { dora } = METRIC_DESCRIPTIONS.p90_files_changed;
 
+    expect(dora).not.toBe('Small batches.');
+    expect(dora.split(/\s+/).length).toBeGreaterThan(5);
+  });
+
+  it("avg_lines_changed's dora footnote is a real sentence, not the removed 'Feeds the same small batches picture.' fragment", () => {
+    const { dora } = METRIC_DESCRIPTIONS.avg_lines_changed;
+
+    expect(dora).not.toBe('Feeds the same small batches picture.');
+    expect(dora.split(/\s+/).length).toBeGreaterThan(5);
+  });
 });
