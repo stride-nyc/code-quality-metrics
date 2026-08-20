@@ -366,6 +366,35 @@ describe('analyzeCommit', () => {
     });
   });
 
+  // GitHub #90: total_additions/total_deletions/files_changed stay whole-diff (the raw,
+  // honest totals above), but the line-count distributions computed from them
+  // (local-code-metrics.js's lineSizes/fileCounts) need an exclusion-aware sibling to respect
+  // ANALYSIS_IGNORE_PATTERNS the way CLAUDE.md already documents. counted_additions/
+  // counted_deletions/counted_files_changed carry that: the same figures as the raw totals
+  // minus whatever ANALYSIS_IGNORE_PATTERNS matched, mirroring countedFilesChanged's own
+  // existing (previously unexported) role in sprawling_commit.
+  test('reports counted_additions, counted_deletions, and counted_files_changed excluding a matched file\'s lines, distinct from the whole-diff totals', () => {
+    withAnalysisIgnorePatterns(['**/bin/**'], () => {
+      mockNumstat([
+        numstatLine(500, 100, 'bin/Debug/App.dll'),
+        numstatLine(10, 2, 'src/app.js')
+      ].join('\n'));
+
+      const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+      // Whole-diff totals unaffected (already covered above), restated here to make the
+      // contrast with the counted fields explicit.
+      expect(result.total_additions).toBe(510);
+      expect(result.total_deletions).toBe(102);
+      expect(result.files_changed).toBe(2);
+
+      // Counted fields exclude the matched file entirely.
+      expect(result.counted_additions).toBe(10);
+      expect(result.counted_deletions).toBe(2);
+      expect(result.counted_files_changed).toBe(1);
+    });
+  });
+
   test('does not exclude any file when ANALYSIS_IGNORE_PATTERNS is empty (default)', () => {
     mockNumstat([
       numstatLine(500, 0, 'bin/Debug/App.dll'),
