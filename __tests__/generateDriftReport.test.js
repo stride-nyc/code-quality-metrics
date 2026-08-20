@@ -150,4 +150,37 @@ describe('generateReport', () => {
     expect(result.stderr).not.toContain('at readRequiredJson');
     expect(result.stderr).not.toContain('at Object.<anonymous>');
   });
+
+  // code-quality-metrics-w3wn: local-code-metrics.js now writes into .codemetrics/ by
+  // default, so the CLI's own default (no directory argument given) must resolve there too --
+  // otherwise the write and the later read disagree about where the pipeline's data lives.
+  it('resolves the default target directory to .codemetrics/ under cwd when run as a CLI with no directory argument', () => {
+    const dir = makeTmpDir();
+    const codemetricsDir = path.join(dir, '.codemetrics');
+    fs.mkdirSync(codemetricsDir);
+    writeFixtureInputs(codemetricsDir);
+    const scriptPath = path.join(__dirname, '..', 'generate-drift-report.js');
+
+    const result = spawnSync(process.execPath, [scriptPath], { encoding: 'utf8', cwd: dir });
+
+    expect(result.status).toBe(0);
+    const outputPath = path.join(codemetricsDir, 'local_drift_report.html');
+    expect(fs.existsSync(outputPath)).toBe(true);
+    const html = fs.readFileSync(outputPath, 'utf8');
+    expect(html.trim().toLowerCase().startsWith('<!doctype html>')).toBe(true);
+  });
+
+  // code-quality-metrics-w3wn's implementation hazard: a legacy root-level local_metrics_summary.json
+  // from before this tool wrote to .codemetrics/ must not be read silently -- that would make a
+  // stale, pre-move file look like current data. Refuse and name the legacy file explicitly,
+  // rather than the generic "missing file" message readRequiredJson gives when nothing at all
+  // exists anywhere.
+  it('refuses (does not read) a legacy root-level local_metrics_summary.json when .codemetrics/ is absent, naming the legacy file and instructing a re-run', () => {
+    const dir = makeTmpDir();
+    writeFixtureInputs(dir); // legacy root-level files; no .codemetrics/ subdirectory created
+    const codemetricsDir = path.join(dir, '.codemetrics');
+
+    expect(() => generateReport(codemetricsDir)).toThrow(/legacy/i);
+    expect(() => generateReport(codemetricsDir)).toThrow(/re-run "node local-code-metrics\.js"/i);
+  });
 });

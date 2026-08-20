@@ -43,6 +43,17 @@ function readFontData() {
 
 /**
  * Read a required JSON input file from dir, throwing a clear error if missing.
+ *
+ * code-quality-metrics-w3wn: local-code-metrics.js now writes into a .codemetrics/ directory
+ * rather than the target repository's root. When dir is that .codemetrics/ directory (the
+ * normal case -- see generateReport's own default) and the file is missing there, but a
+ * legacy root-level copy sits one directory up (from before this tool moved its output, or
+ * from a local-code-metrics.js run against an older tool version), this refuses to read it
+ * rather than silently falling back: a stale pre-move file rendering as if it were current
+ * data is exactly the kind of confusing failure this project has hit before with a path
+ * mismatch masquerading as a stale-file error (see CLAUDE.md's readReportInputs discussion).
+ * The operator is told the legacy file exists and pointed at the fix (re-run
+ * local-code-metrics.js) rather than left to guess why the report predates their latest work.
  * @param {string} dir
  * @param {string} filename
  * @returns {object}
@@ -50,6 +61,14 @@ function readFontData() {
 function readRequiredJson(dir, filename) {
   const filePath = path.join(dir, filename);
   if (!fs.existsSync(filePath)) {
+    const legacyPath = path.join(path.dirname(dir), filename);
+    if (path.basename(dir) === '.codemetrics' && fs.existsSync(legacyPath)) {
+      throw new Error(
+        `Missing ${filePath}. Found a legacy ${filename} at ${legacyPath} instead, from before ` +
+        'local-code-metrics.js began writing to .codemetrics/. This tool does not read that ' +
+        `older location automatically. Re-run "node local-code-metrics.js" to regenerate ${filename} in .codemetrics/.`
+      );
+    }
     throw new Error(`Missing ${filePath}. Run "node local-code-metrics.js" first to generate it.`);
   }
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -161,7 +180,12 @@ async function generateReportWithNarrative(dir = process.cwd()) {
 module.exports = { generateReport, generateReportWithNarrative };
 
 if (require.main === module) {
-  const targetDir = process.argv[2] || process.cwd();
+  // code-quality-metrics-w3wn: local-code-metrics.js's own default output location moved to
+  // .codemetrics/ under the analyzed repository's root, so this CLI's own no-argument default
+  // must resolve to the same place -- otherwise the write and this later read disagree about
+  // where the pipeline's data lives. An explicit directory argument still overrides this
+  // entirely (unchanged), for a run whose local-code-metrics.js invocation used --output-dir.
+  const targetDir = process.argv[2] || path.join(process.cwd(), '.codemetrics');
   generateReportWithNarrative(targetDir)
     .then(outputPath => console.log(`Wrote ${outputPath}`))
     .catch(error => {
