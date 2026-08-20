@@ -165,7 +165,14 @@ describe('generateFindingsNarrative: client provided', () => {
   // diagnostic still needs to exist somewhere for debugging, so it moves to console.error
   // (stderr) rather than being dropped outright; only its presence in the rendered bullets is
   // removed.
-  test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation', async () => {
+  //
+  // Updated for code-quality-metrics-49ch's retry (not a called-shot RED for the retry itself,
+  // that is covered by the two tests above): this client returns the same invalid payload on
+  // every call, so it now fails validation on every one of CONFIG.NARRATIVE_MAX_ATTEMPTS
+  // attempts, and errorSpy is called once per attempt instead of once total -- a direct,
+  // predictable consequence of the retry loop landing in the same commit, not a second
+  // red/green cycle on this test.
+  test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation on every attempt', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
       positive_findings: [],
@@ -180,10 +187,73 @@ describe('generateFindingsNarrative: client provided', () => {
     expect(result).toEqual(fallbackFindings(catalog));
     expect(result.some(item => /narrative rejected/i.test(item))).toBe(false);
     expect(logSpy).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
     expect(errorSpy.mock.calls[0][0]).toMatch(/999/);
 
     logSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  // CALLED SHOT (code-quality-metrics-49ch): diagnosed against flight-info-spike's own
+  // reported symptom -- one batch run silently rendered the deterministic fallback, an
+  // immediate rerun against byte-identical input rendered the full narrative. Measured
+  // directly: 42 live calls to the real Anthropic API against this project's own,
+  // byte-identical catalog produced 8 validation rejections, 6 of them false positives from
+  // the same presence-check gap narrowed in the prior commit -- but that fix cannot cover
+  // every future phrasing the model might choose (a bare "more than N" with no "roughly" hedge
+  // is deliberately still rejected, per that commit's own guard test), so a genuinely good
+  // narrative can still be discarded by a single unlucky generation. A retry gives the model a
+  // second, independently-phrased attempt before falling back to the templated list, rather
+  // than losing the whole narrative to one rejected phrasing.
+  // Predicted failure before implementing: generateFindingsNarrative calls
+  // client.messages.create only once today and returns fallbackFindings(catalog) as soon as
+  // that one attempt fails validation, so mockCreate is called once, not twice, and result
+  // equals fallbackFindings(catalog), not the second (valid) response's bullets --
+  // `expect(mockCreate).toHaveBeenCalledTimes(2)` fails with "Received number of calls: 1".
+  test('retries once after a validation rejection, and returns the narrative from a subsequent successful attempt', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const invalidPayload = { positive_findings: [], concerns: ['Large commits sit at 999%, which is critical.'], recommended_actions: [] };
+    const validPayload = {
+      positive_findings: ['Test coverage sits at 55, comfortably healthy.'],
+      concerns: ['Large commits are at 40, which is critical.'],
+      recommended_actions: []
+    };
+    const mockCreate = jest.fn()
+      .mockResolvedValueOnce({ content: [{ type: 'text', text: JSON.stringify(invalidPayload) }] })
+      .mockResolvedValueOnce({ content: [{ type: 'text', text: JSON.stringify(validPayload) }] });
+    const client = { messages: { create: mockCreate } };
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(result).toEqual([
+      'Positive: Test coverage sits at 55, comfortably healthy.',
+      'Concern: Large commits are at 40, which is critical.'
+    ]);
+
+    errorSpy.mockRestore();
+  });
+
+  // GUARD, not a called-shot RED: written immediately after the retry above landed, to prove
+  // the retry is bounded, not unbounded -- a narrative that fails validation on every attempt
+  // must still fall back, rather than looping forever against a catalog shape the model can
+  // never satisfy.
+  test('falls back to fallbackFindings when validation fails on every attempt, after retrying the configured number of times', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
+    const client = makeClient({
+      positive_findings: [],
+      concerns: ['Large commits sit at 999%, which is critical.'],
+      recommended_actions: []
+    });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await generateFindingsNarrative(client, catalog, []);
+
+    expect(result).toEqual(fallbackFindings(catalog));
+    expect(client.messages.create).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
+    expect(errorSpy).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
+
     errorSpy.mockRestore();
   });
 
