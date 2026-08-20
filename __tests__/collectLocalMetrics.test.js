@@ -7,6 +7,7 @@ jest.mock('../lib/duplicate');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 const claude = require('../lib/claude');
 const duplicate = require('../lib/duplicate');
 const { collectLocalMetrics, CONFIG } = require('../local-code-metrics');
@@ -1231,6 +1232,74 @@ describe('collectLocalMetrics — successful run', () => {
     const metricsCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_commit_metrics'));
     const written = JSON.parse(metricsCall[1]);
     expect(written).toHaveLength(1);
+  });
+});
+
+describe('collectLocalMetrics — output directory (code-quality-metrics-w3wn)', () => {
+  const SHA = 'a'.repeat(40);
+  const NUMSTAT = `10\t5\tsrc/app.js`;
+  const DEFAULT_OUTPUT_DIR = path.join(process.cwd(), '.codemetrics');
+
+  beforeEach(() => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      NUMSTAT
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+    fs.mkdirSync.mockImplementation(() => {});
+  });
+
+  // Part 1's core requirement: running the tool against any repository must write nothing to
+  // that repository's root. Every output path must land under .codemetrics/, not the target's
+  // own root directory (code-quality-metrics-w3wn).
+  test('writes nothing to the target repository root; every output file lands under .codemetrics/', async () => {
+    await collectLocalMetrics();
+
+    expect(fs.writeFileSync.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fs.writeFileSync.mock.calls) {
+      const writtenPath = call[0];
+      expect(writtenPath.startsWith(DEFAULT_OUTPUT_DIR + path.sep)).toBe(true);
+      expect(writtenPath).not.toBe(path.join(process.cwd(), path.basename(writtenPath)));
+    }
+  });
+
+  test('creates .codemetrics/ when it does not already exist', async () => {
+    // beforeEach's global fs.existsSync.mockReturnValue(false) already covers "absent";
+    // reasserted here so the test documents the precondition it depends on rather than
+    // relying on a default set two describe blocks away.
+    fs.existsSync.mockReturnValue(false);
+
+    await collectLocalMetrics();
+
+    expect(fs.mkdirSync).toHaveBeenCalledWith(DEFAULT_OUTPUT_DIR, { recursive: true });
+  });
+
+  test('does not attempt to create .codemetrics/ again when it already exists', async () => {
+    fs.existsSync.mockImplementation(p => p === DEFAULT_OUTPUT_DIR);
+
+    await collectLocalMetrics();
+
+    expect(fs.mkdirSync).not.toHaveBeenCalled();
+  });
+
+  // --output-dir (code-quality-metrics-w3wn): CLI-only override of where a run writes its
+  // output, mirroring --max-commits' own reasoning (see CLAUDE.md's "Analysis Window" section)
+  // -- where a run writes output is a property of the run, not a fact about the repository.
+  test('--output-dir overrides the default .codemetrics/ location', async () => {
+    const customDir = '/tmp/custom-output-dir';
+    fs.existsSync.mockImplementation(p => p === customDir);
+
+    await collectLocalMetrics({ outputDir: customDir });
+
+    expect(fs.writeFileSync.mock.calls.length).toBeGreaterThan(0);
+    for (const call of fs.writeFileSync.mock.calls) {
+      expect(call[0].startsWith(customDir + path.sep)).toBe(true);
+    }
+    // Already exists (mocked above) -- must not attempt to create it again.
+    expect(fs.mkdirSync).not.toHaveBeenCalled();
   });
 });
 

@@ -1073,8 +1073,31 @@ async function collectLocalMetrics(options = {}) {
   // Generate insights
   const { insights, warnings, recommendations } = generateInsights(summary, metrics);
 
-  // Save results
-  const outputDir = process.cwd();
+  // Save results (code-quality-metrics-w3wn): written into a .codemetrics/ directory inside
+  // the analyzed repository, not its root. Measured across the six repositories this toolkit
+  // evaluates, writing local_*.json/local_*.html directly into the target's root left 235
+  // untracked files behind, none of them protected by that repository's own .gitignore --
+  // every one was one `git add .` away from being committed into a client repo, and two of the
+  // six are client repositories whose JSON carries author names, commit messages,
+  // prod_file_paths and model prose. `.codemetrics/` pairs with the existing per-repo
+  // `.codemetrics.json` config file (same prefix, one convention rather than two) and is
+  // hidden by default in a repository someone else opens. Deliberate near-collision: a tracked
+  // `.codemetrics.json` file and an ignored `.codemetrics/` directory can coexist in the same
+  // repository without conflict, since one is a file and the other a directory.
+  //
+  // --output-dir (options.outputDir) overrides this default entirely, mirroring --max-commits'
+  // own reasoning (see CLAUDE.md's "Analysis Window" section): where a run writes its output is
+  // a property of the run, not a fact about the repository, so this has no .codemetrics.json
+  // key -- CLI-only.
+  //
+  // Created when absent, left alone when already present (an existing directory is not
+  // recreated or emptied -- prior local_*.json/html here are simply overwritten by the writes
+  // below, the same overwrite-in-place behavior this tool has always had at its old root-level
+  // location).
+  const outputDir = options.outputDir ?? path.join(process.cwd(), '.codemetrics');
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
   const metricsFile = path.join(outputDir, 'local_commit_metrics.json');
   const summaryFile = path.join(outputDir, 'local_metrics_summary.json');
 
