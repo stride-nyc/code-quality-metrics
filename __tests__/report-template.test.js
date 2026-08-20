@@ -117,6 +117,20 @@ describe('renderReportHtml', () => {
     expect(masthead).toContain('30');
   });
 
+  // code-quality-metrics-kprr: local_metrics_summary.json records filtered_from (the fetched
+  // history before the MAX_COMMITS cap narrowed it down to total_commits), but the report never
+  // mentioned it -- a reader had no way to tell "50 commits analyzed" apart from "50 out of
+  // 1246 fetched." Surfaced right where the sample size is already described.
+  it('surfaces filtered_from next to the analyzed commit count in the masthead when it narrows the sample', () => {
+    const html = renderReportHtml(fixtureArgs({
+      total_commits: 50,
+      filtered_from: 1246
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toContain('1246');
+  });
+
   // code-quality-metrics-g39: a reader on a many-branch repository (measured: remote_retro,
   // 30 branch names before a single number) met a wall of branch names before the commit count
   // or the span. The names move to Analysis Scope; the masthead keeps only the count of
