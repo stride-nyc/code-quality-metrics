@@ -1,0 +1,6 @@
+{
+  "ANALYSIS_IGNORE_PATTERNS": [
+    "Pipfile.lock",
+    "dist/**"
+  ]
+}

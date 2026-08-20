@@ -244,14 +244,22 @@ must never pool them (see "Populations" above):
   postgres counted as usable baselines, until reading each root commit directly showed both to
   be bulk imports of pre-existing code rather than a from-scratch start (see below). git/git
   replaces them as the third historical baseline.
-- **`greenfield-modern`**: `stride-nyc/remote_retro` (first commit 2015-07-17) and
+- **`greenfield-modern`**: originally `stride-nyc/remote_retro` (first commit 2015-07-17) and
   `stride-nyc/dotnetdependencytracer` (first commit 2024-06-13), each measured during its own
   first several months. (`kenjudy/73V`, first commit 2022-01-26, was also measured but is
   excluded -- see "Consistency check" below.) These are local repositories, not cloned from
   GitHub for this measurement; see "Adding a repository" for the local-clone method used. See
   the `greenfield-modern-eval-circularity` reservation: both repositories in this population are
   also among the repositories this toolkit's own maintainer uses it to evaluate, so a band drawn
-  from this population cannot be used to judge either of them without circularity.
+  from this population cannot be used to judge either of them without circularity. Grown from
+  n=2 to n=6 by code-quality-metrics-vxr9, specifically to address that reservation: `ziglang/zig`
+  (first commit 2015-08-05), `denoland/deno` (first commit 2018-05-13), `tiangolo/fastapi` (first
+  commit 2018-12-05) and `sveltejs/svelte` (first commit 2016-11-15) were added, each measured
+  during its own first several months the same way as the original two, and none has any
+  connection to this toolkit or its maintainer. This materially reduces the eval-circularity
+  concern without eliminating it: two of the six repositories behind this population are still
+  both rule-maker and rule-taker for `stride-nyc/remote_retro` and
+  `stride-nyc/dotnetdependencytracer` specifically. GitHub #84 remains open for that reason.
 
 **Method: pinning a window that actually reaches the root.** `--since` alone does not
 guarantee this, for the same reason the general "Adding a repository" pinning trap below
@@ -400,13 +408,16 @@ from. This moves `large_commits_pct` 40 -> 38, `sprawling_commits_pct` 20 -> 16,
 are kept (`include_in_derivation: false`) with the full reasoning above recorded on each, per
 this file's append-only convention, alongside their re-measured replacements.
 
-**Derived bands proposed (not adopted).** `node calibration/derive-bands.js --population
-greenfield-historical` (3 repositories: ember.js, node, git) and `--population
-greenfield-modern` (2 repositories: remote_retro, dotnetdependencytracer) each propose a full
-band table. Neither has been copied into `lib/thresholds.js`; that step is a separate,
-reviewed decision, the same as for the squash-merge set. Run the commands above for the
-current table; do not treat the numbers reproduced in any report derived from this file as
-adopted.
+**Derived bands: greenfield-historical proposed, greenfield-modern adopted.** `node
+calibration/derive-bands.js --population greenfield-historical` (3 repositories: ember.js,
+node, git) proposes a full band table that has not been copied into `lib/thresholds.js`; that
+step remains a separate, reviewed decision, the same as for the squash-merge set. `--population
+greenfield-modern` (6 repositories as of code-quality-metrics-vxr9: remote_retro,
+dotnetdependencytracer, ziglang/zig, denoland/deno, tiangolo/fastapi, sveltejs/svelte -- 2
+originally) is different: its table **is** adopted, as `THRESHOLDS.GREENFIELD_MODERN` in
+`lib/thresholds.js` (see "Greenfield reference set" above and that file's own derivation
+comments). Run the commands above for the current table in either case; do not treat the
+greenfield-historical numbers reproduced in any report derived from this file as adopted.
 
 **Is greenfield `duplication_pct` stable enough to band at all?** No, not on this sample --
 if anything the reset made this worse, not better. Every greenfield observation's jscpd scan is

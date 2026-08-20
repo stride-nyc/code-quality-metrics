@@ -423,7 +423,10 @@ describe('renderReportHtml', () => {
     const noteText = html.slice(pOpen, pClose).replace(/<[^>]+>/g, '');
 
     expect(noteText.toLowerCase()).toContain('early-stage');
-    expect(noteText).toMatch(/just 2 reference projects/);
+    // n = 6 (code-quality-metrics-vxr9 grew the greenfield-modern population from its
+    // original n = 2). This value traces to GREENFIELD_MODERN_PROVENANCE (lib/report.js) via
+    // buildMetricCatalog's real substitution, not a literal restated here for its own sake.
+    expect(noteText).toMatch(/just 6 reference projects/);
     // Roughly a third of the ~110-word paragraph this replaces.
     const wordCount = noteText.trim().split(/\s+/).filter(Boolean).length;
     expect(wordCount).toBeLessThan(50);
@@ -441,8 +444,14 @@ describe('renderReportHtml', () => {
   // count from the reference band so it stays true as the sample grows).
   it('[guard] reads the reference-band sample size dynamically rather than a hardcoded literal', () => {
     const args = fixtureArgs({ project_lifecycle: 'initial-build' });
-    const largeCommitsEntry = args.catalog.find(entry => entry.key === 'large_commits_pct');
-    largeCommitsEntry.bandProvenance = { ...largeCommitsEntry.bandProvenance, n: 7 };
+    // Overriding large_commits_pct by name used to work because it happened to sort first
+    // among substituted entries. It no longer reliably does: code-quality-metrics-vxr9 made
+    // LARGE_COMMITS_PCT three-band under this population, so it now sorts by a real concern
+    // value like any other tile rather than always landing at a fixed spot. Finding the same
+    // way renderGreenfieldNote itself does (catalog.find(entry => entry.bandProvenance)) keeps
+    // this test about dynamism, not about catalog ordering.
+    const substitutedEntry = args.catalog.find(entry => entry.bandProvenance);
+    substitutedEntry.bandProvenance = { ...substitutedEntry.bandProvenance, n: 7 };
 
     const html = renderReportHtml(args);
     const noteStart = html.indexOf('class="greenfield-note"');
@@ -451,7 +460,7 @@ describe('renderReportHtml', () => {
     const noteText = html.slice(pOpen, pClose);
 
     expect(noteText).toMatch(/just 7 reference projects/);
-    expect(noteText).not.toMatch(/just 2 reference projects/);
+    expect(noteText).not.toMatch(/just 6 reference projects/);
   });
 
   // [guard] an established repository must show no trace of the greenfield note anywhere on

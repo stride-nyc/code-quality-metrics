@@ -288,7 +288,7 @@ describe('buildMetricCatalog when project_lifecycle is initial-build', () => {
       expect(entry.healthyBoundary).toBe(band.healthy);
       expect(entry.criticalBoundary).toBe(band.critical ?? null);
       expect(entry.descriptiveNote).toBeUndefined();
-      expect(entry.bandProvenance).toEqual({ population: 'greenfield-modern', n: 2 });
+      expect(entry.bandProvenance).toEqual({ population: 'greenfield-modern', n: 6 });
     }
   });
 
@@ -305,14 +305,14 @@ describe('buildMetricCatalog when project_lifecycle is initial-build', () => {
     expect(density.healthyBoundary).toBe(THRESHOLDS.GREENFIELD_MODERN.DUPLICATION_PCT.healthy);
     expect(density.criticalBoundary).toBeNull();
     expect(density.descriptiveNote).toBeUndefined();
-    expect(density.bandProvenance).toEqual({ population: 'greenfield-modern', n: 2 });
+    expect(density.bandProvenance).toEqual({ population: 'greenfield-modern', n: 6 });
   });
 
   // test_coverage_rate is deliberately NOT substituted: the initial-build bias this
   // substitution addresses (Hattori and Lanza, EVOL 2008 -- scaffolding, vendored
   // dependencies and generated files inflating change-size and duplication metrics) has no
   // equivalent claim for test/prod co-change, so there is no basis to prefer the thinner
-  // n=2 greenfield-modern band over the brownfield one already in use. It also was never
+  // n=6 greenfield-modern band over the brownfield one already in use. It also was never
   // withheld for initial-build in the first place (WITHHELD_WHEN_GREENFIELD_KEYS never
   // included it), so this asserts the pre-existing behavior stays exactly as it was.
   it('[guard] leaves test_coverage_rate scored against the brownfield band, not substituted, under initial-build', () => {

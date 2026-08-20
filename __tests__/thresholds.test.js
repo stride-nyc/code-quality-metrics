@@ -36,11 +36,16 @@ const { THRESHOLDS } = require('../lib/thresholds');
 // TEST_COVERAGE_RATE and UNCOVERED_PROD_RATE above directly, so there is nothing left for a
 // DORA_ARCHETYPE key to hold: duplicating a value here is exactly what let it go stale.
 //
-// GREENFIELD_MODERN is a new, second, separately named band set (adopting
-// code-quality-metrics-4cv's greenfield-modern reference population, n = 2): its own bands are
+// GREENFIELD_MODERN is a second, separately named band set (adopting
+// code-quality-metrics-4cv's greenfield-modern reference population): its own bands are
 // derived from a project's own first several months, not maintenance-era work, and must never
-// be pooled into the flat keys above. See lib/thresholds.js's own comment at that key for the
-// full derivation and its n = 2 / eval-circularity limitation.
+// be pooled into the flat keys above. Grown from n = 2 to n = 6 by code-quality-metrics-vxr9
+// (stride-nyc/remote_retro, stride-nyc/dotnetdependencytracer, ziglang/zig, denoland/deno,
+// tiangolo/fastapi, sveltejs/svelte); LARGE_COMMITS_PCT and P90_LINES_CHANGED are three-band
+// under this population (P90_LINES_CHANGED already was at n = 2). TEST_COVERAGE_RATE and
+// UNCOVERED_PROD_RATE are recorded here for provenance but are never read by
+// GREENFIELD_SUBSTITUTED_KEYS (lib/report.js) -- see lib/thresholds.js's own comment at each
+// key for the full derivation and the eval-circularity limitation that remains at n = 6.
 describe('THRESHOLDS', () => {
   it('exports the calibrated numeric bands', () => {
     expect(THRESHOLDS).toEqual({
@@ -54,12 +59,12 @@ describe('THRESHOLDS', () => {
       P90_FILES_CHANGED: { healthy: 8.5, critical: null },
       DUPLICATION_PCT: { healthy: 2, critical: null },
       GREENFIELD_MODERN: {
-        LARGE_COMMITS_PCT: { healthy: 48, critical: null },
-        SPRAWLING_COMMITS_PCT: { healthy: 43, critical: null },
-        TEST_COVERAGE_RATE: { healthy: 23, critical: null },
-        UNCOVERED_PROD_RATE: { healthy: 12, critical: null },
-        P90_LINES_CHANGED: { healthy: 1020, critical: 1060 },
-        P90_FILES_CHANGED: { healthy: 11, critical: null },
+        LARGE_COMMITS_PCT: { healthy: 45, critical: 58 },
+        SPRAWLING_COMMITS_PCT: { healthy: 30, critical: null },
+        TEST_COVERAGE_RATE: { healthy: 6, critical: null },
+        UNCOVERED_PROD_RATE: { healthy: 22, critical: null },
+        P90_LINES_CHANGED: { healthy: 820, critical: 1060 },
+        P90_FILES_CHANGED: { healthy: 10, critical: null },
         DUPLICATION_PCT: { healthy: 1.5, critical: null }
       }
     });
