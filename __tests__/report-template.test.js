@@ -292,29 +292,75 @@ describe('renderReportHtml', () => {
     expect(html).toContain('squashed');
   });
 
-  // code-quality-metrics-31w, updated by the code-quality-metrics coordination task:
-  // flight-info-spike, a three-week greenfield spike, used to be graded against bands
-  // calibrated on maintenance-era windows of decades-old codebases and came out labelled
-  // legacy-bottleneck; those tiles are now scored against a much thinner (n=2)
-  // greenfield-modern band instead of being withheld. The masthead has to say plainly which
-  // band produced those verdicts, rather than leaving a reader to assume every tile came from
-  // the same twelve-repository benchmark the rest of the page uses.
-  it('states plainly, in the masthead, that change-size and duplication tiles are scored against the thinner greenfield-modern band when project_lifecycle is initial-build', () => {
+  // code-quality-metrics-31w, rewritten by the code-quality-metrics coordination task: the
+  // masthead used to carry a ~110-word, three-sentence paragraph naming what does not apply
+  // ("do not transfer", "much thinner sample", "not substituted", jargon like "brownfield" and
+  // "quantiles of maintenance-era windows") ahead of the reader's own findings in
+  // renderTopSummary. A reader's first line about their own project should say what they are
+  // being compared to, not the tool's reasoning for why. This moves a short version next to
+  // the "Change size and scope" tiles it actually governs -- after renderTopSummary's own
+  // headline, never before it -- and states the population's sample size dynamically (read
+  // from the substituted band's own bandProvenance.n) rather than a hardcoded literal.
+  it('states the early-stage comparison briefly, beside the "Change size and scope" tiles it governs, not as a paragraph in the masthead', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
     const masthead = mastheadSection(html);
 
-    expect(masthead).toMatch(/initial build/);
-    expect(masthead).toMatch(/greenfield-modern/i);
-    expect(masthead).toMatch(/n\s*=\s*2/i);
+    expect(masthead).not.toMatch(/initial build/i);
+    expect(masthead).not.toMatch(/greenfield-modern/i);
+
+    const headingIndex = html.indexOf('<h2 class="metric-category-heading">Change size and scope</h2>');
+    expect(headingIndex).toBeGreaterThanOrEqual(0);
+    const gridIndex = html.indexOf('<div class="metric-grid">', headingIndex);
+    expect(gridIndex).toBeGreaterThan(headingIndex);
+
+    const noteStart = html.indexOf('class="greenfield-note"');
+    expect(noteStart).toBeGreaterThan(headingIndex);
+    expect(noteStart).toBeLessThan(gridIndex);
+
+    const pOpen = html.lastIndexOf('<p', noteStart);
+    const pClose = html.indexOf('</p>', noteStart);
+    const noteText = html.slice(pOpen, pClose).replace(/<[^>]+>/g, '');
+
+    expect(noteText.toLowerCase()).toContain('early-stage');
+    expect(noteText).toMatch(/just 2 reference projects/);
+    // Roughly a third of the ~110-word paragraph this replaces.
+    const wordCount = noteText.trim().split(/\s+/).filter(Boolean).length;
+    expect(wordCount).toBeLessThan(50);
+
+    // Findings (renderTopSummary's own headline) must still come first -- the whole point of
+    // moving this out of the masthead.
+    const summaryIndex = html.indexOf('<section class="report-summary">');
+    expect(summaryIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryIndex).toBeLessThan(noteStart);
   });
 
-  // [guard] an established repository's masthead must not carry the initial-build sentence at
-  // all -- proven by mutation: see the production-code cycle for this line.
-  it('[guard] says nothing about an initial build in the masthead when project_lifecycle is established', () => {
+  // code-quality-metrics coordination task: proves renderGreenfieldNote reads its sample size
+  // from the substituted entry's own bandProvenance.n rather than a hardcoded "2" -- the same
+  // requirement the lifecycle-line rewrite states explicitly (do not hardcode n=2, read the
+  // count from the reference band so it stays true as the sample grows).
+  it('[guard] reads the reference-band sample size dynamically rather than a hardcoded literal', () => {
+    const args = fixtureArgs({ project_lifecycle: 'initial-build' });
+    const largeCommitsEntry = args.catalog.find(entry => entry.key === 'large_commits_pct');
+    largeCommitsEntry.bandProvenance = { ...largeCommitsEntry.bandProvenance, n: 7 };
+
+    const html = renderReportHtml(args);
+    const noteStart = html.indexOf('class="greenfield-note"');
+    const pOpen = html.lastIndexOf('<p', noteStart);
+    const pClose = html.indexOf('</p>', noteStart);
+    const noteText = html.slice(pOpen, pClose);
+
+    expect(noteText).toMatch(/just 7 reference projects/);
+    expect(noteText).not.toMatch(/just 2 reference projects/);
+  });
+
+  // [guard] an established repository must show no trace of the greenfield note anywhere on
+  // the page, masthead or metric grid alike.
+  it('[guard] says nothing about the early-stage comparison anywhere when project_lifecycle is established', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'established' }));
     const masthead = mastheadSection(html);
 
     expect(masthead).not.toMatch(/initial build/);
+    expect(html).not.toContain('class="greenfield-note"');
   });
 
   // code-quality-metrics-bmg: the archetype verdict headlined the report, above every metric
