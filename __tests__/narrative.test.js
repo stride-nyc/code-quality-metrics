@@ -107,10 +107,22 @@ describe('fallbackFindings (shared deterministic helper)', () => {
 });
 
 describe('generateFindingsNarrative: no client (graceful degradation, no API key)', () => {
-  test('returns the same bullets as fallbackFindings when client is null', async () => {
+  // CALLED SHOT (code-quality-metrics-49ch): flight-info-spike's own report varied silently
+  // between two runs against byte-identical input, once rendering the deterministic fallback
+  // list and once the full AI-generated narrative, with nothing in the rendered report telling
+  // a reader which one they were looking at -- these five/six reports are read side by side, so
+  // a report that cannot say which path produced it is not comparable to itself. Every fallback
+  // path (this one included: no ANTHROPIC_API_KEY configured) now prepends a bullet stating
+  // plainly that the section below is the deterministic fallback, not a narrative.
+  // Predicted failure before implementing: the function returns fallbackFindings(catalog)
+  // unchanged today, so `expect(result[0]).toMatch(/deterministic fallback/i)` fails against
+  // that catalog's own first bullet (a "Label: value (status)" line, no such phrase in it).
+  test('states that the deterministic fallback list was used, not a narrative, when no client is available', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const result = await generateFindingsNarrative(null, catalog, []);
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result[0]).toMatch(/not.*narrative/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
   });
 });
 
@@ -142,7 +154,11 @@ describe('generateFindingsNarrative: client provided', () => {
     ]);
   });
 
-  test('falls back to fallbackFindings and logs a single line, not a stack trace, when the API call throws', async () => {
+  // Updated for code-quality-metrics-49ch's fallback notice (not a called-shot RED for the
+  // notice itself, that is covered by the "no client" test above): every fallback path now
+  // prepends a bullet stating the section is the deterministic fallback, so `result` gains
+  // that leading bullet -- a direct, predictable consequence, not a separate defect.
+  test('falls back to fallbackFindings (with the fallback notice) and logs a single line, not a stack trace, when the API call throws', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = { messages: { create: jest.fn().mockRejectedValue(new Error('rate limited')) } };
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -150,7 +166,8 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
     expect(logSpy.mock.calls[0][0]).toMatch(/rate limited/);
     expect(errorSpy).not.toHaveBeenCalled();
@@ -166,12 +183,12 @@ describe('generateFindingsNarrative: client provided', () => {
   // (stderr) rather than being dropped outright; only its presence in the rendered bullets is
   // removed.
   //
-  // Updated for code-quality-metrics-49ch's retry (not a called-shot RED for the retry itself,
-  // that is covered by the two tests above): this client returns the same invalid payload on
-  // every call, so it now fails validation on every one of CONFIG.NARRATIVE_MAX_ATTEMPTS
-  // attempts, and errorSpy is called once per attempt instead of once total -- a direct,
-  // predictable consequence of the retry loop landing in the same commit, not a second
-  // red/green cycle on this test.
+  // Updated for code-quality-metrics-49ch's retry AND fallback notice (not a called-shot RED
+  // for either here, both are covered by their own tests elsewhere in this file): this client
+  // returns the same invalid payload on every call, so it now fails validation on every one of
+  // CONFIG.NARRATIVE_MAX_ATTEMPTS attempts (errorSpy once per attempt, not once total), and the
+  // returned bullets now carry the leading fallback-notice bullet -- both direct, predictable
+  // consequences of those two changes landing in earlier commits, not a defect in this test.
   test('falls back to plain fallbackFindings with no rejection notice in the rendered bullets, logging the reason to stderr instead, when the narrative fails validation on every attempt', async () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const client = makeClient({
@@ -184,8 +201,10 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(result.some(item => /narrative rejected/i.test(item))).toBe(false);
+    expect(result.some(item => /999/.test(item))).toBe(false);
     expect(logSpy).not.toHaveBeenCalled();
     expect(errorSpy).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
     expect(errorSpy.mock.calls[0][0]).toMatch(/999/);
@@ -250,7 +269,8 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(client.messages.create).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
     expect(errorSpy).toHaveBeenCalledTimes(CONFIG.NARRATIVE_MAX_ATTEMPTS);
 
@@ -272,7 +292,8 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();
@@ -302,7 +323,8 @@ describe('generateFindingsNarrative: client provided', () => {
 
     const result = await generateFindingsNarrative(client, catalog, []);
 
-    expect(result).toEqual(fallbackFindings(catalog));
+    expect(result[0]).toMatch(/deterministic fallback/i);
+    expect(result.slice(1)).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
 
     logSpy.mockRestore();
