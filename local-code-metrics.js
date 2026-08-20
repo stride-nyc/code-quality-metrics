@@ -138,10 +138,10 @@ function fetchBranchCommits(ref, sinceStr) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -182,6 +182,19 @@ function parseCliArgs(argv) {
     } else if (argv[i] === '--config') {
       if (!argv[i + 1]) throw new Error('--config requires a path');
       options.config = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--max-commits') {
+      if (!argv[i + 1]) throw new Error("--max-commits requires a positive integer or 'unbounded'");
+      const raw = argv[i + 1];
+      if (raw === 'unbounded') {
+        options.maxCommits = 'unbounded';
+      } else {
+        const maxCommits = Number(raw);
+        if (!Number.isInteger(maxCommits) || maxCommits <= 0) {
+          throw new Error(`--max-commits must be a positive integer or 'unbounded', got '${raw}'`);
+        }
+        options.maxCommits = maxCommits;
+      }
       i++;
     }
   }
@@ -232,7 +245,7 @@ function logNoCommitsAnalyzed() {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -1034,7 +1047,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));

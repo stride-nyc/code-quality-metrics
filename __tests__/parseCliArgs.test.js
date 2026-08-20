@@ -70,4 +70,10 @@ describe('parseCliArgs', () => {
   test('rejects --lifecycle given without a value', () => {
     expect(() => parseCliArgs(['--lifecycle'])).toThrow(/--lifecycle/);
   });
+
+  // code-quality-metrics: per-run override of CONFIG.MAX_COMMITS, for a reference measurement
+  // spanning a repository's first twelve months rather than the newest 50 commits.
+  test('rejects a non-numeric, non-unbounded --max-commits value', () => {
+    expect(() => parseCliArgs(['--max-commits', 'abc'])).toThrow(/--max-commits/);
+  });
 });
