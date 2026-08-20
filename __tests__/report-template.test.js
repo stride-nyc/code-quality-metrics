@@ -589,6 +589,20 @@ describe('renderReportHtml', () => {
     expect(html).not.toContain('suppressed: Archetype suppressed');
   });
 
+  // code-quality-metrics-wo8q: the Team archetype section spent roughly 110 words across two
+  // paragraphs (one disclaiming DORA, one explaining the suppression) to display no content at
+  // all when the archetype is suppressed. The DORA disclaimer only earns its place when there
+  // is a real archetype verdict to disclaim about; a suppressed run collapses to one sentence.
+  it('collapses the Team archetype section to a single sentence when suppressed, dropping the DORA disclaimer paragraph', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed', dora_archetype: undefined }));
+    const archetypeStart = html.indexOf('<section class="archetype-note">');
+    const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
+
+    expect(section).not.toContain('archetype-disclaimer');
+    const text = section.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    expect(text.split('.').filter(Boolean).length).toBeLessThanOrEqual(1);
+  });
+
   // code-quality-metrics-m7kt: measured live in flight-info-spike, a greenfield window. Its
   // large_commits_pct (48.89) and sprawling_commits_pct (42.22) entries are withheld by
   // buildMetricCatalog for project_lifecycle: initial-build (WITHHELD_WHEN_GREENFIELD_KEYS),
