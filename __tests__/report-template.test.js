@@ -796,6 +796,8 @@ describe('renderReportHtml', () => {
       message: `commit number ${i}`,
       total_additions: i,
       total_deletions: 0,
+      counted_additions: i,
+      counted_deletions: 0,
       files_changed: 1
     }));
     const args = fixtureArgs();
