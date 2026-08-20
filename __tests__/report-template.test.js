@@ -715,14 +715,25 @@ describe('renderReportHtml', () => {
     const args = fixtureArgs();
     const html = renderReportHtml(args);
 
+    // code-quality-metrics-rub1: scoped to the metric grid itself, not the whole document.
+    // The affirmative top summary now names every banded-good entry's label too (in the
+    // catalog's own concern order, not grouped by METRIC_GROUP_ORDER), so an unscoped
+    // html.indexOf(label) would find that earlier mention instead of the tile this test is
+    // actually about.
+    const gridStart = html.indexOf('<section class="metric-category">');
+    const gridEnd = html.indexOf('<section class="archetype-note">');
+    expect(gridStart).toBeGreaterThanOrEqual(0);
+    expect(gridEnd).toBeGreaterThan(gridStart);
+    const gridHtml = html.slice(gridStart, gridEnd);
+
     expect(args.catalog).toHaveLength(13);
     for (const entry of args.catalog) {
-      expect(html).toContain(entry.label);
+      expect(gridHtml).toContain(entry.label);
     }
 
     const expectedOrder = METRIC_GROUP_ORDER.flatMap(group => args.catalog.filter(entry => entry.group === group));
     expect(expectedOrder).toHaveLength(args.catalog.length);
-    const indices = expectedOrder.map(entry => html.indexOf(entry.label));
+    const indices = expectedOrder.map(entry => gridHtml.indexOf(entry.label));
     const sortedIndices = [...indices].sort((a, b) => a - b);
     expect(indices).toEqual(sortedIndices);
   });
@@ -1825,17 +1836,71 @@ describe('renderReportHtml', () => {
     expect(summary).toContain('40');
   });
 
-  // [guard] proven by mutation: forcing the `concerns.length === 0` branch condition to `false`
-  // (so the "no measured signal" branch can never be taken, even when concerns is actually
-  // empty) failed this test with a thrown TypeError ("Cannot read properties of undefined
-  // (reading 'label')") from `concerns[0]` being undefined -- reverted after confirming.
-  it('[guard] states no signal crossed a threshold when the catalog has no concerns', () => {
-    const html = renderReportHtml(fixtureArgs({
-      large_commits_pct: '5.00', sprawling_commits_pct: '5.00', uncovered_prod_rate: '1.00', test_coverage_rate: '90.00'
-    }));
+  // code-quality-metrics-rub1: the true degenerate case is having NO banded evidence at all
+  // (bandedGoodCount 0, not merely "no concerns this run") -- e.g. squashed-history windows,
+  // where every commit-unit metric is withheld outright (see CLAUDE.md's "History Granularity
+  // and Commit-Unit Withholding"). There is nothing positive to name here, so the plain
+  // "no measured signal" sentence is the honest one. This replaces a prior version of this
+  // test that used an all-healthy fixture (six banded metrics, all status 'good') and asserted
+  // this exact degenerate sentence for it -- that fixture is precisely the case rub1 reports as
+  // a regression: a run with real positive evidence must not read as "no signal crossed a
+  // threshold." See the affirmative-path test below for that corrected case.
+  it('[guard] states no signal crossed a threshold when literally nothing is banded (e.g. squashed history withholding every commit-unit metric)', () => {
+    const html = renderReportHtml(fixtureArgs({ history_granularity: 'squashed' }));
     const summary = summarySection(html);
 
     expect(summary).toContain('No measured signal in this run crossed a warning or critical threshold.');
+  });
+
+  // code-quality-metrics-rub1, THE MAIN REGRESSION: a run with real positive evidence (every
+  // banded metric healthy, zero concerns of any kind) used to render the exact same degenerate
+  // sentence as a run with NO evidence at all ("No measured signal in this run crossed a
+  // warning or critical threshold."), even the favorable branch pivoted negative ("It still
+  // flags"). Measured on dotnetdependencytracer: 8 positive findings, zero warnings, and the
+  // masthead told the reader only that nothing bad was detected. The default fixture (see
+  // fixtureSummary above) is itself fully healthy across all six default banded metrics
+  // (large/sprawling commits, test/prod co-change, uncovered production, p90 lines/files
+  // changed), with no directional concern either, so it exercises exactly this case with no
+  // overrides needed.
+  it('gives an affirmative path naming specific healthy signals, not the degenerate "no signal crossed" sentence, when every banded metric is healthy and there are no concerns at all', () => {
+    const html = renderReportHtml(fixtureArgs());
+    const summary = summarySection(html);
+
+    expect(summary).toMatch(/All signals are positive/);
+    expect(summary).not.toContain('No measured signal in this run crossed a warning or critical threshold.');
+    // Names specific signals, the way the concern branch already names its worst one via
+    // ledByPhrase -- not a generic reassurance with no content.
+    expect(summary).toContain('Large commits');
+    expect(summary).toContain('Sprawling commits');
+    expect(summary).toContain('Test/prod co-change');
+    expect(summary).toContain('Uncovered production');
+    expect(summary).toContain('Commit size, high end');
+    expect(summary).toContain('Files changed, high end');
+  });
+
+  // [guard] not a called-shot RED: this proves the concern branch (untouched by the
+  // affirmative-path change above) still names its worst finding when every banded metric is a
+  // concern, none good -- the third of the three required cases (all healthy, mixed, all
+  // concern). Expected to pass already under the pre-existing concern branch; included for
+  // explicit coverage of this case per the acceptance criteria, not because it was ever RED.
+  it('[guard] still flags and names the worst finding when every banded metric is a concern, none healthy', () => {
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let summary;
+    try {
+      const html = renderReportHtml(fixtureArgs({
+        large_commits_pct: '40.00', sprawling_commits_pct: '25.00',
+        test_coverage_rate: '5.00', uncovered_prod_rate: '50.00',
+        p90_lines_changed: 900, p90_files_changed: 20
+      }));
+      summary = summarySection(html);
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
+
+    expect(summary).not.toMatch(/All signals are positive/);
+    expect(summary).toMatch(/led by Large commits at 40/);
+    expect(summary).toMatch(/This run flags/);
   });
 
   // code-quality-metrics-nnla: the top summary used to restate the vendored/generated share a
