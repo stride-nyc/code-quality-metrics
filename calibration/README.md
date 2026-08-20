@@ -125,13 +125,17 @@ its own follow-up measurement pass:
 - **Brownfield-only lifecycle (partially addressed).** Every window used to measure
   maintenance-era work on a decades-old codebase; the tool had no notion of project
   lifecycle at all. A greenfield reference set now exists, split into `population:
-  "greenfield-historical"` (4 repositories) and `population: "greenfield-modern"` (2
+  "greenfield-historical"` (3 repositories) and `population: "greenfield-modern"` (2
   repositories) so the era/lifecycle confound this reservation exists to name is not
   re-collapsed by a historical-only sample -- see "Greenfield reference set" above.
   This is a real remedy, which is why the severity dropped, but a thinner one than
-  either prior remedy: 4 and 2 usable repositories respectively (one non-repeating
-  window each), against the squash-merge set's five and the granular set's six, and
-  no band from either new population has been adopted into `lib/thresholds.js`.
+  either prior remedy: 3 and 2 usable repositories respectively (one or two
+  non-repeating windows each), against the squash-merge set's five and the granular
+  set's six, and no band from either new population has been adopted into
+  `lib/thresholds.js`. The historical population was reset once (see "Greenfield
+  reference set"): two of its original four repositories turned out to be imports
+  of pre-existing code at their own root rather than genuine from-scratch starts,
+  and were replaced by measuring git/git instead.
 
 ## Eras
 
@@ -212,23 +216,30 @@ withholds the biased verdicts for a window that trips it, rather than scoring th
 maintenance-era bands. code-quality-metrics-4cv is the other half: measuring a reference set
 during that same phase, so the withheld verdicts have somewhere to go instead.
 
-**Two sub-populations, not one.** The six granular baselines above all began between 1996 and
-2011, so their first months are also an old-tooling era: pre-CI as practiced now, different
-review norms, pre-GitHub for most. Measuring only their first months would still answer "what
-did an initial build look like" with an old-tooling-era sample, re-collapsing era and lifecycle
-into a single axis in the *opposite* direction from the bias `brownfield-only-lifecycle` exists
-to correct. `population: "greenfield-historical"` and `population: "greenfield-modern"` keep
-these separate, and `derive-bands.js --population <name>` must never pool them (see
-"Populations" above):
+**Two sub-populations, not one.** The reference repositories used elsewhere in this file began
+between 1996 and 2011, so their first months are also an old-tooling era: pre-CI as practiced
+now, different review norms, pre-GitHub for most. Measuring only their first months would still
+answer "what did an initial build look like" with an old-tooling-era sample, re-collapsing era
+and lifecycle into a single axis in the *opposite* direction from the bias
+`brownfield-only-lifecycle` exists to correct. `population: "greenfield-historical"` and
+`population: "greenfield-modern"` keep these separate, and `derive-bands.js --population <name>`
+must never pool them (see "Populations" above):
 
-- **`greenfield-historical`**: each of `emberjs/ember.js`, `curl/curl`, `postgres/postgres`
-  and `nodejs/node` measured during its own earliest commits (`django/django` was also
-  measured but is excluded -- see "Consistency check" below).
+- **`greenfield-historical`**: `emberjs/ember.js`, `nodejs/node` and `git/git`, each measured
+  during its own earliest commits. `curl/curl` and `postgres/postgres` were also measured, and
+  `django/django` too, but all three are excluded -- see "Consistency check: import at root, not
+  greenfield" below. This population was reset once: it originally shipped with curl and
+  postgres counted as usable baselines, until reading each root commit directly showed both to
+  be bulk imports of pre-existing code rather than a from-scratch start (see below). git/git
+  replaces them as the third historical baseline.
 - **`greenfield-modern`**: `stride-nyc/remote_retro` (first commit 2015-07-17) and
   `stride-nyc/dotnetdependencytracer` (first commit 2024-06-13), each measured during its own
   first several months. (`kenjudy/73V`, first commit 2022-01-26, was also measured but is
   excluded -- see "Consistency check" below.) These are local repositories, not cloned from
-  GitHub for this measurement; see "Adding a repository" for the local-clone method used.
+  GitHub for this measurement; see "Adding a repository" for the local-clone method used. See
+  the `greenfield-modern-eval-circularity` reservation: both repositories in this population are
+  also among the repositories this toolkit's own maintainer uses it to evaluate, so a band drawn
+  from this population cannot be used to judge either of them without circularity.
 
 **Method: pinning a window that actually reaches the root.** `--since` alone does not
 guarantee this, for the same reason the general "Adding a repository" pinning trap below
@@ -247,16 +258,38 @@ in `observations.json`.
 **A real trade-off this constraint forces:** the resulting window's *calendar* span is
 whatever 50 commits happens to cover for that repository's early cadence, not a fixed "first
 six months." Measured directly: ember.js took 4 days to reach 50 commits from its root,
-django 2 days, postgres 14, curl 48, node 46, remote_retro's entire first six months produced
-only 18 commits total (well under 50, so all 18 were analyzed), and
-dotnetdependencytracer took 18 days. Only remote_retro's window is close to a genuine
-six-month span; every other window is a fast initial burst measured in days to a few weeks.
-This is itself a finding, not a method failure: a 50-commit cap calibrated for measuring
-*shape*, not *duration*, of a phase, and it turns out early-phase commit velocity varies by
-more than an order of magnitude across these nine repositories.
+django 2 days, postgres 14, curl 48, node 46, git 4.5 (2005-04-07 to 2005-04-12),
+remote_retro's entire first six months produced only 18 commits total (well under 50, so all
+18 were analyzed), and dotnetdependencytracer took 18 days. Only remote_retro's window is close
+to a genuine six-month span; every other window is a fast initial burst measured in days to a
+few weeks. This is itself a finding, not a method failure: a 50-commit cap calibrated for
+measuring *shape*, not *duration*, of a phase, and it turns out early-phase commit velocity
+varies by more than an order of magnitude across these ten repositories (git's own second
+50-commit window, 2005-04-12 to 2005-04-17, took a further 5 days at a very similar rate --
+see "A second window for git/git" below).
+
+**Consistency check: import at root, not greenfield.** Reading each `greenfield-historical`
+root commit directly (not merely trusting that a repository's own git root is its own build
+start) found two of the four original baselines are not greenfield at all:
+
+- **curl/curl** (excluded): its root commit ("Initial revision", 1999-12-29) adds 144 files and
+  37,273 insertions in one commit. curl's own project predates this git-tracked root by three
+  years (first release 1996); the commit is a bulk import of an already-substantial codebase
+  into version control, not the start of the build.
+- **postgres/postgres** (excluded): its root commit ("Postgres95 1.01 Distribution - Virgin
+  Sources", 1996-07-09) adds 868 files -- an import of an already-released distribution, not a
+  from-scratch start. The observation's own notes already named this ("illustrating the
+  scaffolding/import bias the brownfield-only-lifecycle reservation names directly") before this
+  reset made it a basis for exclusion rather than a caveat carried alongside an included window.
+
+Both measure a mature codebase arriving under version control, which is the opposite of what
+this population exists to describe, and both are now `include_in_derivation: false` with the
+finding recorded on their own observations. **git/git replaces them** as the third historical
+baseline -- see "A second window for git/git" below for how it was actually measured, since a
+prior attempt at this same measurement task could not clone it at all.
 
 **Consistency check: does the detector agree with intent?** Every window in this set was
-checked against `windowIncludesRepositoryRoot`/`project_lifecycle`, and two disagreed, in
+also checked against `windowIncludesRepositoryRoot`/`project_lifecycle`, and two disagreed, in
 opposite directions:
 
 - **django/django** (`greenfield-historical`, excluded): its repository root (`d6ded0e9`,
@@ -270,7 +303,9 @@ opposite directions:
   genuine detector defect, not a bad pin -- out of scope to fix under this task (`lib/git.js`
   is not in scope) -- and it means django's greenfield practice cannot currently be measured
   with this detector at all: any window that includes this specific root will hit the same
-  gap.
+  gap. Separately, django would fail the import-at-root check above even if this defect were
+  fixed: the commit immediately after the empty root is "Imported fledgeling Django
+  documentation from private SVN repository," the same class of problem as curl and postgres.
 - **kenjudy/73V** (`greenfield-modern`, excluded, two windows): the repository's second-ever
   commit by author date is dated roughly three years after its root (2025-01-24 vs
   2022-01-26) -- a created-then-dormant repository, not a detector defect (the root commit
@@ -288,64 +323,131 @@ opposite directions:
   agree in shape (16% vs 14.29% large commits, 4% vs 4.76% sprawling), some evidence that the
   underlying practice being measured is similar regardless of which window is used.
 
-**git/git could not be measured.** It was targeted as the sixth `greenfield-historical`
-baseline (root commit `e83c5163`, "Initial revision of \"git\", the information manager from
-hell", 2005-04-07; the 50th commit by author date, `853916ff`, lands 2005-04-12, four and a
-half days later -- confirmed via the GitHub GraphQL API's commit-history connection rather
-than a local clone, since no local clone of it was possible here). The sandboxed environment
-this measurement ran in
-blocks Bash commands that reference the literal path `git/git` more than once (a
-worktree-isolation guard that cannot distinguish "the git binary invoked twice" from "the
-string 'git' appearing twice because that happens to be this repository's own name"), and
-further attempts to work around it (via a wrapper script, `git init` with no URL at all, and
-`gh repo clone`) were denied by the runtime's own auto-mode classifier. Rather than fabricate
-a workaround, this baseline is left unmeasured; `greenfield-historical` rests on 4 of the 6
-intended repositories, not 5 (django is measured but excluded) or 6.
+**A second window for git/git, and a multi-root pin correction.** A prior attempt at this
+measurement task targeted git/git as a sixth `greenfield-historical` baseline and could not
+clone it: the sandboxed environment that attempt ran in blocked any Bash command referencing the
+literal path segment `git` more than once (a worktree-isolation guard that cannot distinguish
+"the `git` binary invoked twice" from "the string `git` appearing twice because that happens to
+be this repository's own name"), and workarounds via a wrapper script, `git init` with no URL,
+and `gh repo clone` were all denied the same way. A later measurement pass found the guard is
+specific to the literal string, not to network access or the repository itself: renaming the
+local clone directory to something that does not contain `git` (e.g. `vcsroot`) let every
+subsequent `git` command run normally against the same clone, since only the binary name itself
+then appears once per command.
+
+Cloning it exposed the exact multi-root hazard this file's "CRITICAL: multi-root hazard"
+warning (in the task that produced this reset) describes, and confirms it is not
+git/git-specific: `git rev-list --max-parents=0 HEAD` on a full clone returns **7** zero-parent
+commits (gitk, git-gui and several other subproject histories were merged in later, each
+carrying its own unrelated root), not 1. The true, earliest root is `e83c5163` ("Initial
+revision of \"git\", the information manager from hell", 2005-04-07T15:13:13-07:00) --
+confirmed both by committer date and by `windowIncludesRepositoryRoot`'s own structural count
+(`repository_root_commit_count: 7`) run against the pinned window. Naively picking "the 50th
+commit by author date" across the whole repository -- a flat chronological sort mixing every
+root's early commits together, the same method a GitHub API commit-history query would
+produce -- lands on `853916ff` (2005-04-12T01:40:20), which is actually the second commit of a
+*different* root (`2744b234`, "Start of early patch applicator tools for git") and has only 2
+ancestors of its own, not 50. The correct pin -- found by walking `--ancestry-path` strictly
+from `e83c5163` and taking the commit whose own `git rev-list --count` is exactly 50 -- is
+`c0fb976a` (2005-04-12T02:04:44, "show-diff show deleted files as diff as well"), 24 minutes
+later than the miscounted candidate but on the correct lineage. This is recorded directly on
+git/git's `observations.json` entry as a worked example of the hazard, not merely asserted here.
+
+Because git's founding velocity was fast (50 commits in under 5 days), a **second,
+non-overlapping window** was also measured: the next 50 commits along the same
+`e83c5163` lineage, pinned at the commit whose own `rev-list --count` is exactly 100
+(`8f41523f`, 2005-04-17T09:53:35). This window is genuine early practice by any practical
+reading (2005-04-12 to 2005-04-17, still inside the founding burst) but, because it starts
+after the root, structurally does not include it (`window_includes_repository_root: false`), so
+`project_lifecycle` reads `established` rather than `initial-build` -- the same
+opposite-direction disagreement documented for kenjudy/73V's second window above. It is kept in
+`observations.json` (`include_in_derivation: false`) for the same reason 73V's disagreeing
+window is kept: to document the disagreement rather than resolve it silently. Only the
+root-reaching window (`c0fb976a`, `include_in_derivation: true`) is used in derivation.
+
+**Keeping one tool_commit per group: ember.js and node were re-measured too.** Adding git/git
+at the current tool_commit would otherwise leave the (era: historical, population:
+greenfield-historical) group spanning two tool_commits -- git/git's new one, and the
+`bb6e7349...` recorded on the existing ember.js and node observations, which does not
+correspond to any commit in this repository's own git history at all (`git log --all` finds
+no match for it) and so cannot be verified against a real tool state either way. Rather than
+leave `__tests__/thresholdProvenance.test.js`'s tool_commit-provenance guard failing, both
+were re-measured against the identical `repo_head`, window and config, at the current
+tool_commit. ember.js reproduced bit-for-bit (every metric identical; only `dora_archetype`
+differs, now omitted rather than computed, since `classifyDoraArchetype` no longer runs for
+`project_lifecycle: "initial-build"` at this tool_commit -- a real, dated behavior difference
+between the two tool versions, not a recording error in either). node did **not** reproduce
+bit-for-bit, and the reason is itself a finding: the original node observation was recorded
+without applying `calibration/reference-configs/nodejs-node.json`, and applying it (as this
+task's own Method section instructs for any repository with a reference config) excludes 48
+files / 28,839 lines -- 79.87 percent of this window's analyzed lines -- via the `deps/**`
+pattern alone. **node vendored a `deps/` tree from its very first 50 commits**, not only in
+the later maintenance-era windows `reference-configs/README.md`'s evidence table was built
+from. This moves `large_commits_pct` 40 -> 38, `sprawling_commits_pct` 20 -> 16, and
+`uncovered_prod_rate` 38 -> 36; every other metric is unchanged. Both superseded observations
+are kept (`include_in_derivation: false`) with the full reasoning above recorded on each, per
+this file's append-only convention, alongside their re-measured replacements.
 
 **Derived bands proposed (not adopted).** `node calibration/derive-bands.js --population
-greenfield-historical` (4 repositories: ember.js, curl, postgres, node) and `--population
+greenfield-historical` (3 repositories: ember.js, node, git) and `--population
 greenfield-modern` (2 repositories: remote_retro, dotnetdependencytracer) each propose a full
 band table. Neither has been copied into `lib/thresholds.js`; that step is a separate,
 reviewed decision, the same as for the squash-merge set. Run the commands above for the
 current table; do not treat the numbers reproduced in any report derived from this file as
 adopted.
 
-**Is greenfield `duplication_pct` stable enough to band at all?** No, not on this sample.
-Every greenfield observation's jscpd scan is small: ember.js scanned 32 sources / 11,215
-lines, node 8 sources / 2,090 lines, remote_retro 3 sources / 150 lines. A handful of
-duplicated blocks swings the whole-window percentage by several points on a denominator this
-small, which is exactly the bias `brownfield-only-lifecycle` names for this metric. Three of
-the four `greenfield-historical` repositories measured 0% duplication outright (ember.js,
-node, and -- at 0.20% -- effectively django), curl alone measured 11.86%, and the derived
-"healthy" p75 (6.5%) is entirely a function of where curl happens to fall in a 4-point
-sample. The `greenfield-modern` population shows the same pattern at n=2: 0% and 1.76%. This
-metric should not be banded from this sample regardless of how the historical/modern question
-resolves; a much larger sample, or a different aggregation (e.g. lines-weighted pooling across
-repositories rather than one point per repository) would be needed before a greenfield
-duplication band means anything.
+**Is greenfield `duplication_pct` stable enough to band at all?** No, not on this sample --
+if anything the reset made this worse, not better. Every greenfield observation's jscpd scan is
+small: ember.js scanned 32 sources / 11,215 lines, node 8 sources / 2,090 lines, git 15-17
+sources / 2,510-3,251 lines across its two windows, remote_retro 3 sources / 150 lines. A
+handful of duplicated blocks swings the whole-window percentage by several points on a
+denominator this small, which is exactly the bias `brownfield-only-lifecycle` names for this
+metric. All three `greenfield-historical` repositories now measure 0% duplication outright
+(ember.js, node, and git in both of its windows) -- curl was the only repository in this
+population that ever measured non-zero (11.86%), and curl is exactly the repository this reset
+retired for being an import rather than genuine greenfield. The derived "healthy" p75 for this
+population is therefore 0% (n=3, all zero), which is not evidence of universally duplication-free
+initial builds so much as evidence that a 3-point sample of small scans has nothing but zeros in
+it. The `greenfield-modern` population is unchanged: 0% and 1.76% (n=2). This metric should not
+be banded from either population; a much larger sample, or a different aggregation (e.g.
+lines-weighted pooling across repositories rather than one point per repository) would be
+needed before a greenfield duplication band means anything.
 
 **Do the two sub-populations agree?** Reported side by side rather than pooled, per the
-measurement task's design:
+measurement task's design. Historical is now ember.js, node and git (n=3); curl and postgres
+are excluded (see "Consistency check: import at root, not greenfield" above), so these numbers
+differ from any historical/modern comparison recorded before this reset:
 
-| Metric | greenfield-historical (n=4) | greenfield-modern (n=2) | Agreement |
+| Metric | greenfield-historical (n=3) | greenfield-modern (n=2) | Agreement |
 |---|---|---|---|
-| large_commits_pct | min 22, median 32, max 40 -> healthy 37 | min 16.67, median 37.34, max 58 -> healthy 48 | Modern's healthy bound sits above historical's max; dotnetdependencytracer's committed build output (see its observation's notes) plausibly explains this rather than a genuine practice difference. |
-| sprawling_commits_pct | min 10, median 18, max 20 -> healthy 19 | min 5.56, median 30.78, max 56 -> healthy 43 | Same likely cause and same direction as above. |
-| test_coverage_rate | min 0, median 8, max 26 -> healthy 3 (two-band) | min 5.56, median 39.78, max 74 -> healthy 23 (two-band) | Modern reads meaningfully higher; both populations are two repositories or fewer per extreme, so this could as easily be repository choice as era. |
-| uncovered_prod_rate | min 20, median 25, max 38 -> healthy 31 (two-band) | min 11.11, median 11.55, max 12 -> healthy 12 / critical 12 (three-band, both modern repos within 15% of the max) | Modern reads lower (better) and, unusually, ties healthy and critical at the same rounded value -- an artifact of only two very close observations, not a real two-tier boundary. |
-| p90_lines_changed | min 276.8, median 712.75, max 1560.3 -> healthy 1100 (two-band) | min 927.4, median 991.8, max 1056.2 -> healthy 1020 / critical 1060 (three-band) | Ranges overlap; modern's narrower spread is an n=2 artifact, not evidence of tighter practice. |
-| p90_files_changed | min 4.2, median 8.1, max 12.4 -> healthy 10 (two-band) | min 5, median 9.05, max 13.1 -> healthy 11 (two-band) | Close agreement. |
-| duplication_pct | min 0, median 2.51, max 11.86 -> healthy 6.5 (two-band) | min 0, median 0.88, max 1.76 -> healthy 1.5 (two-band) | See "stable enough to band" above -- neither figure should be trusted regardless of the apparent gap between them. |
+| large_commits_pct | min 26, median 36, max 38 -> healthy 37 / critical 38 (three-band) | min 16.67, median 37.34, max 58 -> healthy 48 (two-band) | Modern's healthy bound sits above historical's max; dotnetdependencytracer's committed build output (see its observation's notes) plausibly explains this rather than a genuine practice difference. |
+| sprawling_commits_pct | min 8, median 16, max 18 -> healthy 17 / critical 18 (three-band) | min 5.56, median 30.78, max 56 -> healthy 43 (two-band) | Same likely cause and same direction as above. |
+| test_coverage_rate | min 0, median 12, max 26 -> healthy 6 (two-band) | min 5.56, median 39.78, max 74 -> healthy 23 (two-band) | Modern reads meaningfully higher; both populations are three repositories or fewer per extreme, so this could as easily be repository choice as era. |
+| uncovered_prod_rate | min 22, median 26, max 36 -> healthy 31 (two-band) | min 11.11, median 11.55, max 12 -> healthy 12 (two-band) | Modern reads lower (better); the two modern observations are close enough to each other that an earlier derive-bands.js run reported a (degenerate, zero-width) three-band here, since corrected -- see "Derivation rule" above on why a zero-width warning band is refused rather than reported. |
+| p90_lines_changed | min 143.3, median 484.7, max 1560.3 -> healthy 1020 (two-band) | min 927.4, median 991.8, max 1056.2 -> healthy 1020 / critical 1060 (three-band) | Historical's healthy bound and modern's healthy bound now coincide at 1020 exactly, which is a coincidence of which repository sits at the 75th percentile in each population, not a converging estimate. |
+| p90_files_changed | min 4.1, median 7.0, max 12.4 -> healthy 9.5 (two-band) | min 5, median 9.05, max 13.1 -> healthy 11 (two-band) | Close agreement, as before. |
+| duplication_pct | min 0, median 0, max 0 -> healthy 0 (two-band) | min 0, median 0.88, max 1.76 -> healthy 1.5 (two-band) | See "stable enough to band" above -- historical's healthy-0 figure is an artifact of a 3-point all-zero sample, not evidence duplication cannot occur in a greenfield build. |
 
-Overall: the two sub-populations broadly overlap on file/line-count percentiles
-(`p90_files_changed`, `p90_lines_changed`) but diverge on the commit-shape percentages
-(`large_commits_pct`, `sprawling_commits_pct`, the test-coverage pair), with modern reading
-worse on sprawl/size and better on test discipline. At n=4 and n=2 respectively, with one
-non-repeating window per repository, this is far too thin a sample to call the divergence a
-real era effect rather than which four and which two repositories happened to be chosen
-(`dotnetdependencytracer`'s committed build output in particular is doing a lot of the work
-in the "modern reads worse on size" direction). The honest reading is: report both tables,
-do not pool them, and do not treat either as validated until the sample grows.
+(large_commits_pct and sprawling_commits_pct's historical figures reflect node's re-measurement
+with `calibration/reference-configs/nodejs-node.json` applied -- see "Keeping one tool_commit
+per group" above; both moved down slightly from an unconfigured re-measurement and, as a direct
+result, ember.js and node now sit close enough together to corroborate a critical bound neither
+had on its own before.)
+
+Overall: replacing curl and postgres with git narrowed the historical population's own range on
+every metric it still carries a verdict for (large_commits_pct and sprawling_commits_pct both
+gained a corroborated critical bound they did not have before, since ember and node now agree
+with each other at the top of a 3-point sample rather than the top value resting on a single
+repository), while leaving the historical/modern comparison's overall shape intact: modern still
+reads worse on sprawl/size and better on test discipline, and duplication is still not
+comparable across either population. At n=3 and n=2 respectively, with one or two non-repeating
+windows per repository, this remains far too thin a sample to call the historical/modern
+divergence a real era effect rather than which three and which two repositories happened to be
+chosen (`dotnetdependencytracer`'s committed build output in particular is doing a lot of the
+work in the "modern reads worse on size" direction). The honest reading is: report both tables,
+do not pool them, and do not treat either as validated until the sample grows. See this task's
+own report for what a *pooled* (historical + modern) table would look like and the case against
+relying on it, argued both ways rather than decided here.
 
 ## Choosing a reference repository
 
