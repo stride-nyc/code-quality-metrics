@@ -833,6 +833,15 @@ reported for reference -- removing the fields would be a breaking change to `loc
 summary.json`'s schema for both GitHub Actions workflows and any other consumer -- but neither
 carries a verdict; the percentiles below carry the load this band used to carry.
 
+**DORA connection (`avg_lines_changed`, code-quality-metrics-wo8q)**: none directly, and weaker
+than the connection `p90_lines_changed` below can support. Both figures are read against DORA's
+small-batches capability, but the average sits on the same heavy-tailed population documented
+just above, where Kolassa, Riehle and Salim's own table shows a mean (465.72) above the reported
+p90 (261) of the same distribution: a single large commit can move the average without the
+underlying batch-size practice having changed at all. `lib/metric-descriptions.js` points this
+metric's DORA footnote at the percentile below rather than repeating the small-batches claim
+against a figure this document already documents as unstable.
+
 **Thresholds** (`P90_LINES_CHANGED` in `lib/thresholds.js`):
 | Metric | Range | Signal |
 |--------|-------|--------|
@@ -896,6 +905,13 @@ critical bound is reported):
 |-------|--------|
 | p90 ≤ 8.5 files | Healthy: at or below the 75th percentile of the benchmark |
 | p90 > 8.5 files | Warning |
+
+**DORA connection (code-quality-metrics-wo8q)**: the same 7.2% delivery-instability figure
+documented under Metric 2 (Sprawling Commit Percentage) applies here too: `p90_files_changed`
+is the percentile view of the same file-scope signal `sprawling_commits_pct` reports as a
+threshold-breach rate, not a separate DORA finding of its own. As with Metric 2, DORA does not
+measure files changed per commit and publishes no figure for pull request size; the link from
+either metric to instability is this toolkit's inference.
 
 **External anchors**: Sadowski et al. (ICSE-SEIP 2018, §5.2), roughly 9 million Google code
 changes: "about 90% modify fewer than 10 files." Alali, Kagdi and Maletic (ICPC 2008, Table 2)
