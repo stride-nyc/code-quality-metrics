@@ -149,10 +149,10 @@ function fetchBranchCommits(ref, sinceStr, maxCommits = CONFIG.MAX_COMMITS) {
  * Parse --since <date> / --days <n> / --history <granular|squashed> CLI flags
  * into a collectLocalMetrics options object.
  * @param {string[]} argv process.argv.slice(2)
- * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }}
+ * @returns {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }}
  */
 function parseCliArgs(argv) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }} */
   const options = {};
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--since') {
@@ -207,6 +207,10 @@ function parseCliArgs(argv) {
         options.maxCommits = maxCommits;
       }
       i++;
+    } else if (argv[i] === '--output-dir') {
+      if (!argv[i + 1]) throw new Error('--output-dir requires a path');
+      options.outputDir = argv[i + 1];
+      i++;
     }
   }
   return options;
@@ -256,7 +260,7 @@ function logNoCommitsAnalyzed() {
 
 /**
  * Main analysis function
- * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} [options] CLI
+ * @param {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }} [options] CLI
  *   window override: since (an explicit YYYY-MM-DD boundary) takes precedence over days (a
  *   count replacing CONFIG.ANALYSIS_DAYS). history forces history_granularity, overriding
  *   auto-detection for this invocation only.
@@ -1215,7 +1219,7 @@ module.exports = {
 // Script execution, placed after all definitions and module.exports so all
 // required lib modules are fully initialized before collectLocalMetrics() runs.
 if (require.main === module) {
-  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded' }} */
+  /** @type {{ days?: number, since?: string, history?: 'granular'|'squashed', lifecycle?: 'initial-build'|'established', config?: string, maxCommits?: number|'unbounded', outputDir?: string }} */
   let cliOptions;
   try {
     cliOptions = parseCliArgs(process.argv.slice(2));
@@ -1223,7 +1227,7 @@ if (require.main === module) {
     // Argument errors are the user's typo, not an analysis failure, so report
     // them as such and show the accepted forms rather than a stack trace.
     console.error(`❌ ${error instanceof Error ? error.message : String(error)}`);
-    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>] [--max-commits <n>|unbounded]');
+    console.error('Usage: node local-code-metrics.js [--days <n>] [--since <YYYY-MM-DD>] [--history granular|squashed] [--lifecycle initial-build|established] [--config <path>] [--max-commits <n>|unbounded] [--output-dir <path>]');
     process.exit(1);
   }
 

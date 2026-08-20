@@ -97,4 +97,15 @@ describe('parseCliArgs', () => {
   test('accepts the unbounded sentinel for --max-commits', () => {
     expect(parseCliArgs(['--max-commits', 'unbounded'])).toEqual({ maxCommits: 'unbounded' });
   });
+
+  // code-quality-metrics-w3wn: where a run writes its output is a property of the run, not a
+  // fact about the repository, so this is CLI-only -- no .codemetrics.json key -- mirroring
+  // --max-commits' own reasoning (see CLAUDE.md's "Analysis Window" section).
+  test('accepts a valid --output-dir value', () => {
+    expect(parseCliArgs(['--output-dir', '/tmp/custom-output'])).toEqual({ outputDir: '/tmp/custom-output' });
+  });
+
+  test('rejects --output-dir given without a value', () => {
+    expect(() => parseCliArgs(['--output-dir'])).toThrow(/--output-dir/);
+  });
 });
