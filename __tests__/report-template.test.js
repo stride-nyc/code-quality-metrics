@@ -1903,20 +1903,30 @@ describe('renderReportHtml', () => {
   // (large/sprawling commits, test/prod co-change, uncovered production, p90 lines/files
   // changed), with no directional concern either, so it exercises exactly this case with no
   // overrides needed.
-  it('gives an affirmative path naming specific healthy signals, not the degenerate "no signal crossed" sentence, when every banded metric is healthy and there are no concerns at all', () => {
+  //
+  // code-quality-metrics-11ib: this used to name all six signals, one clause per metric --
+  // honest but unbounded, and the brief that fixed the mixed-run branch's own asymmetry (naming
+  // only 2) flagged this as the same scaling problem waiting to happen with a seventh or eighth
+  // banded metric. Re-pointed at the same describeStrongestHealthySignals(bandedGoodEntries, 2)
+  // selection the mixed branch now uses, for one consistent rule across both branches rather
+  // than one enumerating everything and the other naming a fixed few. The total (6) is still
+  // stated, so a reader knows how much evidence exists even though only the top 2 are named.
+  it('gives an affirmative path naming its top 2 healthy signals and the total count, not the degenerate "no signal crossed" sentence, when every banded metric is healthy and there are no concerns at all', () => {
     const html = renderReportHtml(fixtureArgs());
     const summary = summarySection(html);
 
     expect(summary).toMatch(/All signals are positive/);
     expect(summary).not.toContain('No measured signal in this run crossed a warning or critical threshold.');
-    // Names specific signals, the way the concern branch already names its worst one via
-    // ledByPhrase -- not a generic reassurance with no content.
-    expect(summary).toContain('Large commits');
-    expect(summary).toContain('Sprawling commits');
+    // States the total (6 metrics measured healthy this run)...
+    expect(summary).toMatch(/6 metrics/);
+    // ...and names its top 2 by margin (furthest inside their own band), not a generic
+    // reassurance with no content: Test/prod co-change (55 against a >=23 bar, the furthest
+    // margin) and Sprawling commits (8 against an <=18 bar, second furthest).
     expect(summary).toContain('Test/prod co-change');
-    expect(summary).toContain('Uncovered production');
-    expect(summary).toContain('Commit size, high end');
-    expect(summary).toContain('Files changed, high end');
+    expect(summary).toContain('Sprawling commits');
+    // Large commits (15 against an <=18 bar) has the smallest margin of the six and is not one
+    // of the top 2 -- proving this names a selected few, not still all six by coincidence.
+    expect(summary).not.toContain('Large commits');
   });
 
   // [guard] not a called-shot RED: this proves the concern branch (untouched by the
@@ -2007,6 +2017,66 @@ describe('renderReportHtml', () => {
 
     const occurrences = (summary.match(/against a calibrated threshold/g) || []).length;
     expect(occurrences).toBe(1);
+  });
+
+  // code-quality-metrics-11ib: "It still flags" frames the healthy majority as a concession
+  // being walked back -- the negative-first reflex compressed into one adverb. Measured on
+  // this repository's own real regenerated run (6 good, 1 warning): "Most metrics scored
+  // against a calibrated threshold in this run are healthy. It still flags 1 warning signal,
+  // led by Duplication density at 5.12 (warning)." Both facts should be stated plainly, in
+  // that order, without the concessive.
+  it('does not use the concessive word "still" when a mixed run has more healthy signals than warnings', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/\bstill\b/);
+  });
+
+  // code-quality-metrics-11ib (second, larger problem): the concern branch already names its
+  // worst finding by label, value and bar via ledByPhrase; the healthy side collapsed six real
+  // findings into the single word "Most". A reader gets one specific fact and one vague
+  // generality. This asserts the healthy side now names its own strongest signals with the
+  // same concreteness -- selected the same way the concern side already is (highest concern
+  // wins there; furthest inside its own healthy band, as a fraction of that boundary, wins
+  // here) -- rather than a bare count or "Most". In this fixture (5 good, 1 warning:
+  // uncovered_prod_rate forced to 15), the two furthest-inside-band good entries are
+  // Test/prod co-change (55 against a >=23 bar, 139% past it) and Sprawling commits (8 against
+  // an <=18 bar, 56% inside it).
+  it('names specific healthy signals with their own value and bar, not the word "Most", in a healthy-dominant mixed run', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/Most metrics/);
+    expect(summary).toContain('Test/prod co-change');
+    expect(summary).toContain('healthy at or above 23');
+    expect(summary).toContain('Sprawling commits');
+    expect(summary).toContain('healthy at or below 18');
+  });
+
+  // code-quality-metrics-11ib: covers the "mixed with several warnings" case named in the
+  // brief (measured shape: daloopa, 5 good and 2 warnings, "led by Test/prod co-change at 12
+  // (warning)"). Two banded metrics are forced into warning here (test_coverage_rate 12,
+  // p90_files_changed 20), leaving 4 good (large/sprawling/uncovered production/p90 lines) --
+  // still more good than flagged, so this exercises the same healthy-dominant branch as the
+  // single-warning test above, with two concerns instead of one. Both forced entries carry the
+  // same fixed two-band concern (-1), so buildMetricCatalog's stable concern-descending sort
+  // breaks the tie by original catalog order, which is test_coverage_rate before
+  // p90_files_changed -- that is what actually decides which one leads here, not a new
+  // property of this fix. Not a new RED: this is the same generalized code path already fixed
+  // by the prior two commits, exercised here with a different shape to confirm the fix was not
+  // accidentally single-warning-specific.
+  it('names specific healthy signals and both warnings in a mixed run with several warnings', () => {
+    const html = renderReportHtml(fixtureArgs({
+      test_coverage_rate: '12.00',
+      p90_files_changed: 20
+    }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/Most metrics/);
+    expect(summary).not.toMatch(/\bstill\b/);
+    expect(summary).toMatch(/2 warning signals/);
+    expect(summary).toMatch(/led by Test\/prod co-change at 12 \(warning\)/);
+    expect(summary).toContain('Sprawling commits');
   });
 
   // code-quality-metrics-q8zp: the ANALYSIS_IGNORE_PATTERNS bullet and the
@@ -2188,6 +2258,12 @@ describe('renderReportHtml', () => {
     const warningCount = catalog.filter(entry => entry.status === 'warning').length;
     allowed.add(String(criticalCount));
     allowed.add(String(warningCount));
+    // code-quality-metrics-11ib: the healthy-dominant mixed branch now also states how many
+    // banded entries are healthy this run ("N metrics ... are healthy"), the same class of
+    // provably-correct tally as criticalCount/warningCount above, just counting the opposite
+    // status over banded (two-band/three-band tier) entries only.
+    const bandedGoodCount = catalog.filter(entry => (entry.tier === 'two-band' || entry.tier === 'three-band') && entry.status === 'good').length;
+    allowed.add(String(bandedGoodCount));
 
     const printed = summaryHtml.match(numberPattern) || [];
     for (const token of printed) {
