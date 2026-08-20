@@ -2,7 +2,7 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative, buildNarrativePayload, validateNarrative } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload, buildNarrativeTopCommits, validateNarrative } = require('../lib/narrative');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { CONFIG } = require('../lib/config');
 
@@ -382,6 +382,68 @@ describe('buildNarrativePayload', () => {
 
     expect(messageQuality.status).toBe('neutral');
     expect(messageQuality.verdict).toBe('none');
+  });
+});
+
+describe('buildNarrativeTopCommits', () => {
+  // CALLED SHOT (code-quality-metrics-j78y, RED 1): measured on the regenerated 73V report.
+  // Commit cc7c77aa has 14,679 total changed lines, of which 14,410 are excluded vendored
+  // terraform, leaving 216 production lines (prod_additions + prod_deletions). The narrative
+  // cited the raw total (9,868 additions / 4,811 deletions) as if it were the commit's size,
+  // overstating it by roughly 68x and presenting a vendored dependency sync as evidence of
+  // poor test discipline. The fix must expose only the exclusion-scoped production counts to
+  // the narrative, the same basis every verdict on the page already uses.
+  // Predicted failure before implementing: buildNarrativeTopCommits is currently a pass-through
+  // stub, so the mapped entry still carries the raw total_additions field (9868), and
+  // JSON.stringify(mapped) contains the literal substring "9868" -- the `not.toContain` assertion
+  // fails with "Received string containing 9868".
+  test('exposes each commit\'s exclusion-scoped production counts, not its raw whole-diff totals', () => {
+    const topCommits = [{
+      sha: 'cc7c77aa',
+      message: 'vendor: sync terraform modules',
+      total_additions: 9868,
+      total_deletions: 4811,
+      files_changed: 6,
+      prod_additions: 200,
+      prod_deletions: 16,
+      prod_files_count: 2,
+      test_files_count: 0,
+      excluded_additions: 9668,
+      excluded_deletions: 4795
+    }];
+
+    const mapped = buildNarrativeTopCommits(topCommits);
+    const json = JSON.stringify(mapped);
+
+    expect(mapped[0].prod_additions).toBe(200);
+    expect(mapped[0].prod_deletions).toBe(16);
+    expect(json).not.toContain('9868');
+    expect(json).not.toContain('4811');
+  });
+
+  // GUARD, not a called-shot RED: proves the mapped shape still identifies the commit (sha,
+  // message) and whether a test file was touched, since the narrative still needs those to
+  // write a legible sentence about "no test file touched alongside".
+  test('keeps sha, message and test_files_count on the mapped entry', () => {
+    const topCommits = [{
+      sha: '1b3d90ff',
+      message: 'fix: handle null response',
+      total_additions: 160,
+      total_deletions: 165,
+      files_changed: 9,
+      prod_additions: 160,
+      prod_deletions: 165,
+      prod_files_count: 9,
+      test_files_count: 0,
+      excluded_additions: 0,
+      excluded_deletions: 0
+    }];
+
+    const mapped = buildNarrativeTopCommits(topCommits);
+
+    expect(mapped[0].sha).toBe('1b3d90ff');
+    expect(mapped[0].message).toBe('fix: handle null response');
+    expect(mapped[0].test_files_count).toBe(0);
   });
 });
 
