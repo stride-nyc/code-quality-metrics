@@ -2022,6 +2022,27 @@ describe('renderReportHtml', () => {
     expect(summary).not.toMatch(/\bstill\b/);
   });
 
+  // code-quality-metrics-11ib (second, larger problem): the concern branch already names its
+  // worst finding by label, value and bar via ledByPhrase; the healthy side collapsed six real
+  // findings into the single word "Most". A reader gets one specific fact and one vague
+  // generality. This asserts the healthy side now names its own strongest signals with the
+  // same concreteness -- selected the same way the concern side already is (highest concern
+  // wins there; furthest inside its own healthy band, as a fraction of that boundary, wins
+  // here) -- rather than a bare count or "Most". In this fixture (5 good, 1 warning:
+  // uncovered_prod_rate forced to 15), the two furthest-inside-band good entries are
+  // Test/prod co-change (55 against a >=23 bar, 139% past it) and Sprawling commits (8 against
+  // an <=18 bar, 56% inside it).
+  it('names specific healthy signals with their own value and bar, not the word "Most", in a healthy-dominant mixed run', () => {
+    const html = renderReportHtml(fixtureArgs({ uncovered_prod_rate: '15.00' }));
+    const summary = summarySection(html);
+
+    expect(summary).not.toMatch(/Most metrics/);
+    expect(summary).toContain('Test/prod co-change');
+    expect(summary).toContain('healthy at or above 23');
+    expect(summary).toContain('Sprawling commits');
+    expect(summary).toContain('healthy at or below 18');
+  });
+
   // code-quality-metrics-q8zp: the ANALYSIS_IGNORE_PATTERNS bullet and the
   // vendored/generated-default bullet used to collapse into one merged bullet whenever their
   // counts happened to coincide, and that merged bullet's own text embedded
@@ -2201,6 +2222,12 @@ describe('renderReportHtml', () => {
     const warningCount = catalog.filter(entry => entry.status === 'warning').length;
     allowed.add(String(criticalCount));
     allowed.add(String(warningCount));
+    // code-quality-metrics-11ib: the healthy-dominant mixed branch now also states how many
+    // banded entries are healthy this run ("N metrics ... are healthy"), the same class of
+    // provably-correct tally as criticalCount/warningCount above, just counting the opposite
+    // status over banded (two-band/three-band tier) entries only.
+    const bandedGoodCount = catalog.filter(entry => (entry.tier === 'two-band' || entry.tier === 'three-band') && entry.status === 'good').length;
+    allowed.add(String(bandedGoodCount));
 
     const printed = summaryHtml.match(numberPattern) || [];
     for (const token of printed) {
