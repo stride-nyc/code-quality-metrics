@@ -1701,6 +1701,69 @@ describe('collectLocalMetrics — analysis exclusions and vendored-default share
     expect(summary.analysis_exclusions.excluded_lines_pct).toBe('0.00');
   });
 
+  // GitHub #90: CLAUDE.md documents ANALYSIS_IGNORE_PATTERNS as excluding globs from "the
+  // line-count distributions", but until this fix those distributions (p50/p90/p95/avg lines
+  // changed, avg/p50/p90 files changed) were built directly from the whole-diff
+  // total_additions/total_deletions/files_changed and never moved when exclusions were
+  // configured. One analyzed commit: 500 lines in an excluded bin/ file (510 whole-diff
+  // total, 2 whole-diff files), 10 lines in one ordinary file. The distributions must reflect
+  // only the 10 counted lines / 1 counted file, not the whole-diff 510/2 -- while
+  // total_additions/total_deletions/files_changed (asserted via analysis_exclusions above)
+  // stay whole-diff.
+  test('computes the line-count distributions from the exclusion-aware counted fields, not the whole-diff totals', async () => {
+    const SHA = 'd'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `500\t0\tbin/Debug/App.dll\n10\t0\tsrc/app.js`
+    );
+    fs.existsSync.mockImplementation(p => typeof p === 'string' && p.endsWith('.codemetrics.json'));
+    fs.readFileSync.mockReturnValue(JSON.stringify({ ANALYSIS_IGNORE_PATTERNS: ['**/bin/**'] }));
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.avg_lines_changed).toBe('10.00');
+    expect(summary.p50_lines_changed).toBe(10);
+    expect(summary.p90_lines_changed).toBe(10);
+    expect(summary.p95_lines_changed).toBe(10);
+    expect(summary.avg_files_changed).toBe('1.00');
+    expect(summary.p50_files_changed).toBe(1);
+    expect(summary.p90_files_changed).toBe(1);
+  });
+
+  // The other required direction (GitHub #90): with no ANALYSIS_IGNORE_PATTERNS configured,
+  // the distributions must be bit-for-bit identical to what the whole-diff totals alone would
+  // have produced -- nothing is excluded, so counted equals raw and nothing here changes.
+  test('leaves the line-count distributions unchanged from the whole-diff totals when no exclusions are configured', async () => {
+    const SHA = 'e'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      'main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `500\t0\tbin/Debug/App.dll\n10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.avg_lines_changed).toBe('510.00');
+    expect(summary.p50_lines_changed).toBe(510);
+    expect(summary.p90_lines_changed).toBe(510);
+    expect(summary.avg_files_changed).toBe('2.00');
+    expect(summary.p50_files_changed).toBe(2);
+    expect(summary.p90_files_changed).toBe(2);
+  });
+
   // The higher-value half (code-quality-metrics-3b6): visible even when nothing is
   // configured, since CONFIG.DUPLICATE_IGNORE_PATTERNS's defaults are not empty.
   test('reports vendored_generated_share even when ANALYSIS_IGNORE_PATTERNS is not configured', async () => {
