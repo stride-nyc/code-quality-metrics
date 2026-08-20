@@ -74,38 +74,41 @@ describe('generateInsights', () => {
   });
 
   // --- warning thresholds ---
-  test('emits warning (not critical) for large_commits_pct between healthy and critical', () => {
+  // large_commits_pct is two-band under the re-measured era:current data (calibration/
+  // derive-bands.js's degenerate-band guard and bot-filtering both changed what corroborates
+  // the old extreme -- see lib/thresholds.js's LARGE_COMMITS_PCT comment): THRESHOLDS reports
+  // critical: null, so a value above healthy always reads as "high", never "very high",
+  // however far above healthy it sits. Same null-coercion guard class as the uncovered_prod_rate
+  // tests above.
+  test('emits warning (not critical) for large_commits_pct above healthy, however high (two-band: no critical bound)', () => {
     const band = THRESHOLDS.LARGE_COMMITS_PCT;
-    const value = (band.healthy + band.critical) / 2;
-    const { warnings } = generateInsights(makeSummary({ large_commits_pct: value.toFixed(2) }), []);
+    const { warnings } = generateInsights(makeSummary({ large_commits_pct: String(band.healthy + 5) }), []);
     expect(warnings.some(w => w.includes('High large commit rate'))).toBe(true);
     expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  test('emits critical warning for large_commits_pct above critical', () => {
-    const value = THRESHOLDS.LARGE_COMMITS_PCT.critical + 5;
-    const { warnings, recommendations } = generateInsights(makeSummary({ large_commits_pct: String(value) }), []);
-    expect(warnings.some(w => w.includes('Very high large commit rate'))).toBe(true);
-    expect(recommendations.length).toBeGreaterThan(0);
+  test('never emits a critical warning for large_commits_pct, however high (two-band: no critical bound)', () => {
+    const { warnings, recommendations } = generateInsights(makeSummary({ large_commits_pct: '90.00' }), []);
+    expect(warnings.some(w => w.includes('Very high large commit rate'))).toBe(false);
+    expect(recommendations).toEqual([]);
   });
 
-  test('emits warning (not critical) for sprawling_commits_pct between healthy and critical', () => {
+  // sprawling_commits_pct is two-band again under the re-measured era:current data:
+  // calibration/derive-bands.js's new degenerate-band guard downgrades it because its
+  // corroborated critical bound would land exactly on its healthy bound (a zero-width warning
+  // interval) -- see lib/thresholds.js's SPRAWLING_COMMITS_PCT comment. It was briefly
+  // three-band under an earlier pooled-derivation adoption; that is no longer the current data.
+  test('emits warning (not critical) for sprawling_commits_pct above healthy, however high (two-band: no critical bound)', () => {
     const band = THRESHOLDS.SPRAWLING_COMMITS_PCT;
-    const value = (band.healthy + band.critical) / 2;
-    const { warnings } = generateInsights(makeSummary({ sprawling_commits_pct: value.toFixed(2) }), []);
+    const { warnings } = generateInsights(makeSummary({ sprawling_commits_pct: String(band.healthy + 5) }), []);
     expect(warnings.some(w => w.includes('High sprawling commit rate'))).toBe(true);
     expect(warnings.some(w => w.includes('Very high'))).toBe(false);
   });
 
-  // sprawling_commits_pct is three-band under era:current (calibration/derive-bands.js:
-  // two distinct repos corroborate the max, nodejs/node and curl/curl) -- unlike the
-  // prior pooled-derivation band, where it was two-band, a value above its critical
-  // bound must now read as critical, the same as any other three-band metric.
-  test('emits critical warning for sprawling_commits_pct above critical', () => {
-    const value = THRESHOLDS.SPRAWLING_COMMITS_PCT.critical + 5;
-    const { warnings, recommendations } = generateInsights(makeSummary({ sprawling_commits_pct: String(value) }), []);
-    expect(warnings.some(w => w.includes('Very high sprawling commit rate'))).toBe(true);
-    expect(recommendations.length).toBeGreaterThan(0);
+  test('never emits a critical warning for sprawling_commits_pct, however high (two-band: no critical bound)', () => {
+    const { warnings, recommendations } = generateInsights(makeSummary({ sprawling_commits_pct: '90.00' }), []);
+    expect(warnings.some(w => w.includes('Very high sprawling commit rate'))).toBe(false);
+    expect(recommendations).toEqual([]);
   });
 
   test('emits warning for test_coverage_rate below the low-coverage cutoff', () => {

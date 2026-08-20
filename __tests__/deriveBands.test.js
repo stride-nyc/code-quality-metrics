@@ -96,6 +96,21 @@ describe('deriveBand', () => {
     expect(result.critical).toBe(round(10));
   });
 
+  // Reproduces the observed sprawling_commits_pct degeneracy at --era current: two
+  // distinct repos (repoA, repoB) both sit at the max (18), so the pre-fix rule marks
+  // this three-band with critical == healthy == 18. A zero-width warning band breaks
+  // lib/report.js's computeConcern, which divides by (criticalBoundary - healthyBoundary):
+  // that difference is 0, so every value above healthy divides by zero into Infinity/NaN
+  // instead of a graduated warning verdict. Treat this the same as an uncorroborated
+  // extreme: two-band, critical null.
+  it('downgrades to two-band and nulls critical when derived critical equals derived healthy, even with two supporting repos', () => {
+    const result = deriveBand('sprawling_commits_pct', obs([
+      ['repoA', 18], ['repoB', 18], ['repoC', 6], ['repoD', 12]
+    ]));
+    expect(result.tier).toBe('two-band');
+    expect(result.critical).toBeNull();
+  });
+
   it('does not export a CRITICAL_MULTIPLE convention any more', () => {
     expect(require('../calibration/derive-bands').CRITICAL_MULTIPLE).toBeUndefined();
   });

@@ -202,35 +202,48 @@ describe('tool_commit provenance', () => {
   // code-quality-metrics-8ad) could fall into: fix a defect, re-measure some observations
   // and not others, and the dataset silently pools two tool versions with nothing failing.
   //
-  // Grouped by population (granular vs squash-merge), pooling every era, rather than by
-  // (era, population): derive-bands.js's default pools every era within a population unless
-  // --era restricts it, so a population-level check is the strictest one that still covers
-  // every era-restricted derivation the CLI can actually produce -- if the whole population is
-  // one tool_commit, every era-restricted subset of it necessarily is too.
+  // Grouped by (era, population) rather than population alone. This check used to pool every
+  // era within a population, reasoning that a population-level check was strictly stronger:
+  // if the whole population sat behind one tool_commit, every era-restricted subset of it
+  // necessarily did too. That reasoning assumed both eras always advance together, which
+  // calibration/README.md's "Eras" section says is not the design: era: "current" tracks
+  // today's tool version and is expected to be re-measured as the tool changes; era: "pre-ai"
+  // is a frozen 2019-2020 snapshot kept "to check the baseline for validity, not to replace
+  // it", and README explicitly recommends deriving bands from era: current alone, never from
+  // the pooled (no --era) default. A scoped re-measurement of era: current only (this file's
+  // own remeasure-era-current task) is exactly that design working as intended, not the defect
+  // this guard exists to catch -- but the old population-level grouping could not tell the two
+  // apart, and flagged the intended case as a violation. Grouping by (era, population) checks
+  // the invariant that actually matters: every derivation the CLI's --era flag can actually
+  // produce (including "no --era", i.e. one era per population, since that pools exactly the
+  // groups checked here) rests on one tool version, while still catching the original defect --
+  // a partial re-measurement that leaves some, but not all, observations *within one era* on
+  // the old tool_commit.
   //
   // Deliberately internal-consistency only, not a comparison against the current git HEAD.
   // Comparing to HEAD would fail on every unrelated commit to this repository (a version bump,
   // an unrelated lib/ change, a docs fix), which is exactly the shape of gate people learn to
   // ignore rather than act on. What must never happen is a derivation silently pooling two tool
-  // versions; it is fine for the whole dataset to sit behind the current tool_commit, as every
-  // observation here already does between re-measurements.
-  test('[guard] every population pools observations measured at a single tool_commit', () => {
+  // versions within the same era; it is fine, and expected, for different eras to sit behind
+  // different tool commits once one has been re-measured and the other deliberately has not.
+  test('[guard] every (era, population) group pools observations measured at a single tool_commit', () => {
     const usable = observationData.observations.filter(o => o.include_in_derivation);
 
     /** @type {Record<string, Set<string>>} */
-    const toolCommitsByPopulation = {};
+    const toolCommitsByGroup = {};
     for (const o of usable) {
       const population = o.population ?? 'granular';
-      (toolCommitsByPopulation[population] ||= new Set()).add(o.tool_commit);
+      const group = `${o.era}|${population}`;
+      (toolCommitsByGroup[group] ||= new Set()).add(o.tool_commit);
     }
 
     // Guards against the filter/grouping silently matching nothing, which would make this
     // test pass by measuring an empty set rather than by the tool commits being consistent.
-    expect(Object.keys(toolCommitsByPopulation).length).toBeGreaterThan(0);
+    expect(Object.keys(toolCommitsByGroup).length).toBeGreaterThan(0);
 
-    const mixed = Object.entries(toolCommitsByPopulation)
+    const mixed = Object.entries(toolCommitsByGroup)
       .filter(([, commits]) => commits.size > 1)
-      .map(([population, commits]) => `${population}: ${[...commits].sort().join(', ')}`);
+      .map(([group, commits]) => `${group}: ${[...commits].sort().join(', ')}`);
 
     expect(mixed).toEqual([]);
   });

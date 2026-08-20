@@ -6,16 +6,24 @@
 //
 // code-quality-metrics-v4o: statusMark compared a value only against the healthy boundary, so
 // the Status column could only ever say 'OK' or 'Warning' even though the adjacent Target
-// column (formatBand) already advertises a critical bound for the three-band metrics
-// (LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT). A value past the critical bound was reported
-// identically to a value merely past healthy. This suite proves a three-band metric reports
-// 'Critical' once its value passes the critical bound, and that a two-band metric (whose
-// critical bound is null by design -- no second reference repository corroborates its extreme)
-// never reports 'Critical', at any distance from healthy.
+// column (formatBand) already advertises a critical bound whenever a metric has one. A value
+// past the critical bound was reported identically to a value merely past healthy. This suite
+// proves a three-band metric reports 'Critical' once its value passes the critical bound, and
+// that a two-band metric (whose critical bound is null by design -- no second reference
+// repository corroborates its extreme) never reports 'Critical', at any distance from healthy.
+//
+// LARGE_COMMITS_PCT and SPRAWLING_COMMITS_PCT are both two-band under the re-measured
+// era:current data (calibration/derive-bands.js's degenerate-band guard and bot-filtering both
+// changed what corroborates the old extremes -- see lib/thresholds.js's comments on each), so
+// neither is a live three-band example any more; every currently-calibrated metric is two-band.
+// The three-band 'Critical' path is still real, reachable script logic (not dead code -- a
+// future re-measurement could restore a three-band metric), so it is proven here against a
+// synthetic THRESHOLDS override rather than dropped along with its last real example.
 
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const { THRESHOLDS } = require('../lib/thresholds');
 
 const REPO_ROOT = path.join(__dirname, '..');
 
@@ -28,10 +36,11 @@ function loadStepScript(workflowFile, stepName) {
   throw new Error(`step "${stepName}" not found in ${workflowFile}`);
 }
 
-async function runCreateIssue(script, summary) {
+async function runCreateIssue(script, summary, thresholdsOverride) {
   const fakeFs = { readFileSync: () => JSON.stringify(summary) };
   const fakeRequire = id => {
     if (id === 'fs') return fakeFs;
+    if (thresholdsOverride && id === './lib/thresholds') return { THRESHOLDS: thresholdsOverride };
     return id.startsWith('./lib/') ? require(path.join(REPO_ROOT, id)) : require(id);
   };
   let created = null;
@@ -85,43 +94,45 @@ describe('code-metrics.yml workflow script -- three-band Critical status (code-q
     script = loadStepScript('code-metrics.yml', 'Create Issue with Results');
   });
 
-  describe('Large Commits (healthy 19, critical 30)', () => {
+  describe('Large Commits (healthy 18, two-band: no critical bound)', () => {
     test('reports OK below the healthy bound', async () => {
       const summary = baseSummary({ large_commits_pct: '12.00' });
       const created = await runCreateIssue(script, summary);
       expect(statusCellFor(created.body, 'Large Commits')).toBe('OK');
     });
 
-    test('reports Warning between healthy and critical', async () => {
+    test('reports Warning above the healthy bound', async () => {
       const summary = baseSummary({ large_commits_pct: '22.00' });
       const created = await runCreateIssue(script, summary);
       expect(statusCellFor(created.body, 'Large Commits')).toBe('Warning');
     });
 
-    test('reports Critical past the critical bound', async () => {
-      const summary = baseSummary({ large_commits_pct: '35.00' });
+    test('never reports Critical, however far above healthy (two-band: LARGE_COMMITS_PCT.critical is null)', async () => {
+      expect(THRESHOLDS.LARGE_COMMITS_PCT.critical).toBeNull();
+      const summary = baseSummary({ large_commits_pct: '90.00' });
       const created = await runCreateIssue(script, summary);
-      expect(statusCellFor(created.body, 'Large Commits')).toBe('Critical');
+      expect(statusCellFor(created.body, 'Large Commits')).toBe('Warning');
     });
   });
 
-  describe('Sprawling Commits (healthy 18, critical 20)', () => {
+  describe('Sprawling Commits (healthy 18, two-band: no critical bound)', () => {
     test('reports OK below the healthy bound', async () => {
       const summary = baseSummary({ sprawling_commits_pct: '12.00' });
       const created = await runCreateIssue(script, summary);
       expect(statusCellFor(created.body, 'Sprawling Commits')).toBe('OK');
     });
 
-    test('reports Warning between healthy and critical', async () => {
+    test('reports Warning above the healthy bound', async () => {
       const summary = baseSummary({ sprawling_commits_pct: '19.00' });
       const created = await runCreateIssue(script, summary);
       expect(statusCellFor(created.body, 'Sprawling Commits')).toBe('Warning');
     });
 
-    test('reports Critical past the critical bound', async () => {
-      const summary = baseSummary({ sprawling_commits_pct: '50.00' });
+    test('never reports Critical, however far above healthy (two-band: SPRAWLING_COMMITS_PCT.critical is null)', async () => {
+      expect(THRESHOLDS.SPRAWLING_COMMITS_PCT.critical).toBeNull();
+      const summary = baseSummary({ sprawling_commits_pct: '90.00' });
       const created = await runCreateIssue(script, summary);
-      expect(statusCellFor(created.body, 'Sprawling Commits')).toBe('Critical');
+      expect(statusCellFor(created.body, 'Sprawling Commits')).toBe('Warning');
     });
   });
 
@@ -136,6 +147,45 @@ describe('code-metrics.yml workflow script -- three-band Critical status (code-q
       const summary = baseSummary({ uncovered_prod_rate: '99.00' });
       const created = await runCreateIssue(script, summary);
       expect(statusCellFor(created.body, 'Uncovered Prod')).toBe('Warning');
+    });
+  });
+
+  // Every currently-calibrated metric is two-band (see the describe blocks above), so nothing
+  // in the real THRESHOLDS module can currently drive the Status column to 'Critical'. That
+  // three-band branch of statusMark is still live script logic, not dead code -- a future
+  // re-measurement could restore a three-band metric -- so it is proven here against a
+  // synthetic THRESHOLDS override (a real critical bound on LARGE_COMMITS_PCT/
+  // SPRAWLING_COMMITS_PCT) rather than left with no coverage at all once the real data stopped
+  // exercising it.
+  describe('three-band Critical status, proven against a synthetic override (no real metric is three-band right now)', () => {
+    const syntheticThresholds = {
+      ...THRESHOLDS,
+      LARGE_COMMITS_PCT: { healthy: 19, critical: 30 },
+      SPRAWLING_COMMITS_PCT: { healthy: 18, critical: 20 }
+    };
+
+    test('reports Critical past a synthetic critical bound for Large Commits', async () => {
+      const summary = baseSummary({ large_commits_pct: '35.00' });
+      const created = await runCreateIssue(script, summary, syntheticThresholds);
+      expect(statusCellFor(created.body, 'Large Commits')).toBe('Critical');
+    });
+
+    test('reports Warning (not Critical) between the synthetic healthy and critical bounds for Large Commits', async () => {
+      const summary = baseSummary({ large_commits_pct: '22.00' });
+      const created = await runCreateIssue(script, summary, syntheticThresholds);
+      expect(statusCellFor(created.body, 'Large Commits')).toBe('Warning');
+    });
+
+    test('reports Critical past a synthetic critical bound for Sprawling Commits', async () => {
+      const summary = baseSummary({ sprawling_commits_pct: '50.00' });
+      const created = await runCreateIssue(script, summary, syntheticThresholds);
+      expect(statusCellFor(created.body, 'Sprawling Commits')).toBe('Critical');
+    });
+
+    test('reports Warning (not Critical) between the synthetic healthy and critical bounds for Sprawling Commits', async () => {
+      const summary = baseSummary({ sprawling_commits_pct: '19.00' });
+      const created = await runCreateIssue(script, summary, syntheticThresholds);
+      expect(statusCellFor(created.body, 'Sprawling Commits')).toBe('Warning');
     });
   });
 });

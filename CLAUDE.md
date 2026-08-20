@@ -114,14 +114,14 @@ enforces this at runtime — never reads a `null` critical bound as zero).
 
 | Metric | Healthy | Critical | Tier |
 |--------|---------|----------|------|
-| Large commit % (>100 prod lines) | ≤19% | >30% | three-band |
-| Sprawling commit % (>5 files) | ≤18% | >20% | three-band |
+| Large commit % (>100 prod lines) | ≤18% | — | two-band |
+| Sprawling commit % (>5 files) | ≤18% | — | two-band |
 | Test coverage rate (test+prod co-occurrence) | ≥23% | — | two-band |
-| Uncovered prod rate | ≤13% | — | two-band |
+| Uncovered prod rate | ≤10% | — | two-band |
 | Commit message quality % | — | — | informational |
 | Avg lines changed | — | — | informational |
-| p90 lines changed | ≤260 | — | two-band |
-| p90 files changed | ≤8 | — | two-band |
+| p90 lines changed | ≤250 | — | two-band |
+| p90 files changed | ≤8.5 | — | two-band |
 | Net additions ratio (median) | — | — | informational |
 | Duplication density % | ≤2% | — | two-band |
 
@@ -131,15 +131,25 @@ Message quality was found to measure Conventional Commits adoption rather than i
 Net additions ratio used a churn denominator the source literature discards. Avg lines changed
 has no finite mean to band: three independent published fits put commit size on a heavy-tailed
 distribution, and a generalized Pareto with shape above 1 has no finite mean at all. Seven
-metrics carry a band; three of those have a critical bound.
+metrics carry a band; none currently has a critical bound. Large commit % and sprawling commit
+% both lost their critical bound in the most recent re-measurement (`calibration/
+observations.json`, twelve era: current observations re-measured after #76 committer-date
+selection, #80 bot filtering, and the reference-config exclusions): large commit %'s old
+corroborating repo (nodejs/node) was measured pre-bot-filter and no longer sits near the
+extreme, and sprawling commit %'s corroborated critical bound now lands exactly on its healthy
+bound -- a zero-width warning band `calibration/derive-bands.js` refuses to report, downgrading
+it to two-band instead (see that script's `deriveBand` comment). Because every calibrated band
+is currently two-band, no metric can render a "critical" verdict right now; `classifyDoraArchetype`'s
+`legacy-bottleneck` and `foundational-challenges` archetypes are consequently unreachable until a
+future re-measurement restores a three-band metric (see the DORA Archetype section below).
 
 Statistical distributions (p50/p90/p95/stddev) are computed for lines changed and files changed. Commit velocity trend and a practice archetype are included in the summary.
 
 Nine of the bands above (large/sprawling commit %, the three-way test-coverage rates, p90 lines/files changed, commit-size and velocity trend) treat one commit as one unit of work and are withheld entirely — not merely left un-banded — when the analyzed history is squashed pull requests rather than granular commits, since a whole PR sized as if it were one commit is not the thing the band was calibrated against. `history_granularity` is detected from PR-reference subjects, squash-flavored committer names, and merge-commit presence (`detectHistoryGranularity`, `lib/git.js`), but a `workflow_type: feature_branch` history always resolves to `granular` for withholding purposes regardless of that raw detection (`resolveHistoryGranularityForWithholding`, `local-code-metrics.js`): commits unique to an unmerged branch cannot yet be the squashed result of a merge, whatever a subject line says. The gate does not apply to `workflow_type: trunk`, where a genuinely squash-merging repository's main-branch commits really are whole pull requests and withholding is correct. See "History Granularity and Commit-Unit Withholding" in `metrics-specification.md` for the detection rule, the withholding rule, and why the other two candidate rules (act on confidence; raise the zero-share bar) were not chosen.
 
 Two bands have corroboration from outside this project's own six repositories, as a *position*
-rather than a *boundary*: p90 lines changed (260) against Kolassa, Riehle & Salim's published p90
-of 261 LoC/commit over 8.7M commits (SOFSEM 2013), and p90 files changed (8) against Sadowski et
+rather than a *boundary*: p90 lines changed (250) against Kolassa, Riehle & Salim's published p90
+of 261 LoC/commit over 8.7M commits (SOFSEM 2013), and p90 files changed (8.5) against Sadowski et
 al.'s ~90% of Google changes touching fewer than 10 files (ICSE-SEIP 2018) and Alali et al.'s gcc
 p90 of ~8 files (ICPC 2008). Thirteen reservations qualify every band, three of them high
 severity, including that a fitted, multi-feature just-in-time defect model already fails to
@@ -171,10 +181,19 @@ It classifies the repository based on large commit %, sprawling commit %, test c
 
 | Archetype | Signal |
 |-----------|--------|
-| `harmonious-high-achiever` | large commits below `LARGE_COMMITS_PCT.healthy` AND sprawling commits below `SPRAWLING_COMMITS_PCT.healthy` AND test coverage above `TEST_COVERAGE_RATE.healthy` AND uncovered prod below `UNCOVERED_PROD_RATE.healthy` (currently ≤19%, ≤18%, ≥23%, ≤13%) |
-| `legacy-bottleneck` | sprawling commits above `SPRAWLING_COMMITS_PCT.critical` AND large commits above `LARGE_COMMITS_PCT.critical` (currently >20%, >30%) |
-| `foundational-challenges` | large commits above `LARGE_COMMITS_PCT.critical` (currently >30%) alone — `uncovered_prod_rate` has no critical bound to add a second path |
+| `harmonious-high-achiever` | large commits below `LARGE_COMMITS_PCT.healthy` AND sprawling commits below `SPRAWLING_COMMITS_PCT.healthy` AND test coverage above `TEST_COVERAGE_RATE.healthy` AND uncovered prod below `UNCOVERED_PROD_RATE.healthy` (currently ≤18%, ≤18%, ≥23%, ≤10%) |
+| `legacy-bottleneck` | sprawling commits above `SPRAWLING_COMMITS_PCT.critical` AND large commits above `LARGE_COMMITS_PCT.critical` |
+| `foundational-challenges` | large commits above `LARGE_COMMITS_PCT.critical` alone — `uncovered_prod_rate` has no critical bound to add a second path |
 | `mixed-signals` | none of the above |
+
+**`legacy-bottleneck` and `foundational-challenges` are currently unreachable.** Both read a
+`.critical` bound that is `null` right now (`LARGE_COMMITS_PCT.critical` and
+`SPRAWLING_COMMITS_PCT.critical` — see the Key Metrics table above), and `classifyDoraArchetype`
+compares through `exceedsCritical`, which returns `false` whenever `.critical` is `null` rather
+than fabricating a breach by coercing `null` to `0`. Every currently-calibrated metric is
+two-band, so no repository, however extreme, can land on either archetype until a future
+re-measurement restores a three-band metric; every run either reads `harmonious-high-achiever`
+or `mixed-signals` today.
 
 ### Claude API Integration (Optional)
 

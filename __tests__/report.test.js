@@ -104,11 +104,22 @@ describe('buildMetricCatalog', () => {
     }
   });
 
+  // Every currently-calibrated metric is two-band (LARGE_COMMITS_PCT.critical is null -- see
+  // lib/thresholds.js), so nothing in the real THRESHOLDS module can reach computeConcern's
+  // three-band, critical-boundary path any more. That path is still live logic (a future
+  // re-measurement could restore a three-band metric), so it is proven here by temporarily
+  // restoring a synthetic critical bound rather than left with no coverage at all.
   it('computes concern = 1 (critical) for a higher-is-worse metric at its critical boundary', () => {
-    const entries = buildMetricCatalog(fullSummary({ large_commits_pct: '30.00' }));
-    const entry = entries.find(e => e.key === 'large_commits_pct');
-    expect(entry.concern).toBe(1);
-    expect(entry.status).toBe('critical');
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    try {
+      const entries = buildMetricCatalog(fullSummary({ large_commits_pct: '30.00' }));
+      const entry = entries.find(e => e.key === 'large_commits_pct');
+      expect(entry.concern).toBe(1);
+      expect(entry.status).toBe('critical');
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
   });
 
   it('marks test_isolation_rate as good when above 10 with fixed concern -2, never critical or warning', () => {
@@ -350,10 +361,22 @@ describe('buildMetricCatalog two-band metrics (no critical bound)', () => {
     expect(p90Lines.concern).toBe(-1);
   });
 
+  // Every currently-calibrated metric is two-band (LARGE_COMMITS_PCT.critical is null -- see
+  // lib/thresholds.js), so there is no real three-band exemplar left in the catalog right now.
+  // Tiering is still live logic keyed directly off whether criticalBoundary is present (a
+  // future re-measurement could restore a three-band metric), so it is proven here by
+  // temporarily restoring a synthetic critical bound rather than left with no coverage.
   it('marks a two-band entry with tier two-band and a three-band entry with tier three-band', () => {
-    const entries = buildMetricCatalog(fullSummary());
-    expect(entries.find(e => e.key === 'p90_lines_changed').tier).toBe('two-band');
-    expect(entries.find(e => e.key === 'large_commits_pct').tier).toBe('three-band');
+    expect(buildMetricCatalog(fullSummary()).find(e => e.key === 'p90_lines_changed').tier).toBe('two-band');
+
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    try {
+      const entries = buildMetricCatalog(fullSummary());
+      expect(entries.find(e => e.key === 'large_commits_pct').tier).toBe('three-band');
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
   });
 
   it('never reports critical for test_coverage_rate even far below healthy (two-band, not a fabricated critical bound)', () => {
