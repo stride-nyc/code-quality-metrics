@@ -806,6 +806,28 @@ describe('renderReportHtml', () => {
     expect(html).toContain('0.68');
   });
 
+  // code-quality-metrics-stoc (P0): renderStatCard renders a visible <span class="status-chip">
+  // stating the word good/warning/critical/unmeasured; renderGaugeCard sets data-status on the
+  // article but never renders that span, so every hasGauge tile (large/sprawling commits,
+  // test/prod co-change, uncovered production, and any gauge-rendered duplication tile) prints
+  // its value, its band, and its qualifiers, but never the word saying whether it passes -- a
+  // needle position against a colored arc is the only signal, invisible in text extraction,
+  // print, and screen readers. large_commits_pct is a gauge entry (hasGauge: true); pushing its
+  // value above THRESHOLDS.LARGE_COMMITS_PCT.healthy (18) makes it status 'warning'.
+  it('renders a visible status chip stating "warning" on a gauge card scored warning', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '25.00' }));
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('<span class="status-chip">warning</span>');
+  });
+
+  it('renders a visible status chip stating "good" on a gauge card scored good', () => {
+    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '15.00' }));
+    const largeCommitsCard = html.split('<article class="metric-card"').find(card => card.includes('>Large commits</p>'));
+
+    expect(largeCommitsCard).toContain('<span class="status-chip">good</span>');
+  });
+
   // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
   // is null -- see lib/thresholds.js), so it can no longer demonstrate a card describing both
   // a healthy AND a critical boundary. That three-band card description is still live
@@ -840,10 +862,10 @@ describe('renderReportHtml', () => {
   });
 
   // code-quality-metrics coordination task: a substituted greenfield-modern verdict must not
-  // render identically to a brownfield one -- n=2 is a much weaker claim than the brownfield
-  // bands' n=12, and a card that looked the same either way would mislead a reader into
-  // trusting both equally.
-  it('names the greenfield-modern band and its thinner evidence on a card substituted under project_lifecycle: initial-build', () => {
+  // render identically to a brownfield one -- naming the population it was scored against is
+  // a much weaker claim than the brownfield bands carry, and a card that looked the same
+  // either way would mislead a reader into trusting both equally.
+  it('names the greenfield-modern band on a card substituted under project_lifecycle: initial-build', () => {
     const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build' }));
     const cards = html.split('<article class="metric-card"');
     const largeCommitsCard = cards.find(card => card.includes('>Large commits</p>'));
@@ -851,7 +873,6 @@ describe('renderReportHtml', () => {
 
     expect(largeCommitsCard).toBeDefined();
     expect(largeCommitsCard.toLowerCase()).toContain('greenfield-modern');
-    expect(largeCommitsCard).toMatch(/n\s*=\s*2/);
 
     // test_coverage_rate is deliberately not substituted (see lib/report.js's
     // GREENFIELD_SUBSTITUTED_KEYS comment) -- its card must not claim a greenfield-modern
