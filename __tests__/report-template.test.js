@@ -1903,14 +1903,18 @@ describe('renderReportHtml', () => {
     expect(occurrences).toBe(1);
   });
 
-  // code-quality-metrics-kprr: 73V's Analysis Scope section stated the identical 3 files /
-  // 28,207 lines / 63.99% twice -- once attributed to ANALYSIS_IGNORE_PATTERNS, once to the
-  // vendored/generated default patterns -- because the two facts happen to coincide in that
-  // run. They are genuinely different facts (a configured exclusion vs. a default-pattern
-  // match) in general, so this only merges them into one bullet when they actually describe
-  // the same files and lines; the next test below proves they still render separately when
-  // they differ.
-  it('states the exclusion and vendored-default facts once, not twice, when they describe the same files and lines', () => {
+  // code-quality-metrics-q8zp: the ANALYSIS_IGNORE_PATTERNS bullet and the
+  // vendored/generated-default bullet used to collapse into one merged bullet whenever their
+  // counts happened to coincide, and that merged bullet's own text embedded
+  // vendored.patterns -- CONFIG.DUPLICATE_IGNORE_PATTERNS, a duplication-detector setting --
+  // inside a sentence otherwise about ANALYSIS_IGNORE_PATTERNS and the commit-shape metrics.
+  // Demonstrated by accident: adding a duplication-only pattern to 73V's
+  // DUPLICATE_IGNORE_PATTERNS moved the callout from 3 files to 13 and changed the merged
+  // bullet's own printed pattern list, even though nothing about ANALYSIS_IGNORE_PATTERNS or
+  // the commit-shape metrics had changed. Each bullet now always names precisely what it
+  // measures and never merges, so this can no longer happen; the two facts render as two
+  // bullets, each independently correct, whether or not their counts happen to coincide.
+  it('always renders the ANALYSIS_IGNORE_PATTERNS exclusion and the vendored/generated default share as two separate bullets, even when their counts coincide', () => {
     const html = renderReportHtml(fixtureArgs({
       analysis_exclusions: {
         patterns: ['**/vendor/**'],
@@ -1928,8 +1932,61 @@ describe('renderReportHtml', () => {
     const scopeStart = html.indexOf('<section class="analysis-scope">');
     const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
 
-    const occurrences = (scope.match(/63\.99/g) || []).length;
-    expect(occurrences).toBe(1);
+    const bulletCount = (scope.match(/<li>/g) || []).length;
+    // At least 2 of the bullets in this section are these two facts (branch/provenance bullets
+    // may add more); asserting the exclusion phrase and the duplicate-detector phrase both
+    // appear as their own, separately-introduced bullets is the direct proof.
+    expect(bulletCount).toBeGreaterThanOrEqual(2);
+    expect(scope).toMatch(/excluded from the commit-shape metrics by ANALYSIS_IGNORE_PATTERNS/);
+    expect(scope).toMatch(/duplicate detector/);
+  });
+
+  // code-quality-metrics-q8zp's core requirement: vendored_generated_share is computed from
+  // CONFIG.DUPLICATE_IGNORE_PATTERNS (the jscpd duplicate-detector's own always-on defaults),
+  // not CONFIG.ANALYSIS_IGNORE_PATTERNS (the commit-shape scoping config) -- a basis mismatch
+  // that let a duplication-only config change move a sentence framed as being about
+  // commit-shape counts. Fixed by rendering the ANALYSIS_IGNORE_PATTERNS bullet from
+  // summary.analysis_exclusions alone, with no reference to summary.vendored_generated_share
+  // at all, so nothing about the vendored/generated share's own value can reach that bullet's
+  // text. This proves it directly: the ANALYSIS_IGNORE_PATTERNS bullet is byte-for-byte
+  // identical whether vendored_generated_share reports 3 files (as if only
+  // ANALYSIS_IGNORE_PATTERNS were configured) or 13 files with a different pattern list (as if
+  // a duplication-only DUPLICATE_IGNORE_PATTERNS addition had been made), with
+  // analysis_exclusions held fixed across both renders.
+  it('never changes the ANALYSIS_IGNORE_PATTERNS commit-shape bullet when only the vendored/generated share (a DUPLICATE_IGNORE_PATTERNS-derived fact) changes', () => {
+    const fixedExclusions = {
+      patterns: ['**/vendor/**'],
+      excluded_files_count: 3,
+      excluded_lines_count: 28207,
+      excluded_lines_pct: '63.99'
+    };
+    const beforeHtml = renderReportHtml(fixtureArgs({
+      analysis_exclusions: fixedExclusions,
+      vendored_generated_share: { patterns: ['**/vendor/**'], files_count: 3, lines_count: 28207, lines_pct: '63.99' }
+    }));
+    const afterHtml = renderReportHtml(fixtureArgs({
+      analysis_exclusions: fixedExclusions,
+      // Simulates adding '**/terraform/environments/**' to DUPLICATE_IGNORE_PATTERNS: the
+      // vendored/generated share's own file count, line count, share, and pattern list all
+      // change, with analysis_exclusions completely untouched.
+      vendored_generated_share: {
+        patterns: ['**/vendor/**', '**/terraform/environments/**'],
+        files_count: 13,
+        lines_count: 28239,
+        lines_pct: '64.07'
+      }
+    }));
+
+    const extractCommitShapeBullet = html => {
+      const scopeStart = html.indexOf('<section class="analysis-scope">');
+      const scope = html.slice(scopeStart, html.indexOf('</section>', scopeStart));
+      const bullets = scope.match(/<li>[^]*?<\/li>/g) || [];
+      const match = bullets.find(li => /excluded from the commit-shape metrics by ANALYSIS_IGNORE_PATTERNS/.test(li));
+      expect(match).toBeDefined();
+      return match;
+    };
+
+    expect(extractCommitShapeBullet(beforeHtml)).toBe(extractCommitShapeBullet(afterHtml));
   });
 
   // Defect: "see Analysis Scope below" (inside the vendored clause) and "See Findings below
