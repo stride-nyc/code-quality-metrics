@@ -193,7 +193,11 @@ compares through `exceedsCritical`, which returns `false` whenever `.critical` i
 than fabricating a breach by coercing `null` to `0`. Every currently-calibrated metric is
 two-band, so no repository, however extreme, can land on either archetype until a future
 re-measurement restores a three-band metric; every run either reads `harmonious-high-achiever`
-or `mixed-signals` today.
+or `mixed-signals` today. The rendered report states this explicitly on a `mixed-signals`
+result: `describeArchetypeBody` (`lib/report-template.js`) appends a clause naming which
+archetype is unreachable and why, via `archetypeUnreachableNote`, read live from `THRESHOLDS`
+rather than hardcoded — a reader could not otherwise tell a genuine no-match apart from a
+structurally unreachable one, which today is every `mixed-signals` result.
 
 ### Claude API Integration (Optional)
 

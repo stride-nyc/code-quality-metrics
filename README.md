@@ -309,9 +309,20 @@ since its own band was dropped to informational:
 | Archetype | Signal |
 |-----------|--------|
 | `harmonious-high-achiever` | Large commits, sprawling commits, test coverage, and uncovered prod all on the healthy side of their own band |
-| `legacy-bottleneck` | Sprawling commits past their critical band (>20%) AND large commits past theirs (>30%) |
-| `foundational-challenges` | Large commits past their critical band (>30%) alone — uncovered prod has no critical band to add a second path |
+| `legacy-bottleneck` | Sprawling commits past their critical band AND large commits past theirs |
+| `foundational-challenges` | Large commits past their critical band alone — uncovered prod has no critical band to add a second path |
 | `mixed-signals` | None of the above |
+
+**`legacy-bottleneck` and `foundational-challenges` are currently unreachable.** Both are defined
+purely by a metric crossing its critical band, and large-commit %/sprawling-commit % are each
+two-band under the current, re-measured calibration — no second reference repository
+corroborates either extreme (see "Understanding Results" above). `classifyDoraArchetype`
+compares through a null-safe helper rather than a raw `>`, so a missing critical bound reads as
+"cannot be exceeded" instead of being coerced to zero and fabricating a breach. Both archetypes
+become reachable again the moment a future re-measurement restores a critical bound for either
+metric; until then every run reads `harmonious-high-achiever` or `mixed-signals`, and the
+rendered report states that explicitly on a `mixed-signals` result rather than leaving it
+indistinguishable from a genuine no-match.
 
 ## Workflow Outputs
 
