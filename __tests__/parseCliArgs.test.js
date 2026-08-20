@@ -76,4 +76,25 @@ describe('parseCliArgs', () => {
   test('rejects a non-numeric, non-unbounded --max-commits value', () => {
     expect(() => parseCliArgs(['--max-commits', 'abc'])).toThrow(/--max-commits/);
   });
+
+  // Guards, not reds: the implementation added for the RED above already admits every case
+  // below (numeric accept, non-positive reject, missing-value reject, unbounded accept), the
+  // same way this file's own "accepts a valid --since date" guard documents behavior a prior
+  // cycle's implementation already covers, rather than driving new code.
+  test('accepts a valid --max-commits value', () => {
+    expect(parseCliArgs(['--max-commits', '400'])).toEqual({ maxCommits: 400 });
+  });
+
+  test('rejects a non-positive --max-commits value', () => {
+    expect(() => parseCliArgs(['--max-commits', '-5'])).toThrow(/--max-commits/);
+    expect(() => parseCliArgs(['--max-commits', '0'])).toThrow(/--max-commits/);
+  });
+
+  test('rejects --max-commits given without a value', () => {
+    expect(() => parseCliArgs(['--max-commits'])).toThrow(/--max-commits/);
+  });
+
+  test('accepts the unbounded sentinel for --max-commits', () => {
+    expect(parseCliArgs(['--max-commits', 'unbounded'])).toEqual({ maxCommits: 'unbounded' });
+  });
 });
