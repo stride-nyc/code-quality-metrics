@@ -141,15 +141,21 @@ project's own first several months (`calibration/observations.json`'s `brownfiel
 reservation). See "Project Lifecycle and Change-Size Withholding" below for why that distinction
 matters and how a report uses this band set.
 
-This population has two usable repositories -- `stride-nyc/remote_retro` and
-`stride-nyc/dotnetdependencytracer` -- against the six behind the bands above, so every number in
-it is a considerably weaker claim: n = 2 rather than n = 12. It also carries a circularity the
-six-repository set does not: both repositories are members of the five-repository set this
-toolkit's own maintainer uses to evaluate the tool day to day
+This population has six usable repositories -- `stride-nyc/remote_retro`,
+`stride-nyc/dotnetdependencytracer`, `ziglang/zig`, `denoland/deno`, `tiangolo/fastapi` and
+`sveltejs/svelte` (grown from an original two by code-quality-metrics-vxr9) -- against the six
+behind the bands above, so every number in it is still a somewhat weaker claim: n = 6 rather than
+n = 12, with one or two non-repeating windows per repository rather than twelve `era: current`
+windows pooled with twelve `era: pre-ai` ones. It also carries a circularity the six-repository
+set does not, though a smaller one than before: two of the six repositories,
+`stride-nyc/remote_retro` and `stride-nyc/dotnetdependencytracer`, are members of the
+five-repository set this toolkit's own maintainer uses to evaluate the tool day to day
 (`greenfield-modern-eval-circularity`, `calibration/observations.json`), so a verdict this band
-produces for either of those two repositories specifically answers "does this repository resemble
-itself" rather than "is this repository's practice unusual". GitHub #84 tracks growing this
-population past two repositories. `greenfield-historical` (`emberjs/ember.js`, `nodejs/node`,
+produces for either of those two repositories specifically still answers "does this repository
+resemble itself" rather than "is this repository's practice unusual". The other four --
+`ziglang/zig`, `denoland/deno`, `tiangolo/fastapi` and `sveltejs/svelte` -- have no connection to
+this toolkit or its maintainer, which materially reduces but does not eliminate the concern.
+GitHub #84 remains open for this reason. `greenfield-historical` (`emberjs/ember.js`, `nodejs/node`,
 `git/git`, each measured during its own earliest commits) remains unadopted: those repositories
 began between 1996 and 2011, so their first commits are also an old-tooling-era sample, and
 banding today's initial builds against them would re-collapse the era/lifecycle confound this
@@ -415,8 +421,9 @@ vendored dependencies and generated files, and no equivalent published or reason
 that test/prod co-change behaves differently in an initial build. Both keep scoring against the
 brownfield band unconditionally, exactly as before this change.
 
-A substituted verdict must not render identically to a brownfield one: n=2 (both supporting
-repositories members of this toolkit's own five-repository eval set -- the
+A substituted verdict must not render identically to a brownfield one: n=6 (grown from an
+original n=2 by code-quality-metrics-vxr9; two of the six supporting repositories are still
+members of this toolkit's own five-repository eval set -- the
 `greenfield-modern-eval-circularity` reservation) is a materially weaker claim than the
 brownfield bands' n=12, and a reader who cannot tell the two apart would trust both equally.
 Each substituted entry carries a `bandProvenance` field (`{ population, n }`), which
