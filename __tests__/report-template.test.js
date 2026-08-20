@@ -876,6 +876,21 @@ describe('renderReportHtml', () => {
     expect(testCoverageCard).not.toContain('class="band-chip"');
   });
 
+  // p90_lines_changed is the one metric where GREENFIELD_MODERN itself is three-band
+  // (healthy 1020, critical 1060 -- both reference repositories corroborate the extreme),
+  // unlike every other substituted metric, which stays two-band under greenfield-modern too.
+  // Found live against flight-info-spike: the three-band sentence has no terminal
+  // punctuation of its own ("critical above 1060"), so appending the band-provenance clause
+  // directly produced "critical above 1060 Scored against..." with no sentence break.
+  it('ends the three-band threshold sentence with terminal punctuation before appending the band-provenance clause', () => {
+    const html = renderReportHtml(fixtureArgs({ project_lifecycle: 'initial-build', p90_lines_changed: 1225.2 }));
+    const cards = html.split('<article class="metric-card"');
+    const p90Card = cards.find(card => card.includes('>Commit size, high end</p>'));
+
+    expect(p90Card).toBeDefined();
+    expect(p90Card).toContain('critical above 1060. Scored against');
+  });
+
   // [guard] an established repository never substitutes any band, so no card anywhere on the
   // page should claim greenfield-modern provenance.
   it('[guard] never mentions greenfield-modern on any card when project_lifecycle is established', () => {
