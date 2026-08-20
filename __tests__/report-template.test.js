@@ -128,6 +128,37 @@ describe('renderReportHtml', () => {
     expect(masthead).toContain('30');
   });
 
+  // code-quality-metrics-rub1: on a real run (dotnetdependencytracer) the summary headline was
+  // the seventh line a reader met -- lines 3 to 6 were methodology (analyzed span with a
+  // HEAD-anchored parenthetical repeating the previous line, a staleness note, a granularity
+  // note) standing between the masthead's bare identity line and the reader's own finding. The
+  // finding must precede the methodology that qualifies it: only the short identity line (h1,
+  // workflow type, commit count) stays ahead of the summary headline now: the span, staleness
+  // and granularity lines all move to after it.
+  it('renders the summary headline before the masthead detail lines (analyzed span, staleness, granularity) that used to precede it', () => {
+    const html = renderReportHtml(fixtureArgs({
+      history_granularity: 'granular',
+      history_granularity_detected: 'granular',
+      history_granularity_confidence: 'high',
+      analyzed_span_start: '2026-05-27',
+      analyzed_span_end: '2026-06-12',
+      window_requested_since: null,
+      window_widened: false
+    }));
+
+    const identityEnd = html.indexOf('</header>');
+    const summaryStart = html.indexOf('<section class="report-summary">');
+    const spanLineStart = html.indexOf('<p class="masthead-span">');
+    const granularityLineStart = html.indexOf('<p class="masthead-granularity">');
+
+    expect(identityEnd).toBeGreaterThanOrEqual(0);
+    expect(summaryStart).toBeGreaterThan(identityEnd);
+    expect(spanLineStart).toBeGreaterThanOrEqual(0);
+    expect(granularityLineStart).toBeGreaterThanOrEqual(0);
+    expect(spanLineStart).toBeGreaterThan(summaryStart);
+    expect(granularityLineStart).toBeGreaterThan(summaryStart);
+  });
+
   // code-quality-metrics-kprr: local_metrics_summary.json records filtered_from (the fetched
   // history before the MAX_COMMITS cap narrowed it down to total_commits), but the report never
   // mentioned it -- a reader had no way to tell "50 commits analyzed" apart from "50 out of
@@ -253,9 +284,11 @@ describe('renderReportHtml', () => {
       window_requested_since: null,
       window_widened: false
     }));
-    const masthead = mastheadSection(html);
 
-    expect(masthead).toContain('69 days');
+    // code-quality-metrics-rub1: this line now renders in renderMastheadDetail, after the
+    // summary headline, not inside the <header class="masthead"> element -- checked against
+    // the whole document rather than the masthead-scoped helper, which no longer contains it.
+    expect(html).toContain('69 days');
   });
 
   // [guard] not a called-shot RED: the threshold guard (STALE_WINDOW_GAP_DAYS) was written in
@@ -269,9 +302,8 @@ describe('renderReportHtml', () => {
       window_requested_since: null,
       window_widened: false
     }));
-    const masthead = mastheadSection(html);
 
-    expect(masthead).not.toContain('masthead-staleness');
+    expect(html).not.toContain('masthead-staleness');
   });
 
   // code-quality-metrics-2l1x: the same short window backing a stale masthead also backs
