@@ -836,6 +836,7 @@ describe('renderReportHtml', () => {
       '.gauge-band', '.gauge-needle', '.gauge-hub',
       '.status-chip', '.metric-value', '.metric-label', '.metric-threshold',
       '.metric-description-measures', '.metric-description-dora',
+      '.metric-meaning', '.metric-what-is', '.metric-methodology', '.greenfield-note',
       '.flight-log', '.findings',
       '.duplicate-code', '.duplicate-static', '.duplicate-layer-indicator', 'footer'
     ]) {
