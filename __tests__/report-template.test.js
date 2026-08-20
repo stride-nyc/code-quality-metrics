@@ -1838,45 +1838,24 @@ describe('renderReportHtml', () => {
     expect(summary).toContain('No measured signal in this run crossed a warning or critical threshold.');
   });
 
-  // code-quality-metrics-g39: "Consider whether the top summary should mention a high vendored
-  // share explicitly, since a reader who never scrolls would otherwise miss the one fact that
-  // changes how everything else reads" -- measured: flight-info-spike at 72%.
-  it('calls out a high vendored/generated share explicitly in the top summary', () => {
+  // code-quality-metrics-nnla: the top summary used to restate the vendored/generated share a
+  // second time (after the masthead line removed above), and one of its own clauses was false
+  // -- "which reframes every count above" -- because every banded metric already excludes
+  // vendored/generated content before computing (large_commits_pct counts production lines,
+  // the line/file distributions read counted_* since PR #94, sprawling_commits_pct counts
+  // non-excluded files, test rates treat an excluded path as neither test nor production).
+  // There is nothing left above for a second discount to reframe. The fact now lives exactly
+  // once, in Analysis Scope, regardless of how large the share is or whether
+  // ANALYSIS_IGNORE_PATTERNS already excludes it.
+  it('never mentions the vendored/generated share in the top summary, however large it is; that fact lives only in Analysis Scope', () => {
     const html = renderReportHtml(fixtureArgs({
       vendored_generated_share: { patterns: ['**/deps/**'], files_count: 40, lines_count: 9000, lines_pct: '72.00' }
     }));
     const summary = summarySection(html);
 
-    expect(summary).toContain('72');
-    expect(summary).toMatch(/vendored|generated/);
-    expect(summary).toMatch(/Analysis Scope/);
-  });
-
-  // A percentage alone buries the notable fact: one or a handful of files can carry nearly
-  // all the vendored volume (measured: stride-nyc/73V, 3 files carrying 28,207 lines). The
-  // callout names the file and line counts, not only the share, so a reader sees the
-  // concentration directly instead of inferring it from a percentage.
-  it('names the vendored/generated file and line counts, not only the percentage, in the callout', () => {
-    const html = renderReportHtml(fixtureArgs({
-      vendored_generated_share: { patterns: ['**/vendor/**'], files_count: 3, lines_count: 28207, lines_pct: '63.99' }
-    }));
-    const summary = summarySection(html);
-
-    expect(summary).toContain('3');
-    expect(summary).toContain('28207');
-    expect(summary).toContain('63.99');
-  });
-
-  // [guard] proven by mutation: lowering VENDORED_SHARE_CALLOUT_THRESHOLD to 0 (so any nonzero
-  // share triggers the callout) failed this test, which found the callout text present for an
-  // 8% share it expects to be silent about -- reverted after confirming.
-  it('[guard] does not call out a vendored share below the callout threshold', () => {
-    const html = renderReportHtml(fixtureArgs({
-      vendored_generated_share: { patterns: ['**/deps/**'], files_count: 2, lines_count: 100, lines_pct: '8.00' }
-    }));
-    const summary = summarySection(html);
-
     expect(summary).not.toMatch(/vendored|generated/);
+    expect(summary).not.toMatch(/reframes/);
+    expect(summary).not.toContain('72');
   });
 
   // code-quality-metrics coordination task (reframe): a directional trend with no calibrated
@@ -1951,51 +1930,6 @@ describe('renderReportHtml', () => {
 
     const occurrences = (scope.match(/63\.99/g) || []).length;
     expect(occurrences).toBe(1);
-  });
-
-  // Defect: "reframes every count above" is false when ANALYSIS_IGNORE_PATTERNS already
-  // excluded the vendored/generated volume from every scored metric (73V's real run: 3 files,
-  // 28,207 lines, 63.99% matched by both analysis_exclusions and vendored_generated_share).
-  // The counts above are already computed on the remaining lines; telling the reader they
-  // need a second discount is worse than saying nothing.
-  it('does not claim the vendored/generated share reframes counts above when ANALYSIS_IGNORE_PATTERNS already excluded that volume', () => {
-    const html = renderReportHtml(fixtureArgs({
-      analysis_exclusions: {
-        patterns: ['**/vendor/**'],
-        excluded_files_count: 3,
-        excluded_lines_count: 28207,
-        excluded_lines_pct: '63.99'
-      },
-      vendored_generated_share: {
-        patterns: ['**/vendor/**'],
-        files_count: 3,
-        lines_count: 28207,
-        lines_pct: '63.99'
-      }
-    }));
-    const summary = summarySection(html);
-
-    expect(summary).not.toMatch(/reframes/);
-    expect(summary).not.toMatch(/vendored|generated/);
-  });
-
-  // The case the original wording was right for, and must not regress: ANALYSIS_IGNORE_PATTERNS
-  // is empty, so the vendored/generated volume is still baked into every count above -- the
-  // callout stays exactly as before.
-  it('[guard] still calls out the vendored/generated share when ANALYSIS_IGNORE_PATTERNS is not configured', () => {
-    const html = renderReportHtml(fixtureArgs({
-      analysis_exclusions: { patterns: [], excluded_files_count: 0, excluded_lines_count: 0, excluded_lines_pct: '0.00' },
-      vendored_generated_share: {
-        patterns: ['**/vendor/**'],
-        files_count: 3,
-        lines_count: 28207,
-        lines_pct: '63.99'
-      }
-    }));
-    const summary = summarySection(html);
-
-    expect(summary).toMatch(/reframes/);
-    expect(summary).toMatch(/vendored|generated/);
   });
 
   // Defect: "see Analysis Scope below" (inside the vendored clause) and "See Findings below
