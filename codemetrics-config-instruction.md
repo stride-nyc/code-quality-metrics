@@ -99,6 +99,60 @@ Leave alone:
   be repetitive, which is a duplication-detector problem, not an analysis-exclusion one. If
   repetitive infra inflates duplication, put it in `DUPLICATE_IGNORE_PATTERNS` only.
 
+## What belongs in `DUPLICATE_IGNORE_PATTERNS` beyond vendored code
+
+The eleven built-in patterns cover vendored trees, `generated/`, and lock files. Two further
+categories routinely dominate a repository's duplication figure and are worth checking for on
+every target. Both go in the target's own `.codemetrics.json`, never into the global defaults.
+
+**Data files.** Any file that is a set of records sharing a schema reads as massive duplication
+to a clone detector, because every record repeats the same keys. There is nothing to refactor:
+that is what a JSON array of records looks like. Note five of the eleven built-in patterns are
+already data files (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, `*.lock`,
+`.terraform.lock.hcl`), so the principle is already established globally for machine-written
+data; what stays per-repo is hand-curated data, because which files those are is a fact about
+the repository.
+
+**Duplication that is a convention rather than debt.** CI and workflow definitions repeat setup
+blocks by design. Task-tracking or issue-export files under a tool directory are not code at
+all. Neither is evidence about the codebase.
+
+Measured, on the six repositories in this project's own evaluation set:
+
+| repository | before | after | what qualified |
+|---|---|---|---|
+| code-quality-metrics | 5.12% | **0.00%** | `calibration/observations.json`, 72 of 76 clone sides; `.github/workflows`, 4 sides |
+| daloopa | 7.25% | **3.41%** | `.github/workflows`, 156 of 248 duplicated lines |
+| 73V | 2.78% | unchanged | nothing: `OAUsers.tsx` against `ProviderUsers.tsx`, 365 lines, is real |
+| dotnetdependencytracer | 0.92% | unchanged | nothing: all C# source |
+| flight-info-spike | 0.41% | unchanged | nothing |
+| remote_retro | 0.00% | unchanged | nothing to exclude |
+
+So four of six had nothing that qualified. Do not assume a repository has data-file noise; look.
+
+**This does not cost the verdict, and the reason matters.** `DUPLICATE_IGNORE_PATTERNS` is
+class A, so the band still applies. More importantly the band was derived over *code*
+duplication, and the reference observations say so in their own notes: fastapi's 23.15%, the
+greenfield extreme, is "concentrated in `fastapi/security/*`"; playwright's 20.73% is
+"near-templated skill/config files"; node's 15.09% is "very likely inflated by near-verbatim
+vendored npm/c-ares source." No observation in `calibration/observations.json` attributes
+duplication to a data file, and every one recorded the eleven defaults verbatim with no
+override. A target whose duplication is mostly data records is therefore being scored against a
+code-only band, and excluding the data files moves it *toward* comparability rather than away.
+No re-derivation is needed.
+
+**Two traps.**
+
+Excluding files shrinks the denominator as well as the numerator, so the percentage does not
+fall as far as subtracting duplicated lines alone would suggest. daloopa dropped to 3.41% rather
+than the 2.7% a numerator-only estimate predicts, because the excluded workflow files were part
+of what was scanned. Predict the direction, not the magnitude.
+
+An exclusion that happens to work today because of `.gitignore` is not an exclusion. jscpd
+honours gitignore, so a tool directory already ignored by git will not be scanned even with no
+pattern naming it. That is fragile: it depends on a gitignore entry written for another purpose
+and breaks silently if that entry changes. Name it explicitly.
+
 ## Record what you checked and found nothing
 
 If a repository has nothing to exclude, write the key with an empty array rather than omitting
@@ -149,6 +203,31 @@ repo-specific patterns you intended actually appear in `ANALYSIS_IGNORE_PATTERNS
 Then run the tool against the repository and read `excluded_lines_pct` and the vendored share
 in the summary. If your exclusions removed nothing, either the repository has nothing to
 exclude or your patterns do not match. Say which.
+
+**Assert each glob against the paths you meant, before adopting it.** A pattern that matches
+nothing produces a clean, plausible, unwarned report, which is the failure this project keeps
+finding. Check both directions: the paths you intend to exclude, and at least one neighbouring
+path you intend to keep.
+
+```bash
+cd <code-quality-metrics-path> && node -e '
+const { matchesAnyPattern } = require("./lib/metrics");
+const pats = ["**/calibration/observations.json", "**/.github/**"];
+for (const p of ["calibration/observations.json", "calibration/derive-bands.js", ".github/workflows/x.yml", "lib/report.js"]) {
+  console.log((matchesAnyPattern(p, pats) ? "EXCLUDED  " : "kept      ") + p);
+}
+'
+```
+
+The keep cases are the point. Excluding `calibration/observations.json` must not also exclude
+`calibration/derive-bands.js`, which is source. A glob broad enough to silence the noise is
+often broad enough to silence real code next to it.
+
+For a duplication exclusion specifically, read `local_duplicate_analysis.json` before and after
+and compare `statistics.percentage`, `statistics.duplicatedLines` and `statistics.lines`, plus
+the file names in `static_duplicates`. The file list is what tells you whether you removed noise
+or removed a finding. If the surviving clones are all in one named source file, that is the
+result you want: the noise is gone and a real, actionable finding remains.
 
 ## Report
 
