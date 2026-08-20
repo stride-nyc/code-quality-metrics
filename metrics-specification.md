@@ -313,6 +313,26 @@ error than withholding one that would have been valid) reach the withholding dec
 recorded separately as `history_granularity_override`; `history_granularity_detected` always
 reports what detection itself found, unaffected by either the gate or the override.
 
+**Naming why effective differs from detected (code-quality-metrics-q5uz).** `history_granularity_override`
+records only an explicit operator `--history` flag, or `null` when none was given — it does not,
+and should not, also record the workflow_type gate above, since that would overload a field
+documented elsewhere (CLAUDE.md's "Analysis Window" section, `project_lifecycle_override`,
+`max_commits_override`) as specifically "the operator's own CLI flag." Before
+`history_granularity_forced_reason` existed, a `workflow_type: feature_branch` run where the gate
+actually forced `granular` over a raw `squashed`/`unknown` detection recorded
+`history_granularity_override: null` — identical to a run where nothing overrode anything at
+all. A reader comparing two summary files could not tell the two apart, even though the rendered
+report's own Analysis Scope section narrated the override in prose (`renderHistoryProvenanceLine`,
+above). `history_granularity_forced_reason` is `null` when `history_granularity` already equals
+`history_granularity_detected` (nothing forced anything, so there is nothing to name); otherwise
+`'operator'` (the `--history` flag set the effective value directly), `'workflow_type_feature_branch'`
+(the gate's feature-branch case fired), or `'unknown_defaults_to_squashed'` (the gate's other
+case: an `unknown` raw verdict defaulted to `squashed` under `workflow_type: trunk`). When an
+operator override is given, it is named regardless of whether the workflow_type gate would also
+have fired for the same sample: the operator's explicit choice is unambiguously why the effective
+value is what it is, since `history_granularity = options.history ?? detectedForWithholding` never
+reaches `detectedForWithholding` once `options.history` is set.
+
 This matters because a single PR-referenced commit subject among many otherwise-granular
 feature-branch commits — a cherry-pick from a squash-merged main, a rebase onto a squash-merging
 main, or a developer simply typing an issue number — used to be enough to classify the entire
@@ -1580,6 +1600,11 @@ Single summary object for the analysis run:
                                         // population a share was computed over
   },
   history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
+  history_granularity_forced_reason: "operator" | "workflow_type_feature_branch" | "unknown_defaults_to_squashed" | null,
+    // names why history_granularity differs from history_granularity_detected, when it does --
+    // null when they are equal. Distinct from history_granularity_override, which records only
+    // the operator's own --history flag (code-quality-metrics-q5uz; see "Naming why effective
+    // differs from detected" above)
 
   // Project lifecycle (code-quality-metrics-31w): see "Project Lifecycle and Change-Size
   // Withholding" above. project_lifecycle is the effective value used for banding decisions;
