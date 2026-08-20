@@ -21,6 +21,7 @@ jest.mock('fs');
 
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 const {
   getAnthropicClient,
   selectClaudeCommits,
@@ -344,6 +345,23 @@ describe('runSemanticDuplicateAnalysis', () => {
     await runSemanticDuplicateAnalysis(client, manyFiles, []);
 
     expect(fs.readFileSync).toHaveBeenCalledTimes(CONFIG.AI_DUPLICATE_MAX_FILES);
+  });
+
+  // code-quality-metrics-34fu: a second, independent guard against the same real file
+  // reaching Claude twice under two different spellings. resolveModuleNeighbors (lib/
+  // duplicate.js) already normalizes its own output, but this function is called
+  // directly by pr-metrics.yml and local-code-metrics.js too, so it must not assume its
+  // caller already deduped -- a file the model sees twice can only be reported as
+  // "duplicating itself," a guaranteed, zero-information finding that wastes a slot.
+  test('dedupes file paths that resolve to the same real file before sending them to Claude', async () => {
+    const client = makeClient({ content: [{ type: 'text', text: '[]' }] });
+    fs.readFileSync.mockReturnValue('function parse(line) {}');
+    const relativePath = 'src/lib/git.js';
+    const absolutePath = path.resolve(relativePath);
+
+    await runSemanticDuplicateAnalysis(client, [relativePath, absolutePath], []);
+
+    expect(fs.readFileSync).toHaveBeenCalledTimes(1);
   });
 });
 
