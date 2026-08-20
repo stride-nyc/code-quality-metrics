@@ -59,6 +59,19 @@ The actual analyzed span (the real oldest/newest commit dates, never the request
 explicitly. A report covering, say, 2025-02 to 2026-04 is never presentable as covering
 recent activity.
 
+`local_metrics_summary.json` also reports `repository_newest_commit_date`: the committer date
+of the newest commit reachable from the analyzed refs, independent of `--since`/`--days` and of
+`CONFIG.MAX_COMMITS` (`findNewestCommitDate`, `lib/git.js`) -- it answers "what is the newest
+commit that exists here", not "what did this run select." The masthead compares it against
+`analyzed_span_end` to state a real gap, if one exists, rather than guessing staleness from the
+report's own generation date (code-quality-metrics-bb29, replacing an earlier version that
+compared against generation date and rendered a hedge -- "this window may not reflect current
+activity" -- even on windows that reached essentially every commit that exists, e.g. missing
+exactly 1 day out of 275 on a dormant repository). A zero-or-negative gap (the window reached
+the repository's own tip) renders no staleness line at all; a positive gap states its exact
+size as a plain fact: "The analyzed window ends N days before the repository's most recent
+commit."
+
 This window applies to `local-code-metrics.js` only. `.github/workflows/code-metrics.yml` and
 `pr-metrics.yml` build their own windows against the GitHub REST API and are out of scope for
 this change; see code-quality-metrics-g10's own notes on whether they need the same treatment.
