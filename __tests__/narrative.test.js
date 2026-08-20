@@ -2,7 +2,7 @@
 
 const { buildMetricCatalog } = require('../lib/report');
 const { fallbackFindings } = require('../lib/report-template');
-const { generateFindingsNarrative, buildNarrativePayload, validateNarrative } = require('../lib/narrative');
+const { generateFindingsNarrative, buildNarrativePayload, buildNarrativeTopCommits, describeBandProvenance, validateNarrative, NARRATIVE_SYSTEM_PROMPT } = require('../lib/narrative');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { CONFIG } = require('../lib/config');
 
@@ -23,6 +23,32 @@ function fixtureSummary(overrides) {
     velocity_commits_per_day: 3.2
   }, overrides);
 }
+
+describe('NARRATIVE_SYSTEM_PROMPT', () => {
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 3): the system prompt gives the model no
+  // instruction against an em dash or double-hyphen pause at all, so validateNarrative's
+  // containsDisallowedDash check is the only line of defense today. A prompt-level instruction
+  // is not a guarantee, but its absence means every rejection is a wasted generation the model
+  // never had a chance to avoid.
+  // Predicted failure before implementing: the prompt string has no mention of "em dash" (or
+  // "--"), so `toMatch(/em dash/i)` fails with "Received: <the full prompt text, no match>".
+  test('instructs the model not to use an em dash or a double-hyphen pause', () => {
+    expect(NARRATIVE_SYSTEM_PROMPT).toMatch(/em dash/i);
+  });
+
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 4): a real generated bullet welded a finding to
+  // its own methodology caveat in one run-on sentence ("Commit sizes are trending in the right
+  // direction ... and the benchmark boundaries used here reflect observations from six
+  // reference repositories, not validated outcome thresholds, so this is a directional signal
+  // rather than a guarantee"), the same blend-meaning-with-qualifiers defect PR #95 already
+  // fixed on the tiles. Nothing in the prompt tells the model to keep a finding and its
+  // caveat in separate sentences.
+  // Predicted failure before implementing: no rule in the prompt mentions keeping a finding
+  // and a caveat in separate sentences, so `toMatch(/separate sentence/i)` fails.
+  test('instructs the model to keep a finding and its methodology caveat in separate sentences', () => {
+    expect(NARRATIVE_SYSTEM_PROMPT).toMatch(/separate sentence/i);
+  });
+});
 
 describe('fallbackFindings (shared deterministic helper)', () => {
   // code-quality-metrics-ponf: the 73V Findings section listed three warnings and nothing
@@ -187,6 +213,105 @@ describe('generateFindingsNarrative: client provided', () => {
 
     expect(result).toEqual(fallbackFindings(catalog));
     expect(logSpy).toHaveBeenCalledTimes(1);
+
+    logSpy.mockRestore();
+  });
+});
+
+describe('describeBandProvenance', () => {
+  // CALLED SHOT (code-quality-metrics-0b8f, RED 1): measured on the regenerated 73V report,
+  // which scored its change-size and duplication tiles against THRESHOLDS.GREENFIELD_MODERN
+  // (n=2), while the narrative still asserted "six reference repositories" -- a provenance
+  // claim contradicting the tiles on the same page. describeBandProvenance must name the
+  // population an entry's own bandProvenance records (set only by lib/report.js's
+  // substituteBand, mirroring how the rendered band-chip and greenfield note already read it),
+  // not a hardcoded count.
+  // Predicted failure before implementing: the stub always returns BENCHMARK_PROVENANCE_NOTE
+  // verbatim (the hardcoded "six-repository benchmark" text), so `toMatch(/greenfield-modern/)`
+  // fails with "Received string: ...six-repository benchmark...".
+  test('names the greenfield-modern population and its sample size when a payload entry carries a substituted band', () => {
+    const payload = [
+      { key: 'large_commits_pct', label: 'Large commits', value: '58', direction: 'higher-is-worse', status: 'warning', healthyBoundary: '48', criticalBoundary: null, bandProvenance: { population: 'greenfield-modern', n: 2 } }
+    ];
+
+    const note = describeBandProvenance(payload);
+
+    expect(note).toMatch(/greenfield-modern/);
+    expect(note).toMatch(/\b2\b/);
+  });
+
+  // GUARD, not a called-shot RED: the default (brownfield) population carries no
+  // bandProvenance at all on any entry -- this is the ordinary, unsubstituted run, which must
+  // keep stating the six-repository benchmark exactly as before.
+  test('states the six-repository benchmark when no payload entry carries a substituted band', () => {
+    const payload = [
+      { key: 'large_commits_pct', label: 'Large commits', value: '15', direction: 'higher-is-worse', status: 'good', healthyBoundary: '18', criticalBoundary: null }
+    ];
+
+    const note = describeBandProvenance(payload);
+
+    expect(note).toMatch(/six-repository/);
+    expect(note).not.toMatch(/greenfield-modern/);
+  });
+});
+
+describe('generateFindingsNarrative: top commits sent to the model', () => {
+  // CALLED SHOT (code-quality-metrics-j78y, RED 2): generateFindingsNarrative currently embeds
+  // the raw topCommits array directly into the request content, so a commit dominated by an
+  // excluded vendored sync still exposes its inflated whole-diff total to the model. This pins
+  // the integration: the content the model actually receives must reflect
+  // buildNarrativeTopCommits' scoped shape, not the raw input.
+  // Predicted failure before implementing: generateFindingsNarrative still does
+  // `JSON.stringify(topCommits)` unchanged, so the sent content contains the literal "9868"
+  // substring -- the `not.toContain` assertion fails with "Received string containing 9868".
+  test('sends each top commit\'s exclusion-scoped production counts to the model, not the raw whole-diff totals', async () => {
+    const catalog = buildMetricCatalog(fixtureSummary());
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const topCommits = [{
+      sha: 'cc7c77aa',
+      message: 'vendor: sync terraform modules',
+      total_additions: 9868,
+      total_deletions: 4811,
+      files_changed: 6,
+      prod_additions: 200,
+      prod_deletions: 16,
+      prod_files_count: 2,
+      test_files_count: 0
+    }];
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, topCommits);
+
+    const sentContent = create.mock.calls[0][0].messages[0].content;
+    expect(sentContent).toContain('"prod_additions":200');
+    expect(sentContent).not.toContain('9868');
+    expect(sentContent).not.toContain('4811');
+
+    logSpy.mockRestore();
+  });
+
+  // CALLED SHOT (code-quality-metrics-0b8f, RED 2): generateFindingsNarrative currently embeds
+  // the hardcoded BENCHMARK_PROVENANCE_NOTE constant directly, regardless of the catalog it is
+  // given. This pins the integration: when a catalog entry carries a substituted band, the
+  // note actually sent to the model must name that population.
+  // Predicted failure before implementing: the content still contains the static hardcoded
+  // "six-repository benchmark" text and no "greenfield-modern" substring, so `toMatch` fails.
+  test('sends a provenance note naming the greenfield-modern population when a catalog entry carries a substituted band', async () => {
+    const catalog = [
+      { key: 'large_commits_pct', label: 'Large commits', value: 58, direction: 'higher-is-worse', status: 'warning', healthyBoundary: 48, criticalBoundary: null, bandProvenance: { population: 'greenfield-modern', n: 2 } }
+    ];
+    const create = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify({ positive_findings: [], concerns: [], recommended_actions: [] }) }]
+    });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    await generateFindingsNarrative({ messages: { create } }, catalog, []);
+
+    const sentContent = create.mock.calls[0][0].messages[0].content;
+    expect(sentContent).toMatch(/greenfield-modern/);
+    expect(sentContent).not.toMatch(/quantiles of a six-repository benchmark/);
 
     logSpy.mockRestore();
   });
@@ -382,6 +507,68 @@ describe('buildNarrativePayload', () => {
 
     expect(messageQuality.status).toBe('neutral');
     expect(messageQuality.verdict).toBe('none');
+  });
+});
+
+describe('buildNarrativeTopCommits', () => {
+  // CALLED SHOT (code-quality-metrics-j78y, RED 1): measured on the regenerated 73V report.
+  // Commit cc7c77aa has 14,679 total changed lines, of which 14,410 are excluded vendored
+  // terraform, leaving 216 production lines (prod_additions + prod_deletions). The narrative
+  // cited the raw total (9,868 additions / 4,811 deletions) as if it were the commit's size,
+  // overstating it by roughly 68x and presenting a vendored dependency sync as evidence of
+  // poor test discipline. The fix must expose only the exclusion-scoped production counts to
+  // the narrative, the same basis every verdict on the page already uses.
+  // Predicted failure before implementing: buildNarrativeTopCommits is currently a pass-through
+  // stub, so the mapped entry still carries the raw total_additions field (9868), and
+  // JSON.stringify(mapped) contains the literal substring "9868" -- the `not.toContain` assertion
+  // fails with "Received string containing 9868".
+  test('exposes each commit\'s exclusion-scoped production counts, not its raw whole-diff totals', () => {
+    const topCommits = [{
+      sha: 'cc7c77aa',
+      message: 'vendor: sync terraform modules',
+      total_additions: 9868,
+      total_deletions: 4811,
+      files_changed: 6,
+      prod_additions: 200,
+      prod_deletions: 16,
+      prod_files_count: 2,
+      test_files_count: 0,
+      excluded_additions: 9668,
+      excluded_deletions: 4795
+    }];
+
+    const mapped = buildNarrativeTopCommits(topCommits);
+    const json = JSON.stringify(mapped);
+
+    expect(mapped[0].prod_additions).toBe(200);
+    expect(mapped[0].prod_deletions).toBe(16);
+    expect(json).not.toContain('9868');
+    expect(json).not.toContain('4811');
+  });
+
+  // GUARD, not a called-shot RED: proves the mapped shape still identifies the commit (sha,
+  // message) and whether a test file was touched, since the narrative still needs those to
+  // write a legible sentence about "no test file touched alongside".
+  test('keeps sha, message and test_files_count on the mapped entry', () => {
+    const topCommits = [{
+      sha: '1b3d90ff',
+      message: 'fix: handle null response',
+      total_additions: 160,
+      total_deletions: 165,
+      files_changed: 9,
+      prod_additions: 160,
+      prod_deletions: 165,
+      prod_files_count: 9,
+      test_files_count: 0,
+      excluded_additions: 0,
+      excluded_deletions: 0
+    }];
+
+    const mapped = buildNarrativeTopCommits(topCommits);
+
+    expect(mapped[0].sha).toBe('1b3d90ff');
+    expect(mapped[0].message).toBe('fix: handle null response');
+    expect(mapped[0].test_files_count).toBe(0);
   });
 });
 
@@ -888,5 +1075,48 @@ describe('validateNarrative', () => {
 
     expect(result.valid).toBe(false);
     expect(result.reason).toMatch(/velocity/i);
+  });
+
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 1): the regenerated 73V report contained 12
+  // real em-dash characters in the Findings narrative, violating this project's no-em-dash
+  // writing standard. containsDisallowedDash is currently a stub that always returns false, so
+  // validateNarrative never rejects this. Predicted failure before implementing: the bullet
+  // has no numbers and starts with "Positive: " (not "Concern: "), so every existing check
+  // passes it through, and `expect(result.valid).toBe(false)` fails with
+  // "Expected: false, Received: true".
+  test('rejects a bullet containing a literal em dash character', () => {
+    const bullets = ['Positive: Commit sizes are shrinking — a good sign for review load.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/em dash/i);
+  });
+
+  // CALLED SHOT (code-quality-metrics-wo8q, RED 2): the same regenerated 73V report also
+  // contained 7 double-hyphen pauses in generated prose, a form the writing standard forbids
+  // just as much as a real em dash. containsDisallowedDash only checks for the literal
+  // character so far. Predicted failure before implementing: the bullet below has no em-dash
+  // character, no numbers, and starts with "Concern: " but names no informational label, so it
+  // passes every existing check; `expect(result.valid).toBe(false)` fails with
+  // "Expected: false, Received: true".
+  test('rejects a bullet containing a double hyphen used as a pause', () => {
+    const bullets = ['Concern: Large commits are common -- worth addressing before the next release.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(false);
+    expect(result.reason).toMatch(/dash/i);
+  });
+
+  // GUARD, not a called-shot RED: an ordinary single hyphen (a compound word, or a negative
+  // number already exercised by the concern-score test above) must not be rejected -- only a
+  // literal em dash or a double hyphen counts as the forbidden pause.
+  test('does not reject a bullet containing an ordinary single hyphen in a compound word', () => {
+    const bullets = ['Positive: Well-tested production code shipped this period.'];
+
+    const result = validateNarrative(bullets, [], []);
+
+    expect(result.valid).toBe(true);
   });
 });
