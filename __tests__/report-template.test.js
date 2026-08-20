@@ -271,16 +271,21 @@ describe('renderReportHtml', () => {
     expect(html).toMatch(/widened/i);
   });
 
-  // code-quality-metrics-2l1x: 73V's report was generated 2026-08-20 and analyzed 2026-05-27
-  // to 2026-06-12, described only as "HEAD-anchored: newest commits, no date filter
-  // requested" -- true, but silent about the fact that the newest analyzed commit is over two
-  // months old, because the window is drawn from stale unmerged branches. A reader assumes
-  // recency unless the gap itself is stated.
-  it('states the gap between the newest analyzed commit and the report date when the window is stale', () => {
+  // code-quality-metrics-bb29: the prior staleness line hedged from the gap between the
+  // analyzed window and the *report's own generation date* ("may not reflect current
+  // activity"), which read as a real limitation even when the window reached essentially every
+  // commit that exists (measured: dotnetdependencytracer missed 1 day of 275; two of five
+  // evaluation repositories missed 0 days and the hedge still rendered). The real question --
+  // did the window reach the repository's own tip -- is answered exactly by
+  // repository_newest_commit_date (code-quality-metrics-2l1x's error record). analysis_date is
+  // set to an absurd, unrelated value here specifically to prove the new gap computation never
+  // reads it at all.
+  it('states the gap in days between the analyzed window and the repository tip, never reading the report generation date (code-quality-metrics-bb29)', () => {
     const html = renderReportHtml(fixtureArgs({
-      analysis_date: '2026-08-20T00:00:00.000Z',
-      analyzed_span_start: '2026-05-27',
-      analyzed_span_end: '2026-06-12',
+      analysis_date: '2099-01-01T00:00:00.000Z',
+      analyzed_span_start: '2025-10-05',
+      analyzed_span_end: '2025-10-13',
+      repository_newest_commit_date: '2025-10-21',
       window_requested_since: null,
       window_widened: false
     }));
@@ -288,17 +293,21 @@ describe('renderReportHtml', () => {
     // code-quality-metrics-rub1: this line now renders in renderMastheadDetail, after the
     // summary headline, not inside the <header class="masthead"> element -- checked against
     // the whole document rather than the masthead-scoped helper, which no longer contains it.
-    expect(html).toContain('69 days');
+    expect(html).toContain('8 days');
+    expect(html).not.toContain('may not reflect current activity');
   });
 
-  // [guard] not a called-shot RED: the threshold guard (STALE_WINDOW_GAP_DAYS) was written in
-  // the same pass as the gap statement above, so this pins down the "recent enough, say
-  // nothing" side of that same conditional rather than driving new production code on its own.
-  it('[guard] does not state a staleness gap when the newest analyzed commit is recent', () => {
+  // Covers the other half of the code-quality-metrics-bb29 fix: when the analyzed window
+  // already reaches the repository's own newest commit (gap zero, measured on 73V and
+  // flight-info-spike), nothing about staleness renders at all -- not even a plain restatement
+  // of how old that commit is -- since analyzed_span_end (renderWindowLine, tested elsewhere)
+  // already states the same date and there is no real gap left to name.
+  it('does not render a staleness line when the analyzed window reaches the repository tip (code-quality-metrics-bb29)', () => {
     const html = renderReportHtml(fixtureArgs({
       analysis_date: '2026-08-20T00:00:00.000Z',
-      analyzed_span_start: '2026-08-10',
-      analyzed_span_end: '2026-08-18',
+      analyzed_span_start: '2026-06-01',
+      analyzed_span_end: '2026-06-12',
+      repository_newest_commit_date: '2026-06-12',
       window_requested_since: null,
       window_widened: false
     }));

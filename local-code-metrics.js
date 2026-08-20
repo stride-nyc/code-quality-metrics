@@ -25,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -538,6 +538,14 @@ async function collectLocalMetrics(options = {}) {
   const committerLog = runGitCommand(`git log --no-merges ${historySinceArg}--pretty=format:"%cn" ${historyRefs}`);
   const committerNames = committerLog ? committerLog.split('\n').filter(Boolean) : [];
 
+  // The repository's own newest commit across the analyzed refs (code-quality-metrics-bb29),
+  // independent of --since/--days and of MAX_COMMITS -- it answers "what is the newest commit
+  // that exists here", not "what did this run select." Compared against analyzedSpanEnd below
+  // (in the summary, and in the masthead via lib/report-template.js's renderStaleWindowLine) to
+  // state a real gap, if one exists, rather than guessing staleness from the report's own
+  // generation date.
+  const repositoryNewestCommitDate = findNewestCommitDate(branchesToAnalyze);
+
   // Project lifecycle (code-quality-metrics-31w): purely structural, no tuned number. Every
   // reference window this toolkit's bands were calibrated on measures maintenance-era work on
   // a decades-old codebase (calibration/observations.json's brownfield-only-lifecycle
@@ -927,6 +935,11 @@ async function collectLocalMetrics(options = {}) {
     // Rendered in the HTML masthead too (lib/report-template.js's renderMasthead), not only here.
     analyzed_span_start: analyzedSpanStart,
     analyzed_span_end: analyzedSpanEnd,
+    // The repository's own newest commit across the analyzed refs (code-quality-metrics-bb29),
+    // read from repositoryNewestCommitDate above. null when the query itself found nothing (an
+    // orphan/empty ref set) -- see findNewestCommitDate's own comment for why null rather than
+    // an empty string.
+    repository_newest_commit_date: repositoryNewestCommitDate,
     // null when the run was HEAD-anchored from the start (no --since/--days given); otherwise
     // the boundary date that was actually requested, whether or not it was later widened.
     window_requested_since: explicitWindow ? sinceStr : null,
