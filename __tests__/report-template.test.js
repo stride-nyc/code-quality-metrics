@@ -177,6 +177,25 @@ describe('renderReportHtml', () => {
     expect(html).toContain('across 7 branch');
   });
 
+  // code-quality-metrics-kprr: 73V's report excluded 63.99% of changed lines across 3 files,
+  // and that fact only ever appeared in the last section of the page (Analysis Scope), printed
+  // twice. Two thirds of the analyzed diff going unmeasured is a masthead fact, not something a
+  // reader only finds by scrolling to the very end.
+  it('states the excluded share in the masthead when ANALYSIS_IGNORE_PATTERNS excludes a large share of changed lines', () => {
+    const html = renderReportHtml(fixtureArgs({
+      analysis_exclusions: {
+        patterns: ['**/vendor/**'],
+        excluded_files_count: 3,
+        excluded_lines_count: 28207,
+        excluded_lines_pct: '63.99'
+      }
+    }));
+    const masthead = mastheadSection(html);
+
+    expect(masthead).toContain('63.99');
+    expect(masthead).toContain('excluded');
+  });
+
   it('states that the window was widened, and from what requested boundary, when window_widened is true', () => {
     const html = renderReportHtml(fixtureArgs({
       analyzed_span_start: '2026-07-30',
