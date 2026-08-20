@@ -276,12 +276,29 @@ per-commit band — the value is still reported, with `hasGauge: false`, `status
 `descriptiveNote` explaining why, but no healthy/warning/critical call is made.
 
 **Detection.** `detectHistoryGranularity` (`lib/git.js`) estimates `history_granularity_detected`
-from three signals over the analyzed commits: the share of subjects carrying a trailing
-`(#N)`/`(GH-N)` pull-request reference, the share of committer names matching a squash-bot
-pattern, and whether true merge commits are present (evidence *for* granular history, e.g. a
-merge-button workflow, not a squash signal). A majority PR-reference share (`>= 0.5`) reports
-`squashed` at `high` confidence; any smaller non-zero share reports `squashed` at `low`
-confidence; zero share reports `granular`; zero commits reports `unknown`.
+from three signals: the share of subjects carrying a trailing `(#N)`/`(GH-N)` pull-request
+reference (`pr_reference_share`), the share of committer names matching a squash-bot pattern
+(`squash_committer_share`), and whether true merge commits are present (`merge_commit_count`,
+evidence *for* granular history, e.g. a merge-button workflow, not a squash signal). A majority
+PR-reference share (`>= 0.5`) reports `squashed` at `high` confidence; any smaller non-zero share
+reports `squashed` at `low` confidence; zero share reports `granular`; zero commits reports
+`unknown`.
+
+**Population, per signal (code-quality-metrics-66oo).** `pr_reference_share` is computed over
+`commitsToAnalyze` (`local-code-metrics.js`) -- the same population that ends up in
+`local_commit_metrics.json` and the report's Flight Log, and the one the "analyzed commit
+subjects" sentence in the rendered report describes. It used to be computed over `uniqueCommits`
+instead, the full deduplicated candidate pool fetched across every branch before bot-filtering
+and the `MAX_COMMITS` slice -- an order of magnitude larger on a repository with many branches,
+and silently different from the population the report claimed to describe. Measured on 73V: a
+4.82% share over 1246 pre-slice candidates, while 21 of the 50 commits actually analyzed (42%)
+carried a visible reference. `squash_committer_share` and `merge_commit_count` stay scoped to the
+wider window (`branchesToAnalyze`, unbounded by `MAX_COMMITS`) rather than `commitsToAnalyze`: a
+true merge commit is stripped from `commitsToAnalyze` by `--no-merges` and so can never appear in
+it, meaning `merge_commit_count` would read zero unconditionally if narrowed to that population,
+losing the evidence-for-granular signal it exists to carry. `sample_size` in
+`history_granularity_signals` (below) records `pr_reference_share`'s own denominator explicitly,
+so a reader never has to assume which population a reported share was computed over.
 
 **Withholding rule (code-quality-metrics-drv).** `history_granularity_detected` alone is not
 what withholding acts on. `resolveHistoryGranularityForWithholding` (`local-code-metrics.js`)
@@ -1550,9 +1567,17 @@ Single summary object for the analysis run:
   history_granularity_detected: "granular" | "squashed" | "unknown",  // detectHistoryGranularity's raw verdict, unaffected by the override or the workflow_type gate
   history_granularity_confidence: "high" | "low",
   history_granularity_signals: {
-    pr_reference_share: number,       // share of subjects carrying a trailing (#N)/(GH-N) reference
+    pr_reference_share: number,       // share of subjects carrying a trailing (#N)/(GH-N) reference,
+                                        // computed over commitsToAnalyze (the analyzed population
+                                        // that also appears in local_commit_metrics.json and the
+                                        // Flight Log), not uniqueCommits (the larger pre-slice
+                                        // candidate pool across all branches) -- see
+                                        // code-quality-metrics-66oo
     squash_committer_share: number,
-    merge_commit_count: number
+    merge_commit_count: number,
+    sample_size: number                // pr_reference_share's own denominator (commitsToAnalyze.length),
+                                        // named explicitly so a reader never has to assume which
+                                        // population a share was computed over
   },
   history_granularity_override: "granular" | "squashed" | null,  // the --history CLI flag, if passed
 

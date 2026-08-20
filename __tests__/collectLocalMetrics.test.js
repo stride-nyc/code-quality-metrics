@@ -929,7 +929,7 @@ describe('collectLocalMetrics — successful run', () => {
       expect(summary.history_granularity_confidence).toBe('high');
       expect(summary.history_granularity_override).toBeNull();
       expect(summary.history_granularity_signals).toEqual({
-        pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0
+        pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0, sample_size: 1
       });
     });
   });

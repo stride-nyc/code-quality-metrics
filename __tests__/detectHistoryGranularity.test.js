@@ -8,7 +8,7 @@ describe('detectHistoryGranularity', () => {
     expect(result).toEqual({
       value: 'unknown',
       confidence: 'low',
-      signals: { pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0 }
+      signals: { pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0, sample_size: 0 }
     });
   });
 
@@ -23,7 +23,7 @@ describe('detectHistoryGranularity', () => {
     expect(result).toEqual({
       value: 'squashed',
       confidence: 'high',
-      signals: { pr_reference_share: 0.75, squash_committer_share: 0, merge_commit_count: 0 }
+      signals: { pr_reference_share: 0.75, squash_committer_share: 0, merge_commit_count: 0, sample_size: 4 }
     });
   });
 
@@ -44,7 +44,7 @@ describe('detectHistoryGranularity', () => {
     expect(result).toEqual({
       value: 'squashed',
       confidence: 'high',
-      signals: { pr_reference_share: 1, squash_committer_share: 0, merge_commit_count: 0 }
+      signals: { pr_reference_share: 1, squash_committer_share: 0, merge_commit_count: 0, sample_size: 5 }
     });
   });
 
@@ -79,7 +79,7 @@ describe('detectHistoryGranularity', () => {
     expect(result).toEqual({
       value: 'granular',
       confidence: 'high',
-      signals: { pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 3 }
+      signals: { pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 3, sample_size: 2 }
     });
   });
 
@@ -93,8 +93,24 @@ describe('detectHistoryGranularity', () => {
     expect(result).toEqual({
       value: 'granular',
       confidence: 'high',
-      signals: { pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0 }
+      signals: { pr_reference_share: 0, squash_committer_share: 0, merge_commit_count: 0, sample_size: 2 }
     });
+  });
+
+  test('reports sample_size in signals, naming the population pr_reference_share was computed over (code-quality-metrics-66oo)', () => {
+    // The 73V run's report stated a PR-reference share with no denominator attached, and the
+    // share itself turned out to be computed over a different population (1246 pre-slice
+    // candidates) than the one the report described (50 analyzed commits) -- a mismatch a
+    // reader had no way to catch from the JSON alone, since nothing named which population
+    // the percentage was a share of. sample_size makes that population explicit going forward.
+    const commits = [
+      { message: 'feat: add widget (#101)' },
+      { message: 'fix: correct bug (#102)' },
+      { message: 'chore: bump deps (#103)' },
+      { message: 'docs: update readme' }
+    ];
+    const result = detectHistoryGranularity({ commits, committerNames: [], mergeCommitCount: 0 });
+    expect(result.signals.sample_size).toBe(4);
   });
 
   test('[guard] detects granular history with only low confidence when a bot committer is present but no PR reference or merge commit corroborates squashing', () => {
@@ -110,7 +126,7 @@ describe('detectHistoryGranularity', () => {
     expect(result).toEqual({
       value: 'granular',
       confidence: 'low',
-      signals: { pr_reference_share: 0, squash_committer_share: 1, merge_commit_count: 0 }
+      signals: { pr_reference_share: 0, squash_committer_share: 1, merge_commit_count: 0, sample_size: 2 }
     });
   });
 });
