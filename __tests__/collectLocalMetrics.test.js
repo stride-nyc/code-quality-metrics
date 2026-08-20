@@ -1893,3 +1893,25 @@ describe('collectLocalMetrics — bot commit exclusion (issue #62)', () => {
     expect(summary.bot_commits_pct).toBe('50.00');
   });
 });
+
+describe('collectLocalMetrics — --max-commits override', () => {
+  test('uses the --max-commits override instead of the default MAX_COMMITS for the per-branch --max-count when no --since is given', async () => {
+    const SHA = 'a'.repeat(40);
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      `10\t0\tsrc/app.js`
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics({ maxCommits: 5 });
+
+    const branchLogCommand = execSync.mock.calls
+      .map(call => String(call[0]))
+      .find(cmd => cmd.startsWith('git log --no-merges') && cmd.includes('feature/x'));
+    expect(branchLogCommand).toBeDefined();
+    expect(branchLogCommand).toMatch(/--max-count=5\b/);
+  });
+});

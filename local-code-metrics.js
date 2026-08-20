@@ -118,12 +118,23 @@ function parseBranchList(output) {
  * --no-merges: git show --numstat diffs a merge against its first parent, so merging a
  * single-commit branch reproduces that commit's diff and the same change is counted twice. A
  * merge commit's content belongs to the commits it merges.
+ *
+ * maxCommits (default CONFIG.MAX_COMMITS) is the per-run --max-commits override, threaded as a
+ * parameter rather than mutated onto CONFIG: the widen fallback (below, in collectLocalMetrics)
+ * calls this same function but must keep the true default regardless of any override in effect,
+ * so the two call sites need to be able to disagree on this value. Number.isFinite(maxCommits)
+ * is false only for the Infinity sentinel an 'unbounded' override resolves to, in which case the
+ * bound is omitted from the command entirely -- unlike a numeric maxCommits, this only applies
+ * meaningfully when sinceStr is also null, since --since already fetches with no count bound.
  * @param {string} ref
  * @param {string|null} sinceStr
+ * @param {number} [maxCommits] effective --max-count bound; Infinity omits it entirely
  * @returns {CommitInfo[]}
  */
-function fetchBranchCommits(ref, sinceStr) {
-  const boundsArg = sinceStr ? `--since="${sinceStr}"` : `--max-count=${CONFIG.MAX_COMMITS}`;
+function fetchBranchCommits(ref, sinceStr, maxCommits = CONFIG.MAX_COMMITS) {
+  const boundsArg = sinceStr
+    ? `--since="${sinceStr}"`
+    : (Number.isFinite(maxCommits) ? `--max-count=${maxCommits}` : '');
   // %B\x1f%cn: committer name appended after the body, needed so isBotCommit/isAIAgentCommit
   // (issue #62) can check committer identity, not just author. See lib/git.js's
   // COMMITTER_SEPARATOR comment for why this is a trailing \x1f-delimited suffix rather than
@@ -256,6 +267,15 @@ async function collectLocalMetrics(options = {}) {
   // a date-bounded window (existing behavior, preserved exactly) and the HEAD-anchored default
   // (code-quality-metrics-g10) below.
   const explicitWindow = options.since !== undefined || options.days !== undefined;
+
+  // Per-run --max-commits override (not a CONFIG mutation -- see fetchBranchCommits' own
+  // comment on why this is threaded as a parameter instead). Infinity represents the
+  // 'unbounded' sentinel: Array.prototype.slice(0, Infinity) already returns the whole array,
+  // and fetchBranchCommits treats a non-finite maxCommits as "omit --max-count entirely",
+  // so both downstream uses need no further special-casing beyond this one resolution.
+  const effectiveMaxCommits = options.maxCommits === 'unbounded'
+    ? Infinity
+    : (options.maxCommits ?? CONFIG.MAX_COMMITS);
 
   // PRECEDENCE (highest to lowest): CLI flags (--since/--days, applied via
   // `options` above and parseCliArgs' own flags) > an explicit --config <path>
@@ -390,7 +410,7 @@ async function collectLocalMetrics(options = {}) {
     process.stdout.write(`📊 Analyzing branch: ${branch}... `);
 
     try {
-      const branchCommits = fetchBranchCommits(branch, sinceStr);
+      const branchCommits = fetchBranchCommits(branch, sinceStr, effectiveMaxCommits);
       branchCommitCounts[branch] = branchCommits.length;
 
       // Add branch info to each commit
@@ -430,7 +450,7 @@ async function collectLocalMetrics(options = {}) {
     branchesToAnalyze = [fallbackRef];
 
     process.stdout.write(`📊 Analyzing branch: ${fallbackRef}... `);
-    const trunkCommits = fetchBranchCommits(fallbackRef, sinceStr);
+    const trunkCommits = fetchBranchCommits(fallbackRef, sinceStr, effectiveMaxCommits);
     trunkCommits.forEach(c => { c.source_branch = fallbackRef; allCommits.push(c); });
     branchCommitCounts[fallbackRef] = trunkCommits.length;
     console.log(`${trunkCommits.length} commits`);
