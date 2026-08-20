@@ -1971,4 +1971,36 @@ describe('collectLocalMetrics — --max-commits override', () => {
       CONFIG.MAX_COMMITS = originalMaxCommits;
     }
   });
+
+  test('the unbounded sentinel combined with --since analyzes every commit found, with no cap', async () => {
+    const originalMaxCommits = CONFIG.MAX_COMMITS;
+    CONFIG.MAX_COMMITS = 2;
+    try {
+      const SHA1 = 'a'.repeat(40);
+      const SHA2 = 'b'.repeat(40);
+      const SHA3 = 'c'.repeat(40);
+      mockExecSequence(
+        FAKE_ROOT,
+        FAKE_REMOTE,
+        '  feature/x',
+        [
+          `${SHA1}|2026-08-01T10:00:00Z|Dev|feat: one\x1e`,
+          `${SHA2}|2026-08-02T10:00:00Z|Dev|feat: two\x1e`,
+          `${SHA3}|2026-08-03T10:00:00Z|Dev|feat: three\x1e`
+        ].join('\n'),
+        `1\t0\tsrc/one.js`,
+        `1\t0\tsrc/two.js`,
+        `1\t0\tsrc/three.js`
+      );
+      fs.writeFileSync.mockImplementation(() => {});
+
+      await collectLocalMetrics({ since: '2020-01-01', maxCommits: 'unbounded' });
+
+      const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+      const summary = JSON.parse(summaryCall[1]);
+      expect(summary.total_commits).toBe(3);
+    } finally {
+      CONFIG.MAX_COMMITS = originalMaxCommits;
+    }
+  });
 });
