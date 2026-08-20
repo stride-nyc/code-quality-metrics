@@ -105,11 +105,11 @@ mismatches are real:
 
 | Band | This toolkit | External comparison | Source |
 |---|---|---|---|
-| `P90_LINES_CHANGED.healthy` | 260 | p90 = **261 LoC/commit** over 8,705,118 commits in 11,143 projects | Kolassa, Riehle & Salim, "A Model of the Commit Size Distribution of Open Source", SOFSEM 2013, Table 1; arXiv:1408.4974 |
-| `P90_FILES_CHANGED.healthy` | 8 | ~90% of changes touch fewer than **10 files**, over ~9M changes | Sadowski et al., "Modern Code Review: A Case Study at Google", ICSE-SEIP 2018, §5.2 |
+| `P90_LINES_CHANGED.healthy` | 250 | p90 = **261 LoC/commit** over 8,705,118 commits in 11,143 projects | Kolassa, Riehle & Salim, "A Model of the Commit Size Distribution of Open Source", SOFSEM 2013, Table 1; arXiv:1408.4974 |
+| `P90_FILES_CHANGED.healthy` | 8.5 | ~90% of changes touch fewer than **10 files**, over ~9M changes | Sadowski et al., "Modern Code Review: A Case Study at Google", ICSE-SEIP 2018, §5.2 |
 | | | gcc p90 ≈ **8 files** (derived from published frequency table) | Alali, Kagdi & Maletic, ICPC 2008, Table 2 |
 
-The 260/261 agreement is consistency within unit uncertainty rather than a clean replication:
+The 250/261 agreement is consistency within unit uncertainty rather than a clean replication:
 Kolassa excludes blank lines and includes test files; this toolkit counts production lines only via
 `git numstat`, which includes blank lines. The two biases pull in opposite directions and
 land close together. Alali et al.'s gcc data puts the same percentile nearer 160 lines, so on
@@ -522,13 +522,18 @@ against its first parent, see the code comment in `analyzeCommit`) and a commit 
 
 **CONFIG key**: `LARGE_COMMIT_THRESHOLD` (default: 100 lines)
 
-**Thresholds** (`LARGE_COMMITS_PCT` in `lib/thresholds.js`; three-band, corroborated at the
-critical extreme by nodejs/node and curl/curl -- see `calibration/`):
+**Thresholds** (`LARGE_COMMITS_PCT` in `lib/thresholds.js`; two-band -- the extreme rests on a
+single reference repository, curl/curl, with no second repository corroborating within 15%, so
+`lib/report.js` reports only good/warning, never critical -- see `calibration/`):
 | Range | Signal |
 |-------|--------|
-| < 19% | Healthy: at or below the 75th percentile of the six-repository benchmark |
-| 19–30% | Warning: above the benchmark's typical range |
-| > 30% | Critical: at or above the worst value two reference repositories both produced |
+| ≤ 18% | Healthy: at or below the 75th percentile of the six-repository benchmark |
+| > 18% | Warning: above the benchmark's typical range |
+
+nodejs/node previously corroborated the critical extreme, but that observation was measured
+before dependency/CI bot commits were excluded from the analyzed window (issue #80); re-measured
+under the current tool, nodejs/node's own values are 8 and 22, neither near curl/curl's 30, so
+the critical bound was withdrawn along with the stale corroboration rather than carried forward.
 
 **False positives**: Legitimate large commits include data migrations, bulk refactoring, large file additions (assets, generated code), and one-time cleanup. Context from `large_commit AND additions > deletions × 3` narrows to the AI-specific pattern.
 
@@ -557,13 +562,17 @@ sprawling_commit_pct = (commits where files_changed > SPRAWLING_COMMIT_THRESHOLD
 
 **CONFIG key**: `SPRAWLING_COMMIT_THRESHOLD` (default: 5 files)
 
-**Thresholds** (`SPRAWLING_COMMITS_PCT`; three-band, corroborated by nodejs/node,
-django/django and curl/curl):
+**Thresholds** (`SPRAWLING_COMMITS_PCT`; two-band -- four repositories (nodejs/node,
+postgres/postgres, django/django and curl/curl) corroborate the extreme, but the corroborated
+critical value lands exactly on the healthy value, a zero-width warning band
+`calibration/derive-bands.js` refuses to report (it would break `lib/report.js`'s
+`computeConcern`, which divides by the healthy/critical gap), so this is two-band by that
+refusal rather than by a lack of corroboration -- see `calibration/` and that script's
+`deriveBand` comment):
 | Range | Signal |
 |-------|--------|
-| < 18% | Healthy: at or below the 75th percentile of the six-repository benchmark |
-| 18–20% | Warning: above the benchmark's typical range |
-| > 20% | Critical: at or above the worst value three reference repositories all produced |
+| ≤ 18% | Healthy: at or below the 75th percentile of the six-repository benchmark |
+| > 18% | Warning: above the benchmark's typical range |
 
 **DORA connection**: DORA's 2024 research measured a 7.2% increase in software delivery instability for every 25% increase in AI adoption, and its 2025 report states that AI adoption now improves throughput but "still increases delivery instability" (2025 report, p. 4). Instability is the finding that held across both years. Sprawling commits are one commit-level mechanism that could produce instability, but this link is an inference by this toolkit: DORA does not measure files changed per commit, and publishes no figure for pull request size. Do not cite the 2024 throughput figure as current; the 2025 report reverses its direction.
 
@@ -605,8 +614,8 @@ either, never critical):
 | `test_coverage_rate` | ≥ 23% | Healthy: at or above the 25th percentile of the benchmark |
 | `test_coverage_rate` | < 23% | Warning: below the benchmark's typical range |
 | `test_isolation_rate` | > 10% | Positive: TDD red-phase or test-improvement commits visible (informational; carries no critical bound at all, see `calibration/derive-bands.js`'s `INFORMATIONAL` list) |
-| `uncovered_prod_rate` | ≤ 13% | Healthy: at or below the 75th percentile of the benchmark |
-| `uncovered_prod_rate` | > 13% | Warning: above the benchmark's typical range |
+| `uncovered_prod_rate` | ≤ 10% | Healthy: at or below the 75th percentile of the benchmark |
+| `uncovered_prod_rate` | > 10% | Warning: above the benchmark's typical range |
 
 The `warning: 30` value still present in `lib/thresholds.js` for `test_coverage_rate` is not a
 second calibrated boundary; it is a pre-existing display cutoff that predates this metric having
@@ -712,16 +721,16 @@ carries a verdict; the percentiles below carry the load this band used to carry.
 **Thresholds** (`P90_LINES_CHANGED` in `lib/thresholds.js`):
 | Metric | Range | Signal |
 |--------|-------|--------|
-| `p90_lines_changed` | ≤ 260 | Healthy: at or below the 75th percentile of the benchmark (two-band; only nodejs/node sits near the extreme, so no critical bound is reported) |
-| `p90_lines_changed` | > 260 | Warning |
+| `p90_lines_changed` | ≤ 250 | Healthy: at or below the 75th percentile of the benchmark (two-band; only nodejs/node sits near the extreme, so no critical bound is reported) |
+| `p90_lines_changed` | > 250 | Warning |
 
 **External anchor for `p90_lines_changed`**: Kolassa, Riehle and Salim (SOFSEM 2013, Table 1;
 arXiv:1408.4974), an Ohloh.net snapshot of 8,705,118 commits across 11,143 projects, report a p90
-of 261 LoC/commit -- one unit from the 260 derived here from an unrelated, six-repository dataset.
+of 261 LoC/commit -- eleven units from the 250 derived here from an unrelated, six-repository dataset.
 The agreement is consistency within unit uncertainty: Kolassa excludes blank lines and includes
 test files, this toolkit counts production lines only and includes blank lines, and the two biases
 pull in opposite directions. Alali et al.'s gcc data puts the same percentile nearer 160 lines, so
-this is one large corpus's position, not a convergent constant. Neither source proposes 260 or 261 as a healthy line; both are descriptive
+this is one large corpus's position, not a convergent constant. Neither source proposes 250 or 261 as a healthy line; both are descriptive
 percentiles. What is citable is a position, not a boundary: this repository sits above the 90th
 percentile of a large published open-source commit-size distribution, not that it has crossed a
 review-effectiveness threshold.
@@ -770,13 +779,13 @@ curl/curl's own two windows, with no second, distinct repository corroborating i
 critical bound is reported):
 | Range | Signal |
 |-------|--------|
-| p90 ≤ 8 files | Healthy: at or below the 75th percentile of the benchmark |
-| p90 > 8 files | Warning |
+| p90 ≤ 8.5 files | Healthy: at or below the 75th percentile of the benchmark |
+| p90 > 8.5 files | Warning |
 
 **External anchors**: Sadowski et al. (ICSE-SEIP 2018, §5.2), roughly 9 million Google code
 changes: "about 90% modify fewer than 10 files." Alali, Kagdi and Maletic (ICPC 2008, Table 2)
 put gcc's files-per-commit p90 at approximately 8, derived from their published size-bucket
-frequencies. The two bracket 8 from either side. As with the lines-changed anchor above, these
+frequencies. The two bracket 8.5 from either side. As with the lines-changed anchor above, these
 are descriptive percentiles from unrelated populations, not proposed healthy lines; what they
 support is the restatement "this repository's file-scope sits above the 90th percentile of these
 published distributions", not a claim that a review-effectiveness or architectural-scatter
@@ -1125,17 +1134,17 @@ every commit object it returns; `local-code-metrics.js` deletes the field before
 
 ```
 harmonious-high-achiever:
-  large_commits_pct < LARGE_COMMITS_PCT.healthy        (currently 19)
+  large_commits_pct < LARGE_COMMITS_PCT.healthy        (currently 18)
   AND sprawling_commits_pct < SPRAWLING_COMMITS_PCT.healthy   (currently 18)
   AND test_coverage_rate > TEST_COVERAGE_RATE.healthy  (currently 23)
-  AND uncovered_prod_rate < UNCOVERED_PROD_RATE.healthy (currently 13)
+  AND uncovered_prod_rate < UNCOVERED_PROD_RATE.healthy (currently 10)
 
 legacy-bottleneck:
-  sprawling_commits_pct > SPRAWLING_COMMITS_PCT.critical (currently 20)
-  AND large_commits_pct > LARGE_COMMITS_PCT.critical      (currently 30)
+  sprawling_commits_pct > SPRAWLING_COMMITS_PCT.critical (currently null -- see below)
+  AND large_commits_pct > LARGE_COMMITS_PCT.critical      (currently null -- see below)
 
 foundational-challenges:
-  large_commits_pct > LARGE_COMMITS_PCT.critical          (currently 30)
+  large_commits_pct > LARGE_COMMITS_PCT.critical          (currently null -- see below)
 
 mixed-signals:
   (all other combinations)
@@ -1144,6 +1153,21 @@ mixed-signals:
 `uncovered_prod_rate` is a two-band metric with no `.critical` value (see Metric 3), so
 `foundational-challenges` has only the large-commit path above; it no longer has a second,
 test-discipline path.
+
+**`legacy-bottleneck` and `foundational-challenges` are currently unreachable.** The most recent
+re-measurement (twelve era: current observations, re-measured after #76 committer-date selection,
+#80 bot filtering, and the reference-config exclusions) left both `LARGE_COMMITS_PCT.critical`
+and `SPRAWLING_COMMITS_PCT.critical` at `null`: large commit %'s old corroborating repository
+(nodejs/node) was measured pre-bot-filter and no longer sits near the extreme, and sprawling
+commit %'s corroborated critical value now lands exactly on its healthy value, a zero-width
+warning band `calibration/derive-bands.js` refuses to report (see Metric 1 and Metric 2 above).
+`classifyDoraArchetype` compares through `exceedsCritical`, a helper that returns `false` whenever
+`.critical` is `null` rather than letting JavaScript coerce `null` to `0` and fabricate a critical
+breach for any positive value -- so with both bounds `null`, the `>` comparisons above can never
+be satisfied, and every run currently resolves to `harmonious-high-achiever` or `mixed-signals`.
+This is the correct behavior, not a bug to work around: an archetype defined entirely by "crossed
+a critical bound" has nothing left to test when that bound does not exist. Both archetypes become
+reachable again the moment a future re-measurement restores a critical bound for either metric.
 
 **Field**: `dora_archetype: "harmonious-high-achiever" | "foundational-challenges" | "legacy-bottleneck" | "mixed-signals"`
 
@@ -1579,7 +1603,7 @@ directory; it does not shell out to git or recompute any metric from source.
 
 `lib/thresholds.js` holds the healthy/warning/critical boundary for every
 metric that carries one in a single `THRESHOLDS` object, for example
-`LARGE_COMMITS_PCT: { healthy: 19, critical: 30 }`. Message quality and net
+`LARGE_COMMITS_PCT: { healthy: 18, critical: null }`. Message quality and net
 additions ratio carry no key here at all — both were demoted to
 informational, reported without a verdict (see each one's own comment in
 `lib/thresholds.js` and Metrics 7 and 8 below). Both `lib/metrics.js`

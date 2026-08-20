@@ -339,12 +339,31 @@ describe('renderReportHtml', () => {
   // describeArchetypeBody's factual per-signal breakdown made this test's "not to contain
   // 'point to'" assertion fail, and its "crossed the critical line" assertion also fail since
   // the old string names no line at all -- reverted after confirming both failures.
+  // large_commits_pct and sprawling_commits_pct are both two-band under the current
+  // calibration (their .critical is null -- see lib/thresholds.js), so a real catalog entry
+  // for either can never reach status 'critical' any more, and classifyDoraArchetype itself
+  // can no longer produce 'legacy-bottleneck' (see __tests__/doraArchetype.test.js). This
+  // renderer path is still live, decoupled logic (archetypeSignalPhrase/describeArchetypeBody
+  // consume summary.dora_archetype and the catalog as given, never re-deriving the verdict --
+  // see lib/report-template.js's own comment), so it is proven here against synthetic,
+  // restored critical bounds rather than left with no coverage now that no real combination
+  // reaches it.
   it('[guard] describes which archetype signals crossed which line, and states the grouping is this toolkit\'s own invention', () => {
-    const html = renderReportHtml(fixtureArgs({
-      large_commits_pct: '45.00',
-      sprawling_commits_pct: '25.00',
-      dora_archetype: 'legacy-bottleneck'
-    }));
+    const originalLarge = THRESHOLDS.LARGE_COMMITS_PCT;
+    const originalSprawling = THRESHOLDS.SPRAWLING_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    THRESHOLDS.SPRAWLING_COMMITS_PCT = { healthy: 18, critical: 20 };
+    let html;
+    try {
+      html = renderReportHtml(fixtureArgs({
+        large_commits_pct: '45.00',
+        sprawling_commits_pct: '25.00',
+        dora_archetype: 'legacy-bottleneck'
+      }));
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = originalLarge;
+      THRESHOLDS.SPRAWLING_COMMITS_PCT = originalSprawling;
+    }
     const archetypeStart = html.indexOf('<section class="archetype-note">');
     const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
 
@@ -439,12 +458,22 @@ describe('renderReportHtml', () => {
   // the healthy line at 28 (healthy at or below 19)"). This is the byte-identical-for-
   // established-targets half of code-quality-metrics-m7kt's acceptance criteria: the greenfield
   // fix above must not touch this path at all.
+  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
+  // is null) and classifyDoraArchetype can no longer produce 'foundational-challenges' (see
+  // __tests__/doraArchetype.test.js) -- same reasoning as the legacy-bottleneck test above.
   it('[guard] still names the real bound and correct direction for an established target, not "null"', () => {
-    const html = renderReportHtml(fixtureArgs({
-      large_commits_pct: '28.00',
-      sprawling_commits_pct: '8.00',
-      dora_archetype: 'foundational-challenges'
-    }));
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let html;
+    try {
+      html = renderReportHtml(fixtureArgs({
+        large_commits_pct: '28.00',
+        sprawling_commits_pct: '8.00',
+        dora_archetype: 'foundational-challenges'
+      }));
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
     const archetypeStart = html.indexOf('<section class="archetype-note">');
     const section = html.slice(archetypeStart, html.indexOf('</section>', archetypeStart));
 
@@ -570,9 +599,21 @@ describe('renderReportHtml', () => {
     expect(html).toContain('<li>Finding two</li>');
   });
 
+  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
+  // is null -- see lib/thresholds.js), so 40% now renders as a warning bullet, not a critical
+  // one (no real metric can currently reach 'critical' -- every calibrated band is two-band).
+  // The critical-entry fallback path is still live rendering logic, so it is proven here
+  // against a synthetic, restored critical bound rather than left uncovered.
   it("falls back to templated bullets from the catalog's top critical entries when findings is not given", () => {
-    const args = fixtureArgs({ large_commits_pct: '40.00' });
-    const html = renderReportHtml(args);
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let html;
+    try {
+      const args = fixtureArgs({ large_commits_pct: '40.00' });
+      html = renderReportHtml(args);
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
 
     expect(html).toContain('<li>Large commits: 40 (critical)</li>');
   });
@@ -757,14 +798,23 @@ describe('renderReportHtml', () => {
     expect(html).toContain('0.68');
   });
 
+  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
+  // is null -- see lib/thresholds.js), so it can no longer demonstrate a card describing both
+  // a healthy AND a critical boundary. That three-band card description is still live
+  // rendering logic (a future re-measurement could restore a three-band metric -- see the
+  // two-band card test right below, which already covers the no-critical-bound wording), so it
+  // is proven here against a synthetic, restored critical bound rather than left uncovered.
   it('renders a threshold description for each metric card describing its healthy and critical boundaries', () => {
-    const html = renderReportHtml(fixtureArgs());
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let html;
+    try {
+      html = renderReportHtml(fixtureArgs());
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
 
-    // large_commits_pct: higher-is-worse. Read from THRESHOLDS rather than
-    // restating the numbers, so a recalibration that moves this band doesn't
-    // break this test for no reason (it already broke once, hardcoded at 23).
-    const band = THRESHOLDS.LARGE_COMMITS_PCT;
-    expect(html).toContain(`Healthy below ${band.healthy}, critical above ${band.critical}`);
+    expect(html).toContain('Healthy below 19, critical above 30');
   });
 
   it('describes a two-band metric honestly: a healthy bound but no fabricated critical bound', () => {
@@ -1199,9 +1249,19 @@ describe('renderReportHtml', () => {
   // and warningCount to 0 inside the concerns branch (so neither count is ever pushed) failed
   // this test's /\d+ critical/ assertion, rendering "This run flags  signal, led by Large
   // commits at 40 (critical)." with an empty count clause -- reverted after confirming.
+  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
+  // is null), so this proves the "N critical" summary phrasing against a synthetic, restored
+  // critical bound -- see the identical reasoning on the fallback-bullets test above.
   it('[guard] states the count of concerns and names the top one by label and value', () => {
-    const html = renderReportHtml(fixtureArgs({ large_commits_pct: '40.00' }));
-    const summary = summarySection(html);
+    const original = THRESHOLDS.LARGE_COMMITS_PCT;
+    THRESHOLDS.LARGE_COMMITS_PCT = { healthy: 19, critical: 30 };
+    let summary;
+    try {
+      const html = renderReportHtml(fixtureArgs({ large_commits_pct: '40.00' }));
+      summary = summarySection(html);
+    } finally {
+      THRESHOLDS.LARGE_COMMITS_PCT = original;
+    }
 
     expect(summary).toMatch(/\d+ critical/);
     expect(summary).toContain('Large commits');

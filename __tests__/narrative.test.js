@@ -25,10 +25,13 @@ function fixtureSummary(overrides) {
 }
 
 describe('fallbackFindings (shared deterministic helper)', () => {
+  // large_commits_pct is two-band under the current calibration (LARGE_COMMITS_PCT.critical
+  // is null -- see lib/thresholds.js), so 40% -- above healthy (18), with no critical bound to
+  // exceed -- renders as a warning bullet, not a critical one.
   test('is exported from lib/report-template and returns templated bullets for critical/warning entries', () => {
     const catalog = buildMetricCatalog(fixtureSummary({ large_commits_pct: '40.00' }));
     const bullets = fallbackFindings(catalog);
-    expect(bullets).toEqual(['Large commits: 40 (critical)']);
+    expect(bullets).toEqual(['Large commits: 40 (warning)']);
   });
 });
 

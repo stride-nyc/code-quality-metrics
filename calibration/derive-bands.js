@@ -168,7 +168,15 @@ function deriveBand(metric, observations) {
     const healthy = round(percentile(sorted, 0.75));
     const extreme = stats.max;
     const supportingRepos = [...new Set(observations.filter(o => isNearExtreme(o.value, extreme)).map(o => o.repo))];
-    const tier = supportingRepos.length >= 2 ? 'three-band' : 'two-band';
+    // A corroborated extreme (>=2 supporting repos) normally earns a three-band verdict, but
+    // when the rounded extreme lands exactly on the rounded healthy bound, the interval between
+    // them is zero-width: there is no value that can read as "warning", and lib/report.js's
+    // computeConcern divides by (criticalBoundary - healthyBoundary), which is 0 here, sending
+    // every value above healthy to Infinity/NaN rather than a graduated verdict. A band that
+    // cannot express "warning" is not a three-band metric, corroborated or not -- treat it the
+    // same as an uncorroborated extreme: two-band, critical null.
+    const degenerate = round(extreme) === healthy;
+    const tier = supportingRepos.length >= 2 && !degenerate ? 'three-band' : 'two-band';
     return {
       ...stats,
       direction: 'higher-is-worse',
@@ -183,7 +191,11 @@ function deriveBand(metric, observations) {
     const healthy = round(percentile(sorted, 0.25));
     const extreme = stats.min;
     const supportingRepos = [...new Set(observations.filter(o => isNearExtreme(o.value, extreme)).map(o => o.repo))];
-    const tier = supportingRepos.length >= 2 ? 'three-band' : 'two-band';
+    // See the matching comment in the HIGHER_IS_WORSE branch above: a rounded extreme equal to
+    // the rounded healthy bound is a zero-width warning interval, so it degrades to two-band
+    // regardless of how many repos corroborate the extreme.
+    const degenerate = round(extreme) === healthy;
+    const tier = supportingRepos.length >= 2 && !degenerate ? 'three-band' : 'two-band';
     return {
       ...stats,
       direction: 'higher-is-better',

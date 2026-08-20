@@ -38,14 +38,14 @@ const { THRESHOLDS } = require('../lib/thresholds');
 describe('THRESHOLDS', () => {
   it('exports the calibrated numeric bands', () => {
     expect(THRESHOLDS).toEqual({
-      LARGE_COMMITS_PCT: { healthy: 19, critical: 30 },
-      SPRAWLING_COMMITS_PCT: { healthy: 18, critical: 20 },
+      LARGE_COMMITS_PCT: { healthy: 18, critical: null },
+      SPRAWLING_COMMITS_PCT: { healthy: 18, critical: null },
       TEST_COVERAGE_RATE: { warning: 30, healthy: 23 },
       TEST_ISOLATION_RATE: { positive: 10 },
-      UNCOVERED_PROD_RATE: { healthy: 13, critical: null },
+      UNCOVERED_PROD_RATE: { healthy: 10, critical: null },
       AI_BATCH_SHARE: { additionsRatio: 3, share: 0.3 },
-      P90_LINES_CHANGED: { healthy: 260, critical: null },
-      P90_FILES_CHANGED: { healthy: 8, critical: null },
+      P90_LINES_CHANGED: { healthy: 250, critical: null },
+      P90_FILES_CHANGED: { healthy: 8.5, critical: null },
       DUPLICATION_PCT: { healthy: 2, critical: null }
     });
   });

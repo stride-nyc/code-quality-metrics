@@ -60,56 +60,61 @@ describe('classifyDoraArchetype', () => {
     })).not.toBe('harmonious-high-achiever');
   });
 
-  it('returns "legacy-bottleneck" for high sprawl combined with high large commits', () => {
+  // LARGE_COMMITS_PCT.critical and SPRAWLING_COMMITS_PCT.critical are both null under the
+  // current (re-measured) calibration -- see lib/thresholds.js. legacy-bottleneck's whole
+  // definition is "both metrics exceed their critical bound"; with neither bound present there
+  // is nothing left to exceed, so the archetype is unreachable. This must not be masked by
+  // JS's `value > null` coercing null to 0 and fabricating a critical breach for any positive
+  // value -- the exact defect exceedsCritical (used elsewhere in lib/metrics.js) exists to
+  // prevent, which classifyDoraArchetype must now use too.
+  it('does not return "legacy-bottleneck" for high sprawl combined with high large commits now that neither critical bound exists', () => {
+    const { LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT } = THRESHOLDS;
+    expect(LARGE_COMMITS_PCT.critical).toBeNull();
+    expect(SPRAWLING_COMMITS_PCT.critical).toBeNull();
     expect(classifyDoraArchetype({
       large_commits_pct: '35.00',
       sprawling_commits_pct: '30.00',
       test_coverage_rate: '40.00',
       uncovered_prod_rate: '5.00',
       message_quality_pct: '50.00'
-    })).toBe('legacy-bottleneck');
+    })).toBe('mixed-signals');
   });
 
-  it('returns "legacy-bottleneck" once sprawling clears the calibrated critical band, not the stale duplicated one', () => {
-    const { SPRAWLING_COMMITS_PCT, LARGE_COMMITS_PCT } = THRESHOLDS;
-    const { LEGACY_BOTTLENECK } = RETIRED_STALE_BOUNDS;
-    // Above the calibrated SPRAWLING_COMMITS_PCT.critical band but below the stale,
-    // duplicated LEGACY_BOTTLENECK.sprawling value it used to be compared against.
-    expect(LEGACY_BOTTLENECK.sprawling).toBeGreaterThan(SPRAWLING_COMMITS_PCT.critical);
-    const sprawlingValue = (LEGACY_BOTTLENECK.sprawling + SPRAWLING_COMMITS_PCT.critical) / 2;
+  it('does not return "legacy-bottleneck" for any sprawling/large combination while SPRAWLING_COMMITS_PCT.critical is null', () => {
+    const { SPRAWLING_COMMITS_PCT } = THRESHOLDS;
+    expect(SPRAWLING_COMMITS_PCT.critical).toBeNull();
     expect(classifyDoraArchetype({
-      large_commits_pct: String(LARGE_COMMITS_PCT.critical + 5),
-      sprawling_commits_pct: String(sprawlingValue),
+      large_commits_pct: '99.00',
+      sprawling_commits_pct: '99.00',
       test_coverage_rate: '40.00',
       uncovered_prod_rate: '5.00'
-    })).toBe('legacy-bottleneck');
+    })).not.toBe('legacy-bottleneck');
   });
 
-  it('returns "foundational-challenges" when large commit rate exceeds 40%', () => {
+  // Same reasoning as the legacy-bottleneck tests above: foundational-challenges' only
+  // remaining path (large-commit rate alone, see this function's own docstring) is also gone
+  // now that LARGE_COMMITS_PCT.critical is null, so the archetype is unreachable entirely.
+  it('does not return "foundational-challenges" for a large commit rate of 45% now that LARGE_COMMITS_PCT has no critical bound', () => {
+    const { LARGE_COMMITS_PCT } = THRESHOLDS;
+    expect(LARGE_COMMITS_PCT.critical).toBeNull();
     expect(classifyDoraArchetype({
       large_commits_pct: '45.00',
-      sprawling_commits_pct: '8.00',
+      sprawling_commits_pct: '0.00',
       test_coverage_rate: '55.00',
       uncovered_prod_rate: '5.00',
       message_quality_pct: '65.00'
-    })).toBe('foundational-challenges');
+    })).toBe('mixed-signals');
   });
 
-  it('returns "foundational-challenges" once large clears the calibrated critical band, not the stale duplicated one', () => {
-    const { LARGE_COMMITS_PCT, SPRAWLING_COMMITS_PCT } = THRESHOLDS;
-    const { FOUNDATIONAL_CHALLENGES } = RETIRED_STALE_BOUNDS;
-    // Above the calibrated LARGE_COMMITS_PCT.critical band but below the stale,
-    // duplicated FOUNDATIONAL_CHALLENGES.large value it used to be compared against.
-    expect(FOUNDATIONAL_CHALLENGES.large).toBeGreaterThan(LARGE_COMMITS_PCT.critical);
-    const largeValue = (FOUNDATIONAL_CHALLENGES.large + LARGE_COMMITS_PCT.critical) / 2;
+  it('does not return "foundational-challenges" for any large commit rate while LARGE_COMMITS_PCT.critical is null', () => {
+    const { LARGE_COMMITS_PCT } = THRESHOLDS;
+    expect(LARGE_COMMITS_PCT.critical).toBeNull();
     expect(classifyDoraArchetype({
-      large_commits_pct: String(largeValue),
-      // Kept below SPRAWLING_COMMITS_PCT.critical so legacy-bottleneck (checked first) does
-      // not also match.
-      sprawling_commits_pct: String(SPRAWLING_COMMITS_PCT.critical - 5),
+      large_commits_pct: '99.00',
+      sprawling_commits_pct: '0.00',
       test_coverage_rate: '40.00',
       uncovered_prod_rate: '5.00'
-    })).toBe('foundational-challenges');
+    })).not.toBe('foundational-challenges');
   });
 
   // Guard, not a new red: UNCOVERED_PROD_RATE is two-band (no .critical -- see
