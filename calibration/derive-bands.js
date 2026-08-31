@@ -258,6 +258,7 @@ function main() {
   const observations = selectByPopulation(selectByEra(data.observations, era), population);
   const usable = observations.filter(o => o.include_in_derivation);
   const excluded = observations.filter(o => !o.include_in_derivation);
+  checkPopulationSize(usable, population ?? 'granular');
 
   /** @type {Record<string, Array<{repo: string, value: number}>>} */
   const byMetric = {};
@@ -312,9 +313,17 @@ function main() {
   }
 }
 
+function checkPopulationSize(usable, populationName) {
+  if (usable.length < 2) {
+    console.error(`derive-bands.js: population '${populationName}' has ${usable.length} usable observation(s) -- cannot derive bands (need at least 2).`);
+    process.exit(1);
+  }
+}
+
 if (require.main === module) main();
 
 module.exports = {
   deriveBand, describe, percentile, isNearExtreme, selectByEra, selectByPopulation,
+  checkPopulationSize,
   NEAR_EXTREME_FRACTION, HIGHER_IS_WORSE, HIGHER_IS_BETTER, INFORMATIONAL
 };
