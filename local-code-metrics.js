@@ -256,6 +256,7 @@ function logNoCommitsAnalyzed() {
   console.log('This could mean:');
   console.log('  • No development activity in the analysis period');
   console.log(`  • Try a wider window: node local-code-metrics.js --days 90`);
+  process.exit(1);
 }
 
 /**

@@ -1,6 +1,6 @@
 'use strict';
 
-const { deriveBand, selectByEra, selectByPopulation } = require('../calibration/derive-bands');
+const { deriveBand, selectByEra, selectByPopulation, checkPopulationSize } = require('../calibration/derive-bands');
 
 /** Build an observation list: [[repo, value], ...] -> [{repo, value}] */
 function obs(pairs) {
@@ -191,6 +191,42 @@ describe('selectByPopulation', () => {
     expect(selectByPopulation(observations, 'greenfield-historical')).toEqual([
       { repo: 'repoC', population: 'greenfield-historical' }
     ]);
+  });
+});
+
+// Guard 2 (code-quality-metrics-d5fa): empty or tiny population exits non-zero
+describe('checkPopulationSize', () => {
+  let exitSpy;
+
+  beforeEach(() => {
+    exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => { throw new Error('process.exit'); });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('exits with code 1 when usable population has 0 observations', () => {
+    expect(() => checkPopulationSize([], 'granular')).toThrow('process.exit');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('granular'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('0'));
+  });
+
+  it('exits with code 1 when usable population has 1 observation', () => {
+    expect(() => checkPopulationSize([{ repo: 'repoA', value: 5 }], 'greenfield-modern')).toThrow('process.exit');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('greenfield-modern'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('1'));
+  });
+
+  it('does not exit when usable population has 2 or more observations', () => {
+    expect(() => checkPopulationSize(
+      [{ repo: 'repoA', value: 5 }, { repo: 'repoB', value: 10 }],
+      'granular'
+    )).not.toThrow();
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });
 

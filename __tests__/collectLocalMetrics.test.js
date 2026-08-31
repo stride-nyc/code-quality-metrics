@@ -402,10 +402,11 @@ describe('collectLocalMetrics — CLI window override', () => {
       FAKE_ROOT,
       FAKE_REMOTE,
       '  feature/x', // git branch -a
-      ''             // git log — no commits, short-circuits before deeper processing
+      ''             // git log — no commits → exits 1
     );
 
-    await collectLocalMetrics({ since: '2026-04-01' });
+    await expect(collectLocalMetrics({ since: '2026-04-01' })).rejects.toThrow('process.exit');
+    expect(process.exit).toHaveBeenCalledWith(1);
 
     const sawExplicitSince = execSync.mock.calls.some(call => String(call[0]).includes('2026-04-01'));
     expect(sawExplicitSince).toBe(true);
@@ -480,7 +481,12 @@ describe('collectLocalMetrics — early exits', () => {
   // code-quality-metrics-wzy2: `git branch -a` succeeds with empty stdout on a freshly
   // initialised repository that has no branches yet -- there is nothing wrong with the git
   // command. That must not be reported as the command having failed.
-  test('does not report a git failure, and continues to the trunk fallback, when git branch -a succeeds with empty output', async () => {
+  // code-quality-metrics-wzy2: `git branch -a` succeeds with empty stdout on a freshly
+  // initialised repository that has no branches yet -- there is nothing wrong with the git
+  // command. That must not be reported as the command having failed.
+  // Guard 2 (code-quality-metrics-d5fa): zero commits from the trunk fallback → exits 1,
+  // but not with the git-failure message.
+  test('does not report a git failure when git branch -a succeeds with empty output, but still exits 1 because trunk also yields no commits', async () => {
     mockExecSequence(
       FAKE_ROOT,    // git rev-parse --show-toplevel
       FAKE_REMOTE,  // git remote get-url origin
@@ -488,11 +494,9 @@ describe('collectLocalMetrics — early exits', () => {
       ''            // git log HEAD (trunk fallback) → no commits (unborn HEAD)
     );
 
-    await collectLocalMetrics();
-
+    await expect(collectLocalMetrics()).rejects.toThrow('process.exit');
+    expect(process.exit).toHaveBeenCalledWith(1);
     expect(console.error).not.toHaveBeenCalledWith(expect.stringContaining('Unable to list Git branches'));
-    expect(process.exit).not.toHaveBeenCalled();
-    expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
   // [guard] proven by mutation: changing the catch block below to swallow the error (e.g.
@@ -517,19 +521,19 @@ describe('collectLocalMetrics — early exits', () => {
     expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Unable to list Git branches'));
   });
 
-  test('returns without writing files when no feature branches exist', async () => {
+  test('exits with code 1 (without writing files) when no feature branches exist and trunk also yields no commits', async () => {
     mockExecSequence(
       FAKE_ROOT,
       FAKE_REMOTE,
-      'main'  // git branch — only main, filtered out
+      'main'  // git branch — only main, filtered out; trunk fallback also returns '' → exits 1
     );
 
-    await collectLocalMetrics();
-
+    await expect(collectLocalMetrics()).rejects.toThrow('process.exit');
+    expect(process.exit).toHaveBeenCalledWith(1);
     expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
-  test('returns without writing files when no commits found in analysis period', async () => {
+  test('exits with code 1 (without writing files) when no commits found in analysis period', async () => {
     mockExecSequence(
       FAKE_ROOT,
       FAKE_REMOTE,
@@ -538,8 +542,8 @@ describe('collectLocalMetrics — early exits', () => {
       ''                            // git log for feature/y → no commits
     );
 
-    await collectLocalMetrics();
-
+    await expect(collectLocalMetrics()).rejects.toThrow('process.exit');
+    expect(process.exit).toHaveBeenCalledWith(1);
     expect(fs.writeFileSync).not.toHaveBeenCalled();
   });
 
@@ -547,7 +551,12 @@ describe('collectLocalMetrics — early exits', () => {
   // feature/x -- but every commit's `git show --numstat` genuinely fails, so analyzeCommit
   // (lib/git.js) returns null for each one and `metrics` ends up empty even though commits
   // were found. That gap is not covered by the uniqueCommits.length === 0 guard above.
-  test('returns without writing files (rather than throwing) when every commit in the window fails analysis', async () => {
+  // code-quality-metrics-1g6j: uniqueCommits (git log) is non-empty here -- one commit on
+  // feature/x -- but every commit's `git show --numstat` genuinely fails, so analyzeCommit
+  // (lib/git.js) returns null for each one and `metrics` ends up empty even though commits
+  // were found. That gap is not covered by the uniqueCommits.length === 0 guard above.
+  // Guard 2 (code-quality-metrics-d5fa): metrics empty → exits 1 (same outcome as zero commits).
+  test('exits with code 1 (without writing files) when every commit in the window fails analysis', async () => {
     const SHA = 'a'.repeat(40);
     execSync.mockImplementation(command => {
       const cmd = typeof command === 'string' ? command : String(command);
@@ -567,8 +576,8 @@ describe('collectLocalMetrics — early exits', () => {
     });
     fs.writeFileSync.mockImplementation(() => {});
 
-    await collectLocalMetrics();
-
+    await expect(collectLocalMetrics()).rejects.toThrow('process.exit');
+    expect(process.exit).toHaveBeenCalledWith(1);
     expect(fs.writeFileSync).not.toHaveBeenCalled();
     expect(console.log).toHaveBeenCalledWith(expect.stringContaining('No commits found in the analysis period'));
   });
