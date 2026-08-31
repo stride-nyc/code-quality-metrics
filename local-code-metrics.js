@@ -25,9 +25,9 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, findContentDuplicateGroups, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, findContentDuplicateGroups, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate, fetchReleaseTags } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
-const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit } = require('./lib/metrics');
+const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit, detectDeploymentFrequency, findReleaseCommitsFromSubjects, findUnmatchedVersionShapedRefs } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
@@ -945,6 +945,33 @@ async function collectLocalMetrics(options = {}) {
   const project_lifecycle_override = options.lifecycle ?? config_sources.overrides.lifecycle ?? null;
   const project_lifecycle = project_lifecycle_override ?? detectedLifecycle;
 
+  // Deployment frequency (GitHub #65): opt-in via releaseTagPattern in .codemetrics.json.
+  // Tags are the primary source; commit subjects are the fallback when no tags exist.
+  // Both are a floor -- deleted tags and unrecognized conventions are invisible.
+  const releaseTagPattern = /** @type {string|null} */ (config_sources.overrides.releaseTagPattern ?? null);
+  const stagingTagPattern = /** @type {string|null} */ (config_sources.overrides.stagingTagPattern ?? null);
+  const releaseCommitSubjectPattern = /** @type {string|null} */ (config_sources.overrides.releaseCommitSubjectPattern ?? null);
+  let deployment_frequency_floor = null;
+  if (releaseTagPattern || releaseCommitSubjectPattern) {
+    const tagEvents = fetchReleaseTags(releaseTagPattern, stagingTagPattern);
+    const commitEvents = releaseCommitSubjectPattern
+      ? findReleaseCommitsFromSubjects(
+          metrics.map(m => ({ sha: m.sha, subject: m.message, date: m.date })),
+          releaseCommitSubjectPattern
+        )
+      : null;
+    const events = tagEvents.length > 0 ? tagEvents : (commitEvents ?? []);
+    deployment_frequency_floor = detectDeploymentFrequency(events, new Date().toISOString());
+
+    if (releaseTagPattern) {
+      const allTagNames = runGitCommand("git tag --list").split('\n').map(t => t.trim()).filter(Boolean);
+      const unmatched = findUnmatchedVersionShapedRefs(allTagNames, releaseTagPattern, stagingTagPattern);
+      if (unmatched.length > 0) {
+        console.warn(`⚠️  ${unmatched.length} version-shaped tag(s) do not match releaseTagPattern and were excluded: ${unmatched.slice(0, 5).join(', ')}${unmatched.length > 5 ? '...' : ''}`);
+      }
+    }
+  }
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -1073,6 +1100,10 @@ async function collectLocalMetrics(options = {}) {
     dora_archetype: (historyGranularity === 'squashed' || project_lifecycle === 'initial-build')
       ? undefined
       : classifyDoraArchetype({ large_commits_pct, sprawling_commits_pct, test_coverage_rate, uncovered_prod_rate, message_quality_pct }),
+    // Deployment frequency floor (GitHub #65): null when no releaseTagPattern or
+    // releaseCommitSubjectPattern is configured in .codemetrics.json. A floor, not a count:
+    // deleted tags and unrecognized conventions are invisible to this detector.
+    deployment_frequency_floor,
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };

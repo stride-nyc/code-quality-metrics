@@ -92,6 +92,11 @@ function mockExecSequence(...values) {
     // answer" and returns null), so it never consumes a positional value meant for a call that
     // follows it.
     if (typeof command === 'string' && command.includes('format:%cs')) return '';
+    // Tests predating deployment frequency (GitHub #65) supply no value for the
+    // for-each-ref tags query or the git tag --list query. Return empty so no release
+    // events are found and deployment_frequency_floor stays null.
+    if (typeof command === 'string' && command.includes('for-each-ref')) return '';
+    if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -127,6 +132,11 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // answer" and returns null), so it never consumes a positional value meant for a call that
     // follows it.
     if (typeof command === 'string' && command.includes('format:%cs')) return '';
+    // Tests predating deployment frequency (GitHub #65) supply no value for the
+    // for-each-ref tags query or the git tag --list query. Return empty so no release
+    // events are found and deployment_frequency_floor stays null.
+    if (typeof command === 'string' && command.includes('for-each-ref')) return '';
+    if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -158,6 +168,11 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     // answer" and returns null), so it never consumes a positional value meant for a call that
     // follows it.
     if (typeof command === 'string' && command.includes('format:%cs')) return '';
+    // Tests predating deployment frequency (GitHub #65) supply no value for the
+    // for-each-ref tags query or the git tag --list query. Return empty so no release
+    // events are found and deployment_frequency_floor stays null.
+    if (typeof command === 'string' && command.includes('for-each-ref')) return '';
+    if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -188,6 +203,11 @@ function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
     // answer" and returns null), so it never consumes a positional value meant for a call that
     // follows it.
     if (typeof command === 'string' && command.includes('format:%cs')) return '';
+    // Tests predating deployment frequency (GitHub #65) supply no value for the
+    // for-each-ref tags query or the git tag --list query. Return empty so no release
+    // events are found and deployment_frequency_floor stays null.
+    if (typeof command === 'string' && command.includes('for-each-ref')) return '';
+    if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -218,6 +238,11 @@ function mockExecSequenceWithRootCommitFailure(...values) {
     // answer" and returns null), so it never consumes a positional value meant for a call that
     // follows it.
     if (typeof command === 'string' && command.includes('format:%cs')) return '';
+    // Tests predating deployment frequency (GitHub #65) supply no value for the
+    // for-each-ref tags query or the git tag --list query. Return empty so no release
+    // events are found and deployment_frequency_floor stays null.
+    if (typeof command === 'string' && command.includes('for-each-ref')) return '';
+    if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
     const val = values[i] ?? '';
     i++;
     return val;
@@ -2572,5 +2597,68 @@ describe('collectLocalMetrics — content-duplicate detection (code-quality-metr
     expect(summary.content_duplicate_group_count).toBe(0);
     expect(summary.content_duplicate_redundant_entries_count).toBe(0);
     expect(summary.content_duplicate_groups).toEqual([]);
+  });
+});
+
+describe('collectLocalMetrics — deployment frequency (GitHub #65)', () => {
+  const SHA = 'a'.repeat(40);
+
+  test('deployment_frequency_floor is null when no release patterns configured', async () => {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      '10\t5\tsrc/app.js'
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.deployment_frequency_floor).toBeNull();
+  });
+
+  test('deployment_frequency_floor is computed when releaseTagPattern is configured', async () => {
+    // .codemetrics.json present with releaseTagPattern
+    fs.existsSync.mockImplementation(p => String(p).endsWith('.codemetrics.json'));
+    fs.statSync.mockReturnValue({ isDirectory: () => false });
+    fs.readFileSync.mockImplementation(p => {
+      if (String(p).endsWith('.codemetrics.json')) {
+        return JSON.stringify({ releaseTagPattern: '^v\\d+' });
+      }
+      return '';
+    });
+
+    let posIdx = 0;
+    const positional = [FAKE_ROOT, FAKE_REMOTE, '  feature/x', `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`, '10\t5\tsrc/app.js'];
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('format:"%cn"')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40);
+      if (cmd.includes('--max-parents=0')) return '';
+      if (cmd.includes('--name-only')) return 'src/app.js';
+      if (cmd.includes('--reverse') && cmd.includes('%H')) return '';
+      if (cmd.includes('rev-list') && cmd.includes('--count')) return '';
+      if (cmd.includes('format:%cs')) return '';
+      if (cmd.includes('for-each-ref')) {
+        return 'v1.0.0\t2024-01-01 10:00:00 +0000\nv1.1.0\t2024-01-10 10:00:00 +0000\n';
+      }
+      return positional[posIdx++] ?? '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.deployment_frequency_floor).not.toBeNull();
+    expect(summary.deployment_frequency_floor.release_count).toBe(2);
+    expect(typeof summary.deployment_frequency_floor.median_interval_days).toBe('number');
   });
 });

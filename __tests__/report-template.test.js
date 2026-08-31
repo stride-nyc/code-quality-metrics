@@ -1,6 +1,6 @@
 'use strict';
 
-const { renderReportHtml } = require('../lib/report-template');
+const { renderReportHtml, renderDeploymentFrequency } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { buildMetricCatalog, METRIC_GROUP_ORDER } = require('../lib/report');
 const { THRESHOLDS } = require('../lib/thresholds');
@@ -2373,5 +2373,46 @@ describe('renderReportHtml metric group headings (code-quality-metrics-yte)', ()
     }
     const sortedPositions = [...positions].sort((a, b) => a - b);
     expect(positions).toEqual(sortedPositions);
+  });
+});
+
+describe('renderDeploymentFrequency (GitHub #65)', () => {
+  test('returns empty string when deployment_frequency_floor is null', () => {
+    expect(renderDeploymentFrequency({ deployment_frequency_floor: null })).toBe('');
+  });
+
+  test('returns empty string when deployment_frequency_floor is absent', () => {
+    expect(renderDeploymentFrequency({})).toBe('');
+  });
+
+  test('renders release_count and interval when floor is present', () => {
+    const df = { release_count: 3, median_interval_days: 7, mean_interval_days: 8, days_since_last: 5 };
+    const html = renderDeploymentFrequency({ deployment_frequency_floor: df });
+    expect(html).toContain('3 release events detected');
+    expect(html).toContain('Median release interval: 7 days');
+    expect(html).toContain('Days since last release: 5');
+  });
+
+  test('omits interval line when median_interval_days is null (single event)', () => {
+    const df = { release_count: 1, median_interval_days: null, mean_interval_days: null, days_since_last: 10 };
+    const html = renderDeploymentFrequency({ deployment_frequency_floor: df });
+    expect(html).toContain('1 release event detected');
+    expect(html).toContain('Insufficient history');
+  });
+
+  test('renderReportHtml includes deployment frequency section when floor is set', () => {
+    const df = { release_count: 2, median_interval_days: 14, mean_interval_days: 14, days_since_last: 3 };
+    const summary = fixtureSummary({ deployment_frequency_floor: df });
+    const catalog = buildMetricCatalog(summary, []);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates: [] });
+    expect(html).toContain('Deployment Frequency');
+    expect(html).toContain('2 release events detected');
+  });
+
+  test('renderReportHtml omits deployment frequency section when floor is null', () => {
+    const summary = fixtureSummary({ deployment_frequency_floor: null });
+    const catalog = buildMetricCatalog(summary, []);
+    const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates: [] });
+    expect(html).not.toContain('deployment-frequency');
   });
 });
