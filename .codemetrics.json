@@ -1,0 +1,6 @@
+{
+  "DUPLICATE_IGNORE_PATTERNS": [
+    "**/calibration/observations.json",
+    "**/.github/**"
+  ]
+}
