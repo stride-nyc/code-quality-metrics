@@ -33,7 +33,7 @@ jobs:
             // lib/ modules are available after checkout — require() resolves from $GITHUB_WORKSPACE
             const { CONFIG } = require('./lib/config');
             const { computeStatistics, computeVelocity } = require('./lib/statistics');
-            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath, isBotCommit } = require('./lib/metrics');
+            const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath, isBotCommit, detectDeploymentFrequency, findUnmatchedVersionShapedRefs, findReleaseCommitsFromSubjects } = require('./lib/metrics');
 
             // ---------------------------------------------------------------
             // Main collection
@@ -42,6 +42,20 @@ jobs:
             async function collectMetrics() {
               const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
               const since = new Date(Date.now() - CONFIG.ANALYSIS_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+              // Deployment frequency opt-in: read release pattern keys from .codemetrics.json.
+              // Guards against fakeFs in tests not having existsSync/readFileSync.
+              let releaseTagPattern = null, stagingTagPattern = null, releaseCommitSubjectPattern = null;
+              try {
+                if (fs.existsSync && fs.existsSync('.codemetrics.json')) {
+                  const repoConf = JSON.parse(fs.readFileSync('.codemetrics.json', 'utf8'));
+                  releaseTagPattern = repoConf.releaseTagPattern ?? null;
+                  stagingTagPattern = repoConf.stagingTagPattern ?? null;
+                  releaseCommitSubjectPattern = repoConf.releaseCommitSubjectPattern ?? null;
+                }
+              } catch (e) {
+                console.warn('Could not read .codemetrics.json for release patterns:', e.message);
+              }
 
               console.log(`Repository: ${owner}/${repo}`);
               console.log(`Looking for commits since: ${since}`);
@@ -200,6 +214,7 @@ jobs:
                     net_additions_ratio_median: 0,
                     net_additions_ratio_p90: 0,
                     dora_archetype: "mixed-signals",
+                    deployment_frequency_floor: null,
                     note: "Feature branches only - main/master excluded. Large commit threshold applied to production code only."
                   };
 
@@ -322,6 +337,41 @@ jobs:
                 const testIsolationPct = parseFloat((metrics.filter(m => m.test_only_commit).length / metrics.length * 100).toFixed(2));
                 const uncoveredProdPct = parseFloat((metrics.filter(m => m.uncovered_prod_commit).length / metrics.length * 100).toFixed(2));
 
+                // Deployment frequency (GitHub #65): opt-in via releaseTagPattern in .codemetrics.json.
+                let deployment_frequency_floor = null;
+                if (releaseTagPattern || releaseCommitSubjectPattern) {
+                  let tagEvents = [];
+                  if (releaseTagPattern) {
+                    const releaseRe = new RegExp(releaseTagPattern);
+                    const stagingRe = stagingTagPattern ? new RegExp(stagingTagPattern) : null;
+                    const allTags = await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 });
+                    const matchingTags = allTags.filter(t => {
+                      if (!releaseRe.test(t.name)) return false;
+                      if (stagingRe && stagingRe.test(t.name)) return false;
+                      return true;
+                    });
+                    for (const tag of matchingTags) {
+                      try {
+                        const detail = await github.rest.repos.getCommit({ owner, repo, ref: tag.commit.sha });
+                        tagEvents.push({ name: tag.name, date: detail.data.commit.committer.date });
+                      } catch (e) {
+                        console.warn(`Could not fetch date for tag ${tag.name}: ${e.message}`);
+                      }
+                    }
+                    tagEvents.sort((a, b) => new Date(a.date) - new Date(b.date));
+                    const allTagNames = allTags.map(t => t.name);
+                    const unmatched = findUnmatchedVersionShapedRefs(allTagNames, releaseTagPattern, stagingTagPattern);
+                    if (unmatched.length > 0) {
+                      console.warn(`${unmatched.length} version-shaped tag(s) excluded from deployment frequency: ${unmatched.slice(0, 5).join(', ')}`);
+                    }
+                  }
+                  if (releaseCommitSubjectPattern && tagEvents.length === 0) {
+                    const commitSubjects = metrics.map(m => ({ sha: m.sha, subject: m.message, date: m.date }));
+                    tagEvents = findReleaseCommitsFromSubjects(commitSubjects, releaseCommitSubjectPattern) ?? [];
+                  }
+                  deployment_frequency_floor = detectDeploymentFrequency(tagEvents, new Date().toISOString());
+                }
+
                 const summary = {
                   total_commits: metrics.length,
                   filtered_from: uniqueCommits.length,
@@ -360,6 +410,7 @@ jobs:
                   // reads only large-commit, sprawling, test-coverage and uncovered-prod from
                   // THRESHOLDS, so message quality has no part in the archetype (code-quality-metrics-4hu).
                   dora_archetype: classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2) }),
+                  deployment_frequency_floor,
                   note: "Feature branches only - main/master excluded. Large commit threshold applied to production code only."
                 };
 

@@ -48,7 +48,8 @@ function makeGithubMock({ branches, commitsByBranch, commitDetailsBySha }) {
         get: async () => ({ data: { full_name: 'acme/widgets' } }),
         listBranches: async () => ({ data: branches }),
         listCommits: async ({ sha }) => ({ data: commitsByBranch[sha] || [] }),
-        getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] })
+        getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] }),
+        listTags: async () => ({ data: [] })
       }
     },
     // The real workflow relies on github.paginate to walk multi-page results; every mocked

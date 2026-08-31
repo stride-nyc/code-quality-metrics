@@ -42,7 +42,8 @@ function makeGithubMock({ branches, commitsByBranch, commitsByBranchWidened, com
           const source = since === undefined ? (commitsByBranchWidened || {}) : (commitsByBranch || {});
           return { data: source[sha] || [] };
         },
-        getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] })
+        getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] }),
+        listTags: async () => ({ data: [] })
       }
     },
     // The real workflow relies on github.paginate to walk multi-page results; every mocked
