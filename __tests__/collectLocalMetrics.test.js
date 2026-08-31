@@ -2772,3 +2772,69 @@ describe('collectLocalMetrics — commit shipment visibility (GitHub #107)', () 
     expect(summary.default_branch).toBe('main');
   });
 });
+
+// ---------------------------------------------------------------------------
+// collectLocalMetrics — COSMIC FP estimation (GitHub #125)
+// ---------------------------------------------------------------------------
+
+describe('collectLocalMetrics — CFP estimation (GitHub #125)', () => {
+  const SHA = 'a'.repeat(40);
+
+  function setupExecMock() {
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  main',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add user CRUD`,
+      '120\t10\tsrc/api/users.js'
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+  }
+
+  const CFP_RESULT = {
+    estimated_cfp_delta: 6,
+    estimated_cfp_breakdown: { entries: 2, exits: 2, reads: 1, writes: 1 }
+  };
+
+  test('includes cfp_results in summary when history is squashed and client is available', async () => {
+    setupExecMock();
+    claude.getAnthropicClient.mockResolvedValue({});
+    claude.selectClaudeCommits.mockReturnValue([]);
+    claude.analyzeCfpWithClaude.mockResolvedValue(CFP_RESULT);
+
+    await collectLocalMetrics({ history: 'squashed' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.cfp_results).toBeDefined();
+    expect(summary.cfp_results).toHaveLength(1);
+    expect(summary.cfp_results[0].estimated_cfp_delta).toBe(6);
+  });
+
+  test('omits cfp_results when history is granular even if client is available', async () => {
+    setupExecMock();
+    claude.getAnthropicClient.mockResolvedValue({});
+    claude.selectClaudeCommits.mockReturnValue([]);
+    claude.analyzeCfpWithClaude.mockResolvedValue(CFP_RESULT);
+
+    await collectLocalMetrics({ history: 'granular' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.cfp_results).toBeUndefined();
+    expect(claude.analyzeCfpWithClaude).not.toHaveBeenCalled();
+  });
+
+  test('omits cfp_results when client is null regardless of history granularity', async () => {
+    setupExecMock();
+    claude.getAnthropicClient.mockResolvedValue(null);
+    claude.analyzeCfpWithClaude.mockResolvedValue(CFP_RESULT);
+
+    await collectLocalMetrics({ history: 'squashed' });
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+    expect(summary.cfp_results).toBeUndefined();
+    expect(claude.analyzeCfpWithClaude).not.toHaveBeenCalled();
+  });
+});

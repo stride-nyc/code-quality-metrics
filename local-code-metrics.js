@@ -28,7 +28,7 @@ const { resolveConfigOverrides } = require('./lib/repoConfig');
 const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, findContentDuplicateGroups, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate, fetchReleaseTags, findDefaultBranch, fetchDefaultBranchShas } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit, detectDeploymentFrequency, findReleaseCommitsFromSubjects, findUnmatchedVersionShapedRefs } = require('./lib/metrics');
-const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
+const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis, analyzeCfpWithClaude } = require('./lib/claude');
 const { runDuplicateAnalysis, resolveModuleNeighbors } = require('./lib/duplicate');
 
 // Captured once at module load, before any run can mutate CONFIG via a
@@ -811,6 +811,26 @@ async function collectLocalMetrics(options = {}) {
     console.log('ℹ️  Claude analysis skipped (no ANTHROPIC_API_KEY set)');
   }
 
+  // CFP estimation: each squashed commit on main represents a complete PR,
+  // which is the right unit for COSMIC Function Points. Only runs on squashed
+  // history (operator-forced or detected); skipped on granular feature-branch
+  // history where commits are partial changes.
+  /** @type {Array<{sha:string,estimated_cfp_delta:number,estimated_cfp_breakdown:{entries:number,exits:number,reads:number,writes:number}}>|undefined} */
+  let cfpResults;
+  if (anthropicClient && historyGranularity === 'squashed' && metrics.length > 0) {
+    console.log('📐 Running CFP estimation on squashed commits...');
+    const cfpTargets = metrics.slice(0, CONFIG.AI_ANALYSIS_MAX_COMMITS);
+    const rawResults = [];
+    for (const m of cfpTargets) {
+      const diff = getCommitDiff(m.full_sha);
+      const result = await analyzeCfpWithClaude(anthropicClient, [
+        { filename: m.sha, additions: m.counted_additions, deletions: m.counted_deletions, patch: diff }
+      ]);
+      if (result) rawResults.push({ sha: m.sha, ...result });
+    }
+    if (rawResults.length > 0) cfpResults = rawResults;
+  }
+
   // Duplicate code detection: Layer 1 (jscpd, static) always runs over the
   // production files touched by the analyzed commits; Layer 2 (Claude,
   // semantic) runs over the same files widened to their module neighbors,
@@ -1120,6 +1140,7 @@ async function collectLocalMetrics(options = {}) {
     default_branch,
     shipped_commits_count,
     unconfirmed_commits_count,
+    ...(cfpResults !== undefined && { cfp_results: cfpResults }),
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };
@@ -1289,7 +1310,7 @@ module.exports = {
   // metrics
   scoreMessageQuality, classifyDoraArchetype, generateInsights,
   // claude
-  CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude
+  CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, analyzeCfpWithClaude
 };
 
 
