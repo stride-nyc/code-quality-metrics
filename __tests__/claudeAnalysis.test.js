@@ -29,7 +29,7 @@ const {
   analyzeWithClaude,
   CONFIG,
 } = require('../local-code-metrics');
-const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis, analyzeCfpWithClaude, CFP_SYSTEM_PROMPT } = require('../lib/claude');
+const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis, analyzeCfpWithClaude, CFP_SYSTEM_PROMPT, DUPLICATE_SYSTEM_PROMPT } = require('../lib/claude');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -427,6 +427,15 @@ describe('runSemanticDuplicateAnalysis', () => {
 });
 
 // ---------------------------------------------------------------------------
+// DUPLICATE_SYSTEM_PROMPT content
+// ---------------------------------------------------------------------------
+
+describe('DUPLICATE_SYSTEM_PROMPT content', () => {
+  test('instructs model to return no other text alongside the JSON', () => {
+    expect(DUPLICATE_SYSTEM_PROMPT).toMatch(/no other text/i);
+  });
+});
+
 // analyzeCfpWithClaude (GitHub #124)
 // ---------------------------------------------------------------------------
 
