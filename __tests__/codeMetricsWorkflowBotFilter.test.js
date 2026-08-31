@@ -32,7 +32,8 @@ function makeGithubMock({ branches, commitsByBranch, commitDetailsBySha }) {
         listCommits: async ({ sha }) => ({ data: commitsByBranch[sha] || [] }),
         getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] }),
         listTags: async () => ({ data: [] })
-      }
+      },
+      pulls: { list: async () => ({ data: [] }) }
     },
     paginate: async (fn, params) => (await fn(params)).data
   };

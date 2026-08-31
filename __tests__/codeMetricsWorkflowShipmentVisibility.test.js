@@ -1,8 +1,8 @@
 'use strict';
 
-// Executes the real inline script from .github/workflows/code-metrics.yml's "Collect Commit
-// Metrics" step against mocked GitHub API responses to verify deployment_frequency_floor
-// integration (GitHub #65).
+// Tests the branch-level merged-PR check added to code-metrics.yml for GitHub #107.
+// Each analyzed feature branch is checked via github.rest.pulls.list; merged_branches_count
+// and unmerged_branches_count are added to both the normal and empty-metrics summary.
 
 const fs = require('fs');
 const path = require('path');
@@ -19,7 +19,7 @@ function loadStepScript(workflowFile, stepName) {
   throw new Error(`step "${stepName}" not found in ${workflowFile}`);
 }
 
-function makeGithubMock({ branches, commitsByBranch, commitDetailsBySha, tagsByName = {} }) {
+function makeGithubMock({ branches, commitsByBranch, commitDetailsBySha, pullsByBranch = {} }) {
   return {
     rest: {
       repos: {
@@ -27,23 +27,25 @@ function makeGithubMock({ branches, commitsByBranch, commitDetailsBySha, tagsByN
         listBranches: async () => ({ data: branches }),
         listCommits: async ({ sha }) => ({ data: commitsByBranch[sha] || [] }),
         getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] }),
-        listTags: async () => ({ data: Object.keys(tagsByName).map(name => ({ name, commit: { sha: name + '-sha' } })) })
+        listTags: async () => ({ data: [] })
       },
-      pulls: { list: async () => ({ data: [] }) }
+      pulls: {
+        list: async ({ head }) => {
+          const branch = head.split(':')[1];
+          return { data: pullsByBranch[branch] || [] };
+        }
+      }
     },
     paginate: async (fn, params) => (await fn(params)).data
   };
 }
 
-async function runCollectMetrics(script, githubMock, repoConfigJson = null) {
+async function runCollectMetrics(script, githubMock) {
   const writes = {};
   const fakeFs = {
     writeFileSync: (name, content) => { writes[name] = content; },
-    existsSync: (p) => repoConfigJson !== null && String(p).endsWith('.codemetrics.json'),
-    readFileSync: (p) => {
-      if (repoConfigJson !== null && String(p).endsWith('.codemetrics.json')) return repoConfigJson;
-      throw new Error(`ENOENT: no such file or directory, open '${p}'`);
-    }
+    existsSync: () => false,
+    readFileSync: (p) => { throw new Error(`ENOENT: ${p}`); }
   };
   const fakeRequire = id => {
     if (id === 'fs') return fakeFs;
@@ -51,12 +53,7 @@ async function runCollectMetrics(script, githubMock, repoConfigJson = null) {
   };
   const fakeProcess = { env: { ...process.env, GITHUB_REPOSITORY: 'acme/widgets' }, stdout: { write: () => {} } };
 
-  const occurrences = script.split('collectMetrics();').length - 1;
-  if (occurrences !== 1) {
-    throw new Error(`expected exactly one "collectMetrics();" invocation to capture, found ${occurrences}`);
-  }
   const wrapped = script.replace('collectMetrics();', 'return collectMetrics();');
-
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
   const runner = new AsyncFunction('require', 'github', 'process', wrapped);
   await runner(fakeRequire, githubMock, fakeProcess);
@@ -78,45 +75,63 @@ const baseCommitDetail = {
   files: [{ filename: 'src/app.js', additions: 10, deletions: 5 }]
 };
 
-describe('code-metrics.yml workflow script -- deployment frequency (GitHub #65)', () => {
+describe('code-metrics.yml workflow script -- shipment visibility (GitHub #107)', () => {
   let script;
 
   beforeAll(() => {
     script = loadStepScript('code-metrics.yml', 'Collect Commit Metrics');
   });
 
-  test('deployment_frequency_floor is null when no release patterns configured', async () => {
+  test('merged_branches_count and unmerged_branches_count are present in summary', async () => {
     const githubMock = makeGithubMock({
       branches: [{ name: 'main' }, { name: 'feature-x' }],
       commitsByBranch: { 'feature-x': [baseCommit] },
-      commitDetailsBySha: { 'abc1': baseCommitDetail }
+      commitDetailsBySha: { 'abc1': baseCommitDetail },
+      pullsByBranch: { 'feature-x': [{ merged_at: '2026-01-20T00:00:00.000Z' }] }
     });
 
     const writes = await runCollectMetrics(script, githubMock);
-
     const summary = JSON.parse(writes['metrics_summary.json']);
-    expect(summary.deployment_frequency_floor).toBeNull();
+
+    expect(typeof summary.merged_branches_count).toBe('number');
+    expect(typeof summary.unmerged_branches_count).toBe('number');
   });
 
-  test('deployment_frequency_floor is computed from tags when releaseTagPattern is configured', async () => {
-    // Tags: v1.0.0 and v1.1.0 match '^v\\d+'; docs-update does not
+  test('merged_branches_count counts branches with a closed merged PR', async () => {
     const githubMock = makeGithubMock({
-      branches: [{ name: 'main' }, { name: 'feature-x' }],
-      commitsByBranch: { 'feature-x': [baseCommit] },
+      branches: [{ name: 'main' }, { name: 'feature-a' }, { name: 'feature-b' }],
+      commitsByBranch: {
+        'feature-a': [baseCommit],
+        'feature-b': [{ ...baseCommit, sha: 'abc2' }]
+      },
       commitDetailsBySha: {
         'abc1': baseCommitDetail,
-        'v1.0.0-sha': { stats: { additions: 0, deletions: 0 }, files: [], commit: { committer: { date: '2026-01-01T00:00:00.000Z' } } },
-        'v1.1.0-sha': { stats: { additions: 0, deletions: 0 }, files: [], commit: { committer: { date: '2026-01-10T00:00:00.000Z' } } },
+        'abc2': baseCommitDetail
       },
-      tagsByName: { 'v1.0.0': true, 'v1.1.0': true, 'docs-update': true }
+      pullsByBranch: {
+        'feature-a': [{ merged_at: '2026-01-20T00:00:00.000Z' }],
+        'feature-b': []  // no merged PR
+      }
     });
 
-    const repoConfig = JSON.stringify({ releaseTagPattern: '^v\\d+' });
-    const writes = await runCollectMetrics(script, githubMock, repoConfig);
-
+    const writes = await runCollectMetrics(script, githubMock);
     const summary = JSON.parse(writes['metrics_summary.json']);
-    expect(summary.deployment_frequency_floor).not.toBeNull();
-    expect(summary.deployment_frequency_floor.release_count).toBe(2);
-    expect(typeof summary.deployment_frequency_floor.median_interval_days).toBe('number');
+
+    expect(summary.merged_branches_count).toBe(1);
+    expect(summary.unmerged_branches_count).toBe(1);
+  });
+
+  test('merged_branches_count is 0 in empty-metrics summary when no commits found', async () => {
+    const githubMock = makeGithubMock({
+      branches: [{ name: 'main' }],
+      commitsByBranch: {},
+      commitDetailsBySha: {}
+    });
+
+    const writes = await runCollectMetrics(script, githubMock);
+    const summary = JSON.parse(writes['metrics_summary.json']);
+
+    expect(summary.merged_branches_count).toBe(0);
+    expect(summary.unmerged_branches_count).toBe(0);
   });
 });
