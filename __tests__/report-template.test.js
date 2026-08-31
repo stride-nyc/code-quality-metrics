@@ -1,6 +1,6 @@
 'use strict';
 
-const { renderReportHtml, renderDeploymentFrequency } = require('../lib/report-template');
+const { renderReportHtml, renderDeploymentFrequency, renderShipmentLine } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { buildMetricCatalog, METRIC_GROUP_ORDER } = require('../lib/report');
 const { THRESHOLDS } = require('../lib/thresholds');
@@ -2414,5 +2414,25 @@ describe('renderDeploymentFrequency (GitHub #65)', () => {
     const catalog = buildMetricCatalog(summary, []);
     const html = renderReportHtml({ summary, metrics: fixtureMetrics(), catalog, fontData: fixtureFontData(), duplicates: [] });
     expect(html).not.toContain('deployment-frequency');
+  });
+});
+
+describe('renderShipmentLine (GitHub #107)', () => {
+  test('renders shipped and unconfirmed counts when both are present', () => {
+    const html = renderShipmentLine({ shipped_commits_count: 35, unconfirmed_commits_count: 7, default_branch: 'main' });
+    expect(html).toContain('35');
+    expect(html).toContain('7');
+    expect(html).toContain('main');
+  });
+
+  test('returns empty string when shipped_commits_count is absent', () => {
+    expect(renderShipmentLine({})).toBe('');
+    expect(renderShipmentLine({ default_branch: null })).toBe('');
+  });
+
+  test('renders all-shipped message when unconfirmed_commits_count is 0', () => {
+    const html = renderShipmentLine({ shipped_commits_count: 42, unconfirmed_commits_count: 0, default_branch: 'main' });
+    expect(html).toContain('42');
+    expect(html).not.toContain('unconfirmed');
   });
 });
