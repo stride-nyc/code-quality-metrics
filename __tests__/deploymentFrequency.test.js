@@ -1,6 +1,6 @@
 'use strict';
 
-const { detectDeploymentFrequency, findUnmatchedVersionShapedRefs } = require('../lib/metrics');
+const { detectDeploymentFrequency, findUnmatchedVersionShapedRefs, findReleaseCommitsFromSubjects } = require('../lib/metrics');
 
 describe('detectDeploymentFrequency', () => {
   const asOf = '2026-01-31T00:00:00.000Z';
@@ -86,6 +86,45 @@ describe('findUnmatchedVersionShapedRefs', () => {
   test('[guard] a staging-prefixed version-shaped tag is never returned as unmatched when stagingTagPattern is configured', () => {
     const names = ['staging-v3.2.1'];
     const result = findUnmatchedVersionShapedRefs(names, '^v\\d+', '^staging-v\\d+');
+    expect(result).toEqual([]);
+  });
+});
+
+describe('findReleaseCommitsFromSubjects', () => {
+  const commits = [
+    { sha: 'aaa', subject: 'chore: release v1.0.0', date: '2026-01-10T00:00:00.000Z' },
+    { sha: 'bbb', subject: 'feat: add feature', date: '2026-01-15T00:00:00.000Z' },
+    { sha: 'ccc', subject: 'chore: release v1.1.0', date: '2026-01-20T00:00:00.000Z' },
+  ];
+
+  test('returns null when releaseCommitSubjectPattern is null', () => {
+    expect(findReleaseCommitsFromSubjects(commits, null)).toBeNull();
+  });
+
+  test('returns commits whose subject matches the pattern', () => {
+    const result = findReleaseCommitsFromSubjects(commits, 'chore: release');
+    expect(result).toHaveLength(2);
+    expect(result[0].sha).toBe('aaa');
+    expect(result[1].sha).toBe('ccc');
+  });
+
+  test('non-matching subjects are excluded', () => {
+    const result = findReleaseCommitsFromSubjects(commits, 'chore: release');
+    expect(result.find(e => e.sha === 'bbb')).toBeUndefined();
+  });
+
+  test('returns events sorted ascending by date', () => {
+    const unsorted = [
+      { sha: 'zzz', subject: 'chore: release v2.0.0', date: '2026-03-01T00:00:00.000Z' },
+      { sha: 'aaa', subject: 'chore: release v1.0.0', date: '2026-01-01T00:00:00.000Z' },
+    ];
+    const result = findReleaseCommitsFromSubjects(unsorted, 'chore: release');
+    expect(result[0].sha).toBe('aaa');
+    expect(result[1].sha).toBe('zzz');
+  });
+
+  test('returns empty array when no commits match', () => {
+    const result = findReleaseCommitsFromSubjects(commits, 'deploy:');
     expect(result).toEqual([]);
   });
 });
