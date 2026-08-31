@@ -25,7 +25,7 @@ require('./lib/env').loadEnv(__dirname);
 
 const { CONFIG } = require('./lib/config');
 const { resolveConfigOverrides } = require('./lib/repoConfig');
-const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, findContentDuplicateGroups, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate, fetchReleaseTags } = require('./lib/git');
+const { runGitCommand, parseGitLog, isTestFile, analyzeCommit, getCommitDiff, detectHistoryGranularity, findContentDuplicateGroups, windowIncludesRepositoryRoot, findRepositoryRootShas, findEffectiveRootSha, getExpectedCommitCount, findNewestCommitDate, fetchReleaseTags, findDefaultBranch, fetchDefaultBranchShas } = require('./lib/git');
 const { computeStatistics, computeVelocity } = require('./lib/statistics');
 const { scoreMessageQuality, classifyDoraArchetype, generateInsights, isBotCommit, detectDeploymentFrequency, findReleaseCommitsFromSubjects, findUnmatchedVersionShapedRefs } = require('./lib/metrics');
 const { CLAUDE_SYSTEM_PROMPT, getAnthropicClient, selectClaudeCommits, analyzeWithClaude, runSemanticDuplicateAnalysis } = require('./lib/claude');
@@ -972,6 +972,15 @@ async function collectLocalMetrics(options = {}) {
     }
   }
 
+  // Commit shipment visibility (GitHub #107): classify each analyzed commit as confirmed
+  // shipped (full_sha reachable from the default branch) or unconfirmed (not a direct
+  // ancestor -- includes squash-merged commits that git cannot distinguish from abandoned
+  // branches via ancestry alone; the count is a lower bound on unshipped work).
+  const default_branch = findDefaultBranch();
+  const defaultBranchShas = fetchDefaultBranchShas(default_branch, 5 * CONFIG.MAX_COMMITS);
+  const shipped_commits_count = metrics.filter(m => defaultBranchShas.has(m.full_sha)).length;
+  const unconfirmed_commits_count = metrics.length - shipped_commits_count;
+
   // Generate summary statistics
   const summary = {
     analysis_date: new Date().toISOString(),
@@ -1104,6 +1113,13 @@ async function collectLocalMetrics(options = {}) {
     // releaseCommitSubjectPattern is configured in .codemetrics.json. A floor, not a count:
     // deleted tags and unrecognized conventions are invisible to this detector.
     deployment_frequency_floor,
+    // Commit shipment visibility (GitHub #107): how many analyzed commits are confirmed
+    // shipped vs. unconfirmed. Squash-merged commits appear unconfirmed even when shipped
+    // because they are not direct ancestors of the default branch; unconfirmed_commits_count
+    // is therefore a lower bound on unshipped work, not an exact count.
+    default_branch,
+    shipped_commits_count,
+    unconfirmed_commits_count,
     config: CONFIG,
     note: "Local feature branches analysis - shows actual development patterns before merge squashing"
   };

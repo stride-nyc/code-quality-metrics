@@ -97,6 +97,12 @@ function mockExecSequence(...values) {
     // events are found and deployment_frequency_floor stays null.
     if (typeof command === 'string' && command.includes('for-each-ref')) return '';
     if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
+    // Tests predating commit shipment visibility (GitHub #107) supply no value for
+    // findDefaultBranch's symbolic-ref and rev-parse probes. Throw so findDefaultBranch
+    // returns null and fetchDefaultBranchShas returns an empty Set -- no commits appear
+    // shipped, and the two new counts (shipped=0, unconfirmed=total) are consistent.
+    if (typeof command === 'string' && command.includes('symbolic-ref')) throw new Error('no HEAD');
+    if (typeof command === 'string' && command.includes('rev-parse') && command.includes('--verify')) throw new Error('not found');
     const val = values[i] ?? '';
     i++;
     return val;
@@ -137,6 +143,9 @@ function mockExecSequenceWithMerged(mergedOutput, ...values) {
     // events are found and deployment_frequency_floor stays null.
     if (typeof command === 'string' && command.includes('for-each-ref')) return '';
     if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
+    // Tests predating commit shipment visibility (GitHub #107): see mockExecSequence comment.
+    if (typeof command === 'string' && command.includes('symbolic-ref')) throw new Error('no HEAD');
+    if (typeof command === 'string' && command.includes('rev-parse') && command.includes('--verify')) throw new Error('not found');
     const val = values[i] ?? '';
     i++;
     return val;
@@ -173,6 +182,9 @@ function mockExecSequenceWithHistorySignals(mergesOutput, committerNamesOutput, 
     // events are found and deployment_frequency_floor stays null.
     if (typeof command === 'string' && command.includes('for-each-ref')) return '';
     if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
+    // Tests predating commit shipment visibility (GitHub #107): see mockExecSequence comment.
+    if (typeof command === 'string' && command.includes('symbolic-ref')) throw new Error('no HEAD');
+    if (typeof command === 'string' && command.includes('rev-parse') && command.includes('--verify')) throw new Error('not found');
     const val = values[i] ?? '';
     i++;
     return val;
@@ -208,6 +220,9 @@ function mockExecSequenceWithRootCommits(rootCommitsOutput, ...values) {
     // events are found and deployment_frequency_floor stays null.
     if (typeof command === 'string' && command.includes('for-each-ref')) return '';
     if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
+    // Tests predating commit shipment visibility (GitHub #107): see mockExecSequence comment.
+    if (typeof command === 'string' && command.includes('symbolic-ref')) throw new Error('no HEAD');
+    if (typeof command === 'string' && command.includes('rev-parse') && command.includes('--verify')) throw new Error('not found');
     const val = values[i] ?? '';
     i++;
     return val;
@@ -243,6 +258,9 @@ function mockExecSequenceWithRootCommitFailure(...values) {
     // events are found and deployment_frequency_floor stays null.
     if (typeof command === 'string' && command.includes('for-each-ref')) return '';
     if (typeof command === 'string' && command.trim() === 'git tag --list') return '';
+    // Tests predating commit shipment visibility (GitHub #107): see mockExecSequence comment.
+    if (typeof command === 'string' && command.includes('symbolic-ref')) throw new Error('no HEAD');
+    if (typeof command === 'string' && command.includes('rev-parse') && command.includes('--verify')) throw new Error('not found');
     const val = values[i] ?? '';
     i++;
     return val;
@@ -2660,5 +2678,97 @@ describe('collectLocalMetrics — deployment frequency (GitHub #65)', () => {
     expect(summary.deployment_frequency_floor).not.toBeNull();
     expect(summary.deployment_frequency_floor.release_count).toBe(2);
     expect(typeof summary.deployment_frequency_floor.median_interval_days).toBe('number');
+  });
+});
+
+describe('collectLocalMetrics — commit shipment visibility (GitHub #107)', () => {
+  const SHA = 'a'.repeat(40);
+
+  test('default_branch is null and shipped_commits_count is 0 when findDefaultBranch returns null', async () => {
+    // mockExecSequence throws on symbolic-ref and rev-parse --verify so findDefaultBranch returns null
+    mockExecSequence(
+      FAKE_ROOT,
+      FAKE_REMOTE,
+      '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      '10\t5\tsrc/app.js'
+    );
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.default_branch).toBeNull();
+    expect(summary.shipped_commits_count).toBe(0);
+    expect(summary.unconfirmed_commits_count).toBe(1);
+  });
+
+  test('shipped_commits_count equals count of commits whose full_sha is in default branch Set', async () => {
+    const SHA_B = 'b'.repeat(40);
+    let posIdx = 0;
+    const positional = [FAKE_ROOT, FAKE_REMOTE, '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: shipped\x1e\n${SHA_B}|2024-01-14T10:00:00Z|Dev|feat: unconfirmed\x1e`,
+      `10\t5\tsrc/app.js`,
+      `3\t1\tsrc/util.js`];
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('format:"%cn"')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40);
+      if (cmd.includes('--max-parents=0')) return '';
+      if (cmd.includes('--name-only')) return 'src/app.js';
+      if (cmd.includes('--reverse') && cmd.includes('%H')) return '';
+      if (cmd.includes('rev-list') && cmd.includes('--count') && !cmd.includes('--max-count')) return '';
+      if (cmd.includes('format:%cs')) return '';
+      if (cmd.includes('for-each-ref')) return '';
+      if (cmd.trim() === 'git tag --list') return '';
+      if (cmd.includes('symbolic-ref')) return 'origin/main';
+      if (cmd.includes('rev-list') && cmd.includes('--max-count')) return SHA; // only SHA_A on default branch
+      return positional[posIdx++] ?? '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.shipped_commits_count).toBe(1);
+    expect(summary.unconfirmed_commits_count).toBe(1);
+  });
+
+  test('default_branch is set to the name returned by findDefaultBranch', async () => {
+    let posIdx = 0;
+    const positional = [FAKE_ROOT, FAKE_REMOTE, '  feature/x',
+      `${SHA}|2024-01-15T10:00:00Z|Dev|feat: add thing`,
+      '10\t5\tsrc/app.js'];
+    execSync.mockImplementation(command => {
+      const cmd = String(command);
+      if (cmd.includes('--merged')) return '';
+      if (cmd.includes('--merges')) return '';
+      if (cmd.includes('format:"%cn"')) return '';
+      if (cmd.includes('%P')) return 'p'.repeat(40);
+      if (cmd.includes('--max-parents=0')) return '';
+      if (cmd.includes('--name-only')) return 'src/app.js';
+      if (cmd.includes('--reverse') && cmd.includes('%H')) return '';
+      if (cmd.includes('rev-list') && cmd.includes('--count')) return '';
+      if (cmd.includes('format:%cs')) return '';
+      if (cmd.includes('for-each-ref')) return '';
+      if (cmd.trim() === 'git tag --list') return '';
+      if (cmd.includes('symbolic-ref')) return 'origin/main';
+      if (cmd.includes('rev-list') && cmd.includes('--max-count')) return SHA;
+      return positional[posIdx++] ?? '';
+    });
+    fs.writeFileSync.mockImplementation(() => {});
+
+    await collectLocalMetrics();
+
+    const summaryCall = fs.writeFileSync.mock.calls.find(c => c[0].includes('local_metrics_summary'));
+    const summary = JSON.parse(summaryCall[1]);
+
+    expect(summary.default_branch).toBe('main');
   });
 });
