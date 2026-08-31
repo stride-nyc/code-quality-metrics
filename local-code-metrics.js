@@ -50,7 +50,7 @@ const CONFIG_OVERRIDABLE_DEFAULTS = Object.freeze({
  * @typedef {{ sha: string, full_sha: string, date: string, author: string, committer: string, message: string, full_message: string, source_branch?: string }} CommitInfo
  * date is committer date (git %ci), not author date -- see fetchBranchCommits' own comment
  * (code-quality-metrics-75 / mbiw) for why: it matches --since's own filtering semantics.
- * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, counted_additions: number, counted_deletions: number, counted_files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
+ * @typedef {{ total_additions: number, total_deletions: number, files_changed: number, counted_additions: number, counted_deletions: number, counted_files_changed: number, binary_files: number, test_files_count: number, prod_files_count: number, prod_file_paths: string[], suspect_test_paths: string[], test_prod_cochange_commit: boolean, test_only_commit: boolean, uncovered_prod_commit: boolean, large_commit: boolean, sprawling_commit: boolean, excluded_files_count: number, excluded_additions: number, excluded_deletions: number, vendored_default_files_count: number, vendored_default_additions: number, vendored_default_deletions: number, source_branch: string, change_ratio: string, ai_confidence?: number, risk_score?: number, patterns?: string[], architectural_concerns?: string[], claude_summary?: string }} CommitStats
  * @typedef {CommitInfo & CommitStats & { commit_type: string }} CommitMetric
  */
 
@@ -816,6 +816,11 @@ async function collectLocalMetrics(options = {}) {
   // only when ANTHROPIC_API_KEY is set. Reuses the anthropicClient already
   // resolved above rather than creating a second client.
   const prodFilePaths = [...new Set(metrics.flatMap(m => m.prod_file_paths || []))];
+  const suspectTestPaths = [...new Set(metrics.flatMap(m => m.suspect_test_paths || []))];
+  if (suspectTestPaths.length > 0) {
+    console.warn(`⚠️  ${suspectTestPaths.length} production-classified file(s) have path segments that look like test directories (test/, spec/, __tests__, etc.) but matched no TEST_FILE_PATTERNS entry. Test coverage metrics may be understated. Review these paths and add patterns to TEST_FILE_PATTERNS in lib/config.js if needed:`);
+    suspectTestPaths.forEach(p => console.warn(`   ${p}`));
+  }
   // One combined call: jscpd is the expensive part of a run, so findings and
   // statistics come from the same scan rather than two passes over the same files.
   const { findings: staticDuplicates, statistics: duplicateStatistics, unsupportedExtensions } = runDuplicateAnalysis(prodFilePaths);
@@ -1029,6 +1034,7 @@ async function collectLocalMetrics(options = {}) {
     },
     config_sources,
     analysis_exclusions,
+    suspect_test_paths: suspectTestPaths,
     vendored_generated_share,
     branches_analyzed: branchesToAnalyze,
     branch_commit_counts: branchCommitCounts,

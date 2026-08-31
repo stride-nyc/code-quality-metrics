@@ -441,6 +441,36 @@ describe('analyzeCommit', () => {
     expect(result.vendored_default_deletions).toBe(0);
   });
 
+  // --- suspect_test_paths (Guard 1, GitHub #63 / code-quality-metrics-juy7) ---
+  test('includes a prod-classified file with a spec/ segment in suspect_test_paths', () => {
+    // src/spec/utils.js: TEST_FILE_PATTERNS covers test/ and tests/ directories but not
+    // spec/ as a bare directory segment, so isTestFile() returns false and it classifies
+    // as production. looksLikeTestPath() flags it as suspicious for operator review.
+    mockNumstat(numstatLine(5, 2, 'src/spec/utils.js'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.suspect_test_paths).toEqual(['src/spec/utils.js']);
+  });
+
+  test('does not include a plain production file in suspect_test_paths', () => {
+    mockNumstat(numstatLine(5, 2, 'src/app.js'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.suspect_test_paths).toEqual([]);
+  });
+
+  test('does not include a file already matched by isTestFile in suspect_test_paths', () => {
+    // src/utils.test.js is caught by isTestFile() and classified as a test file,
+    // so it never reaches the suspect check (it is not a production file).
+    mockNumstat(numstatLine(5, 2, 'src/utils.test.js'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.suspect_test_paths).toEqual([]);
+  });
+
   // --- outlier (withdrawn, code-quality-metrics-496) ---
   test('does not include an outlier field in its result', () => {
     // The per-commit outlier flag used mean + 2*stddev on a distribution with no finite
