@@ -29,7 +29,7 @@ const {
   analyzeWithClaude,
   CONFIG,
 } = require('../local-code-metrics');
-const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis, analyzeCfpWithClaude } = require('../lib/claude');
+const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis, analyzeCfpWithClaude, CFP_SYSTEM_PROMPT } = require('../lib/claude');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -429,6 +429,12 @@ describe('runSemanticDuplicateAnalysis', () => {
 // ---------------------------------------------------------------------------
 // analyzeCfpWithClaude (GitHub #124)
 // ---------------------------------------------------------------------------
+
+describe('CFP_SYSTEM_PROMPT content', () => {
+  test('instructs Claude to ignore test files when counting data movements', () => {
+    expect(CFP_SYSTEM_PROMPT).toMatch(/test file|test code|ignore.*test|test.*ignore|skip.*test|test.*skip/i);
+  });
+});
 
 describe('analyzeCfpWithClaude', () => {
   const PR_FILES = [
