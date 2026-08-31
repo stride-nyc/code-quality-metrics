@@ -1434,9 +1434,39 @@ If `ANTHROPIC_API_KEY` is absent:
 - `local_claude_analysis.json` is not written
 - No error or exit code change
 
+### Semantic Duplicate Analysis
+
+Documented in full under [Metric 9: Duplication Density (Two-Layer Detection)](#metric-9-duplication-density-two-layer-detection). This is the second of three Claude-powered analyses: it reads up to `AI_DUPLICATE_MAX_FILES` (40) production files and returns pairs implementing the same logic in different words, each with a confidence rating. Its result is merged into `local_duplicate_analysis.json` alongside the jscpd static findings.
+
+### Functional Size Estimation (COSMIC-inspired)
+
+**What it measures**: Data movements across a software boundary in the diff of a squashed commit -- Entries (E, data in from user or external system), Exits (X, data out to user or external system), Reads (R, data read from persistent storage), and Writes (W, data written to persistent storage). One data movement = 1 CFP unit. This is an approximation from code, not a formal ISO 19761 measurement.
+
+**When it runs**: requires `ANTHROPIC_API_KEY` set AND `history_granularity === 'squashed'` (detected or operator-forced via `--history squashed`). Each squashed commit on the default branch represents a complete pull request, which is the appropriate unit of work for COSMIC Function Points. The estimate is meaningless for individual commits in a granular feature-branch history and is skipped there.
+
+**Commits analyzed**: up to `AI_ANALYSIS_MAX_COMMITS` (default: 5), the same cap that governs the commit analysis above. Each commit's full diff is passed as a single file entry.
+
+**Prompt enforcement**: all three Claude prompts in `lib/claude.js` carry an explicit "no other text" clause alongside "Respond ONLY with valid JSON". The functional size prompt additionally instructs the model to ignore test files: test assertions are not data movements across a software boundary.
+
+**Output**: `cfp_results` in `local_metrics_summary.json` (see Output Format Reference below), absent when the gate does not open. Also rendered as an "Estimated Functional Size" table in `local_drift_report.html` when present.
+
+**Status**: informational only. No calibrated band exists for this metric. Reference measurement against the benchmark repositories is deferred until the metric definition is confirmed stable.
+
+**CONFIG key**: `AI_ANALYSIS_MAX_COMMITS` (default: 5) governs the number of commits estimated per run.
+
+### Prompt Quality Gate
+
+`scripts/eval-prompts.js` runs each Claude prompt against the live API with a minimal toy fixture and asserts the response is parseable JSON matching the expected schema. Run it before releasing any prompt change:
+
+```bash
+ANTHROPIC_API_KEY=... node scripts/eval-prompts.js
+```
+
+This is a manual smoke test, not a unit test: it requires the live API, costs a small amount per run, and is non-deterministic. It catches regressions the "Respond ONLY with valid JSON, no other text" instruction alone cannot prevent, such as a model version returning prose despite a correct instruction (observed: `runSemanticDuplicateAnalysis` returning "Looking at..." on a live run, caught by this script).
+
 ### Cost Estimate
 
-At the default `AI_ANALYSIS_MAX_COMMITS: 5` with 4000-char diffs, a typical run costs approximately $0.02–0.05 USD using claude-sonnet-4-6. Actual cost depends on diff sizes.
+At the default `AI_ANALYSIS_MAX_COMMITS: 5` with 4000-char diffs, a typical run costs approximately $0.02–0.05 USD using claude-sonnet-4-6. Actual cost depends on diff sizes. Functional size estimation adds one API call per squashed commit analyzed, within the same `AI_ANALYSIS_MAX_COMMITS` cap.
 
 ---
 
@@ -1717,6 +1747,20 @@ Single summary object for the analysis run:
 
   // DORA archetype (new)
   dora_archetype: "harmonious-high-achiever" | "foundational-challenges" | "legacy-bottleneck" | "mixed-signals",
+
+  // Functional size estimation (COSMIC-inspired, optional -- see "Functional Size Estimation"
+  // in Claude API Integration above). Present only when ANTHROPIC_API_KEY is set AND
+  // history_granularity === 'squashed'. Absent (field not written) otherwise.
+  cfp_results?: Array<{
+    sha: string,                      // short commit SHA
+    estimated_cfp_delta: number,      // entries + exits + reads + writes
+    estimated_cfp_breakdown: {
+      entries: number,                // data movements in from user or external system
+      exits: number,                  // data movements out to user or external system
+      reads: number,                  // reads from persistent storage
+      writes: number                  // writes to persistent storage
+    }
+  }>,
 
   // Configuration snapshot
   config: CONFIG,
