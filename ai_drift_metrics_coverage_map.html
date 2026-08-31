@@ -195,7 +195,7 @@ const CAPS = [
 ];
 
 const DELIVERY = [
-  { title:'Deployment frequency', sub:'CI/CD pipeline data', type:'gap', detail:'Requires deployment event data from CI/CD pipeline. Use DX or LinearB for full lifecycle visibility.' },
+  { title:'Deployment frequency', sub:'Release tags / commit subjects', type:'partial', detail:'Floor estimate via opt-in releaseTagPattern/.codemetrics.json: counts release tags or commit subjects matching a user-supplied pattern. A floor, not a count -- deleted tags and unrecognized conventions are invisible. Full metric requires CI/CD pipeline integration (DX, LinearB).' },
   { title:'Lead time for changes', sub:'Commit → production', type:'partial', detail:'Proxy available: branch lifetime (creation → merge date). Full metric requires pipeline timestamps.' },
   { title:'Change failure rate', sub:'Incident / rollback data', type:'gap', detail:'Requires integration with incident tracking (PagerDuty, etc.). Not addressable from git alone.' },
   { title:'Mean time to recovery', sub:'Incident duration', type:'gap', detail:'Requires incident duration data. Not addressable without incident tracking integration.' },
