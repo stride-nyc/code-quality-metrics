@@ -1,6 +1,6 @@
 'use strict';
 
-const { renderReportHtml, renderDeploymentFrequency, renderShipmentLine } = require('../lib/report-template');
+const { renderReportHtml, renderDeploymentFrequency, renderShipmentLine, renderCfpSection } = require('../lib/report-template');
 const { METRIC_DESCRIPTIONS } = require('../lib/metric-descriptions');
 const { buildMetricCatalog, METRIC_GROUP_ORDER } = require('../lib/report');
 const { THRESHOLDS } = require('../lib/thresholds');
@@ -2434,5 +2434,34 @@ describe('renderShipmentLine (GitHub #107)', () => {
     const html = renderShipmentLine({ shipped_commits_count: 42, unconfirmed_commits_count: 0, default_branch: 'main' });
     expect(html).toContain('42');
     expect(html).not.toContain('unconfirmed');
+  });
+});
+
+describe('renderCfpSection (GitHub #125)', () => {
+  const CFP_RESULTS = [
+    { sha: 'abc1234', estimated_cfp_delta: 6, estimated_cfp_breakdown: { entries: 2, exits: 2, reads: 1, writes: 1 } },
+    { sha: 'def5678', estimated_cfp_delta: 3, estimated_cfp_breakdown: { entries: 1, exits: 1, reads: 1, writes: 0 } }
+  ];
+
+  test('renders total delta and per-commit breakdown when cfp_results is present', () => {
+    const html = renderCfpSection({ cfp_results: CFP_RESULTS });
+    expect(html).toContain('9'); // 6 + 3 total
+    expect(html).toContain('6'); // first commit delta
+    expect(html).toContain('abc1234');
+    expect(html).toMatch(/Functional Size|functional size/i);
+  });
+
+  test('returns empty string when cfp_results is absent', () => {
+    expect(renderCfpSection({})).toBe('');
+    expect(renderCfpSection({ cfp_results: undefined })).toBe('');
+  });
+
+  test('returns empty string when cfp_results is an empty array', () => {
+    expect(renderCfpSection({ cfp_results: [] })).toBe('');
+  });
+
+  test('labels the section as squashed-history and approximation only', () => {
+    const html = renderCfpSection({ cfp_results: CFP_RESULTS });
+    expect(html).toMatch(/squashed|approximation/i);
   });
 });
