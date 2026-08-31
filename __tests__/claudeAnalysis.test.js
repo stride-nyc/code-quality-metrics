@@ -29,7 +29,7 @@ const {
   analyzeWithClaude,
   CONFIG,
 } = require('../local-code-metrics');
-const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis } = require('../lib/claude');
+const { analyzeDuplicatesWithClaude, runSemanticDuplicateAnalysis, analyzeCfpWithClaude } = require('../lib/claude');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -423,6 +423,68 @@ describe('runSemanticDuplicateAnalysis', () => {
     await runSemanticDuplicateAnalysis(client, [relativePath, absolutePath], []);
 
     expect(fs.readFileSync).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// analyzeCfpWithClaude (GitHub #124)
+// ---------------------------------------------------------------------------
+
+describe('analyzeCfpWithClaude', () => {
+  const PR_FILES = [
+    { filename: 'src/api/users.js', additions: 40, deletions: 5, patch: '+async function createUser(data) { await db.insert(data); return { id: 1 }; }' },
+    { filename: 'src/routes/users.js', additions: 20, deletions: 2, patch: '+router.post("/users", createUser);' },
+  ];
+
+  const CFP_RESPONSE = { entries: 2, exits: 2, reads: 1, writes: 1 };
+
+  function makeClient(responsePayload) {
+    const mockCreate = jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(responsePayload || CFP_RESPONSE) }]
+    });
+    return { messages: { create: mockCreate } };
+  }
+
+  test('returns estimated_cfp_delta and breakdown when API responds', async () => {
+    const client = makeClient();
+    const result = await analyzeCfpWithClaude(client, PR_FILES);
+    expect(result).not.toBeNull();
+    expect(result.estimated_cfp_delta).toBe(6); // 2+2+1+1
+    expect(result.estimated_cfp_breakdown).toEqual({ entries: 2, exits: 2, reads: 1, writes: 1 });
+  });
+
+  test('returns null when client is null', async () => {
+    const result = await analyzeCfpWithClaude(null, PR_FILES);
+    expect(result).toBeNull();
+  });
+
+  test('returns null when API call throws', async () => {
+    const client = { messages: { create: jest.fn().mockRejectedValue(new Error('rate limited')) } };
+    const result = await analyzeCfpWithClaude(client, PR_FILES);
+    expect(result).toBeNull();
+  });
+
+  test('returns null when API response is not valid JSON', async () => {
+    const client = { messages: { create: jest.fn().mockResolvedValue({ content: [{ type: 'text', text: 'not json {{{' }] }) } };
+    const result = await analyzeCfpWithClaude(client, PR_FILES);
+    expect(result).toBeNull();
+  });
+
+  test('sends filenames and patch content in the prompt', async () => {
+    const client = makeClient();
+    await analyzeCfpWithClaude(client, PR_FILES);
+    const call = client.messages.create.mock.calls[0][0];
+    expect(call.messages[0].content).toContain('src/api/users.js');
+    expect(call.messages[0].content).toContain('createUser');
+  });
+
+  test('strips markdown code fences before parsing', async () => {
+    const client = { messages: { create: jest.fn().mockResolvedValue({
+      content: [{ type: 'text', text: '```json\n' + JSON.stringify(CFP_RESPONSE) + '\n```' }]
+    }) } };
+    const result = await analyzeCfpWithClaude(client, PR_FILES);
+    expect(result).not.toBeNull();
+    expect(result.estimated_cfp_delta).toBe(6);
   });
 });
 
