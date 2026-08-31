@@ -44,7 +44,8 @@ function makeGithubMock({ branches, commitsByBranch, commitsByBranchWidened, com
         },
         getCommit: async ({ ref }) => ({ data: commitDetailsBySha[ref] }),
         listTags: async () => ({ data: [] })
-      }
+      },
+      pulls: { list: async () => ({ data: [] }) }
     },
     // The real workflow relies on github.paginate to walk multi-page results; every mocked
     // call here fits on one page, so paginate just forwards to the underlying call. The

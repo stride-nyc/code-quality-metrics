@@ -77,6 +77,19 @@ jobs:
                 console.log(`Found ${branches.length} total branches`);
                 console.log(`Analyzing ${featureBranches.length} feature branches: ${featureBranches.map(b => b.name).join(', ')}`);
 
+                // Commit shipment visibility (GitHub #107): for each feature branch, check
+                // whether a closed, merged PR exists. Branches without a merged PR are
+                // unconfirmed -- squash-merged branches appear here as unconfirmed because the
+                // squash SHA is not an ancestor of the branch tip.
+                const branchMergeStatuses = await Promise.all(featureBranches.map(async branch => {
+                  const prs = await github.rest.pulls.list({
+                    owner, repo, state: 'closed', head: `${owner}:${branch.name}`, per_page: 1
+                  });
+                  return prs.data.some(pr => pr.merged_at !== null);
+                }));
+                const merged_branches_count = branchMergeStatuses.filter(Boolean).length;
+                const unmerged_branches_count = branchMergeStatuses.filter(v => !v).length;
+
                 // github.rest.repos.getCommit (below) diffs a merge commit against its first
                 // parent only, so for a conflict-free two-parent merge -- e.g. GitHub's "Merge
                 // pull request" button on a single-commit PR, or a feature branch that merged
@@ -215,6 +228,8 @@ jobs:
                     net_additions_ratio_p90: 0,
                     dora_archetype: "mixed-signals",
                     deployment_frequency_floor: null,
+                    merged_branches_count: 0,
+                    unmerged_branches_count: 0,
                     note: "Feature branches only - main/master excluded. Large commit threshold applied to production code only."
                   };
 
@@ -411,6 +426,8 @@ jobs:
                   // THRESHOLDS, so message quality has no part in the archetype (code-quality-metrics-4hu).
                   dora_archetype: classifyDoraArchetype({ large_commits_pct: largePct.toFixed(2), sprawling_commits_pct: sprawlingPct.toFixed(2), test_coverage_rate: testCoveragePct.toFixed(2), uncovered_prod_rate: uncoveredProdPct.toFixed(2) }),
                   deployment_frequency_floor,
+                  merged_branches_count,
+                  unmerged_branches_count,
                   note: "Feature branches only - main/master excluded. Large commit threshold applied to production code only."
                 };
 
