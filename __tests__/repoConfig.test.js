@@ -192,6 +192,56 @@ describe('resolveConfigOverrides — lifecycle (code-quality-metrics-zkhq)', () 
   });
 });
 
+// GitHub #65: release pattern keys are META_KEYS -- recognized and recorded in sources
+// but not merged into effective (they are not CONFIG fields; local-code-metrics.js and
+// code-metrics.yml read them back from sources).
+describe('resolveConfigOverrides — release pattern keys (GitHub #65)', () => {
+  test('recognizes releaseTagPattern, records in sources, does not merge into effective', () => {
+    const targetDir = makeTempDir('cqm-release-tag-');
+    writeConfigFile(targetDir, { releaseTagPattern: '^v\\d+' });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir);
+
+    expect(result.effective).toEqual(SAMPLE_DEFAULTS);
+    expect(result.sources[0].overrides.releaseTagPattern).toBe('^v\\d+');
+  });
+
+  test('recognizes stagingTagPattern and releaseCommitSubjectPattern', () => {
+    const targetDir = makeTempDir('cqm-release-all-');
+    writeConfigFile(targetDir, {
+      releaseTagPattern: '^v\\d+\\.\\d+\\.\\d+$',
+      stagingTagPattern: '^staging-',
+      releaseCommitSubjectPattern: '^chore\\(release\\):'
+    });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir);
+
+    expect(result.effective).toEqual(SAMPLE_DEFAULTS);
+    const overrides = result.sources[0].overrides;
+    expect(overrides.releaseTagPattern).toBe('^v\\d+\\.\\d+\\.\\d+$');
+    expect(overrides.stagingTagPattern).toBe('^staging-');
+    expect(overrides.releaseCommitSubjectPattern).toBe('^chore\\(release\\):');
+  });
+
+  test('rejects a releaseTagPattern value that is not a string', () => {
+    const targetDir = makeTempDir('cqm-release-bad-');
+    writeConfigFile(targetDir, { releaseTagPattern: 42 });
+
+    expect(() => resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir))
+      .toThrow(/releaseTagPattern.*must be a string/);
+  });
+
+  test('coexists with a class A override in the same file', () => {
+    const targetDir = makeTempDir('cqm-release-coexist-');
+    writeConfigFile(targetDir, { releaseTagPattern: '^v\\d+', DUPLICATE_IGNORE_PATTERNS: ['**/designs/**'] });
+
+    const result = resolveConfigOverrides(SAMPLE_DEFAULTS, targetDir);
+
+    expect(result.effective.DUPLICATE_IGNORE_PATTERNS).toContain('**/designs/**');
+    expect(result.sources[0].overrides.releaseTagPattern).toBe('^v\\d+');
+  });
+});
+
 describe('resolveConfigOverrides — purity', () => {
   test('never mutates the defaults object passed in', () => {
     const targetDir = makeTempDir('cqm-purity-');
