@@ -482,4 +482,41 @@ describe('analyzeCommit', () => {
     const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
     expect(result).not.toHaveProperty('outlier');
   });
+
+  // --- Guard 3: file-count reconciliation invariant (code-quality-metrics-83y7) ---
+  // files_changed === excluded_files_count + counted_files_changed
+  // Excluded and non-excluded files partition the total; binary files sit inside
+  // whichever half their exclusion status places them, so the two-bucket partition
+  // holds regardless of binary presence. If any classification branch is added or
+  // modified without updating the counters, at least one of these tests will fail.
+  test('reconciliation invariant: files_changed equals excluded_files_count + counted_files_changed (all-prod, no excluded)', () => {
+    mockNumstat([
+      numstatLine(10, 5, 'src/app.js'),
+      numstatLine(3,  1, 'src/util.js'),
+    ].join('\n'));
+
+    const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+    expect(result.files_changed).toBe(2);
+    expect(result.excluded_files_count).toBe(0);
+    expect(result.counted_files_changed).toBe(2);
+    expect(result.files_changed).toBe(result.excluded_files_count + result.counted_files_changed);
+  });
+
+  test('reconciliation invariant: files_changed equals excluded_files_count + counted_files_changed (mixed test + prod + excluded)', () => {
+    withAnalysisIgnorePatterns(['**/generated/**'], () => {
+      mockNumstat([
+        numstatLine(10, 5,  'src/app.js'),
+        numstatLine(3,  1,  'src/app.test.js'),
+        numstatLine(50, 0,  'generated/api.js'),
+      ].join('\n'));
+
+      const result = analyzeCommit(MOCK_SHA, MOCK_BRANCH);
+
+      expect(result.files_changed).toBe(3);
+      expect(result.excluded_files_count).toBe(1);
+      expect(result.counted_files_changed).toBe(2);
+      expect(result.files_changed).toBe(result.excluded_files_count + result.counted_files_changed);
+    });
+  });
 });
