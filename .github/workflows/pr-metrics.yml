@@ -29,7 +29,7 @@ jobs:
             const { THRESHOLDS } = require('./lib/thresholds');
             const { scoreMessageQuality, classifyDoraArchetype, isTestFile, isExcludedPath, isBotCommit } = require('./lib/metrics');
             const { runDuplicateCheck, resolveModuleNeighbors } = require('./lib/duplicate');
-            const { getAnthropicClient, analyzeDuplicatesWithClaude } = require('./lib/claude');
+            const { getAnthropicClient, analyzeDuplicatesWithClaude, analyzeCfpWithClaude } = require('./lib/claude');
 
             // Renders a metric's calibrated band as "<healthy%, critical >critical%".
             // Some bands are two-band (critical: null in lib/thresholds.js -- the
@@ -201,6 +201,7 @@ jobs:
                   staticDuplicates
                 )
               : [];
+            const cfpResult = anthropicClient ? await analyzeCfpWithClaude(anthropicClient, files) : null;
 
             const testAdditions = testFiles.reduce((sum, f) => sum + f.additions, 0);
             const testDeletions = testFiles.reduce((sum, f) => sum + f.deletions, 0);
@@ -519,6 +520,20 @@ jobs:
               smallSampleNote,
               '',
               duplicationSection,
+              '',
+              cfpResult ? [
+                '## Estimated Functional Size (COSMIC-inspired approximation)',
+                '',
+                `**Estimated functional size:** ${cfpResult.estimated_cfp_delta} data movements (E+X+R+W)`,
+                `| Movement type | Count |`,
+                `|---------------|-------|`,
+                `| Entry (data in) | ${cfpResult.estimated_cfp_breakdown.entries} |`,
+                `| Exit (data out) | ${cfpResult.estimated_cfp_breakdown.exits} |`,
+                `| Read (storage) | ${cfpResult.estimated_cfp_breakdown.reads} |`,
+                `| Write (storage) | ${cfpResult.estimated_cfp_breakdown.writes} |`,
+                '',
+                '_COSMIC-inspired approximation from diff analysis; not ISO 19761 compliant. Boundary ambiguity means the count is approximate. Informational only; no calibrated target established._'
+              ].join('\n') : '',
               '',
               '_Automated by Code Metrics Workflow_'
             ].filter(s => s !== '').join('\n');
